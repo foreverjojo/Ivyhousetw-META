@@ -3,7 +3,7 @@ import hashlib
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -17,7 +17,7 @@ from scripts.moderator import build_workflow_state, build_meeting_markdown, writ
 from jsonschema import validators
 
 # =========================
-# Timezone (固定台北時間)
+# Timezone（固定台北時間）
 # =========================
 try:
     from zoneinfo import ZoneInfo  # py3.9+
@@ -49,7 +49,6 @@ def now_iso() -> str:
     """固定用台北時間（Asia/Taipei）。"""
     if TAIPEI_TZ:
         return datetime.now(TAIPEI_TZ).isoformat(timespec="seconds")
-    # fallback
     return datetime.now().isoformat(timespec="seconds")
 
 
@@ -63,13 +62,13 @@ def sha256_str(s: str) -> str:
     return sha256_bytes(s.encode("utf-8"))
 
 
-def read_json_if_exists(p: Path):
+def read_json_if_exists(p: Path) -> Optional[dict]:
     if p.exists():
         return json.loads(p.read_text(encoding="utf-8"))
     return None
 
 
-def write_json(p: Path, obj: dict):
+def write_json(p: Path, obj: dict) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -80,7 +79,7 @@ def read_text_if_exists(p: Path) -> Optional[str]:
     return None
 
 
-def write_text(p: Path, s: str):
+def write_text(p: Path, s: str) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(s, encoding="utf-8")
 
@@ -97,16 +96,17 @@ def _load_schema(schema_filename: str) -> dict:
         raise RuntimeError(f"找不到 schema 檔案：{sp}（請確認已放在 schemas/）")
     return json.loads(sp.read_text(encoding="utf-8"))
 
+
 class SchemaValidationError(RuntimeError):
-    def __init__(self, message: str, details: list[str] | None = None):
+    """給 pipeline_state.json 落盤用：保留可讀錯誤清單在 details。"""
+
+    def __init__(self, message: str, details: Optional[List[str]] = None):
         super().__init__(message)
-        self.details: list[str] = details or []
+        self.details: List[str] = details or []
 
 
 def validate_json(instance: dict, schema: dict, *, label: str = "") -> None:
-    """使用 schema 的 $schema 自動選對 validator，並輸出可讀錯誤。
-    若驗證失敗，會 raise SchemaValidationError，並帶有 .details (list[str]) 方便落盤到 pipeline_state.json。
-    """
+    """使用 schema 的 $schema 自動選對 validator，並輸出可讀錯誤。"""
     ValidatorCls = validators.validator_for(schema)
     ValidatorCls.check_schema(schema)
     v = ValidatorCls(schema)
@@ -115,8 +115,8 @@ def validate_json(instance: dict, schema: dict, *, label: str = "") -> None:
     if not errors:
         return
 
-    # 只列前 20 條，避免 UI 爆炸 / log 爆大
-    lines: list[str] = []
+    # 只列前 20 條，避免 UI / log 爆炸
+    lines: List[str] = []
     for e in errors[:20]:
         path = ".".join(str(p) for p in e.path) or "(root)"
         lines.append(f"- {path}: {e.message}")
@@ -124,7 +124,6 @@ def validate_json(instance: dict, schema: dict, *, label: str = "") -> None:
     hint = f"\n（還有 {len(errors)-20} 條未顯示）" if len(errors) > 20 else ""
     name = f"[{label}] " if label else ""
     msg = name + "Schema validate 失敗：\n" + "\n".join(lines) + hint
-
     raise SchemaValidationError(msg, details=lines)
 
 
@@ -133,7 +132,10 @@ def validate_report_summary(rs: dict) -> None:
     validate_json(rs, schema, label="report_summary.v1")
 
 
-def read_csv(uploaded_file):
+# =========================
+# CSV / preview
+# =========================
+def read_csv(uploaded_file) -> pd.DataFrame:
     raw = uploaded_file.getvalue()
     for enc in ["utf-8-sig", "utf-8", "cp950", "big5"]:
         try:
@@ -143,7 +145,7 @@ def read_csv(uploaded_file):
     return pd.read_csv(pd.io.common.BytesIO(raw))
 
 
-def preview_df(df, title, max_rows=20):
+def preview_df(df: pd.DataFrame, title: str, max_rows: int = 20) -> None:
     st.subheader(title)
     st.write(f"Rows: {len(df):,} | Cols: {df.shape[1]}")
     st.write("Columns:", list(df.columns))
@@ -176,25 +178,18 @@ def parse_week_id(week_id: str) -> Optional[Tuple[int, int]]:
     if not n:
         return None
     m = WEEK_RE.match(n)
-    y = int(m.group("y"))
-    w = int(m.group("w"))
-    return (y, w)
+    return (int(m.group("y")), int(m.group("w")))
 
 
 def list_week_ids_on_disk() -> List[str]:
-    """
-    只列出 history/ 下「資料夾名本身就是 week_id」的資料夾（YYYY-Www 或 YYYY-Ww）。
-    若存在 YYYY-W1 這種舊資料夾，也會被納入排序（但不改名）。
-    """
-    out = []
+    """只列出 history/ 下資料夾名本身就是 week_id 的資料夾（YYYY-Www 或 YYYY-Ww）。"""
+    out: List[str] = []
     for p in HISTORY_ROOT.iterdir():
-        if p.is_dir():
-            wk = p.name
-            if parse_week_id(wk):
-                out.append(wk)
+        if p.is_dir() and parse_week_id(p.name):
+            out.append(p.name)
 
     def key(wk: str):
-        y, w = parse_week_id(wk)
+        y, w = parse_week_id(wk)  # type: ignore[misc]
         return (y, w)
 
     return sorted(out, key=key)
@@ -206,9 +201,9 @@ def get_prev_week_id(current_week_id: str) -> Optional[str]:
         return None
     weeks = list_week_ids_on_disk()
     cur_y, cur_w = cur
-    prev = None
+    prev: Optional[str] = None
     for wk in weeks:
-        y, w = parse_week_id(wk)
+        y, w = parse_week_id(wk)  # type: ignore[misc]
         if (y, w) < (cur_y, cur_w):
             prev = wk
         else:
@@ -221,17 +216,14 @@ def get_prev_week_id(current_week_id: str) -> Optional[str]:
 # =========================
 def compute_file_fp(uploaded_file) -> dict:
     b = uploaded_file.getvalue()
-    return {
-        "name": getattr(uploaded_file, "name", ""),
-        "size": len(b),
-        "sha256": sha256_bytes(b),
-    }
+    return {"name": getattr(uploaded_file, "name", ""), "size": len(b), "sha256": sha256_bytes(b)}
 
 
 def compute_inputs_fingerprint(meta_adset_file, meta_ads_file, web_excel_file, detail_level: str) -> dict:
+    # generated_at 僅顯示用，不進版本碼
     return {
         "schema_version": "inputs_fingerprint.v2",
-        "generated_at": now_iso(),  # 顯示用，不進版本碼
+        "generated_at": now_iso(),
         "config": {"detail_level": detail_level or ""},
         "files": {
             "meta_adset": compute_file_fp(meta_adset_file),
@@ -265,13 +257,6 @@ def fp_short(current_fp: dict) -> str:
     return sha256_str(dumped)[:8]
 
 
-def fingerprint_equal(a: dict, b: dict) -> bool:
-    try:
-        return fingerprint_key_for_version(a) == fingerprint_key_for_version(b)
-    except Exception:
-        return False
-
-
 # =========================
 # New path helpers (week-based)
 # =========================
@@ -295,11 +280,8 @@ def read_latest_ptr(week_id: str) -> Optional[dict]:
     return read_json_if_exists(latest_ptr_path(week_id))
 
 
-def write_latest_ptr(week_id: str, fp_code: str):
-    """
-    ✅ latest.json 改存相對路徑（避免搬環境 / root 變更不穩）
-    例：versions/fp-xxxxxxxx
-    """
+def write_latest_ptr(week_id: str, fp_code: str) -> None:
+    """latest.json 改存相對路徑（避免搬環境 / root 變更不穩）。"""
     rel = f"versions/fp-{fp_code}"
     write_json(
         latest_ptr_path(week_id),
@@ -313,7 +295,7 @@ def write_latest_ptr(week_id: str, fp_code: str):
     )
 
 
-def write_week_info(week_id: str, date_range: str):
+def write_week_info(week_id: str, date_range: str) -> None:
     write_json(
         week_meta_dir(week_id) / "week_info.json",
         {
@@ -325,7 +307,8 @@ def write_week_info(week_id: str, date_range: str):
     )
 
 
-def restore_from_version_dir(vdir: Path):
+def restore_from_version_dir(vdir: Path) -> None:
+    """rerun 後從落盤 artifacts 還原 session_state。"""
     if not vdir or not vdir.exists():
         return
 
@@ -365,16 +348,17 @@ def restore_from_version_dir(vdir: Path):
 # =========================
 # pipeline_state + sidebar status
 # =========================
-from typing import Optional  # 如果你最上方已經有 Optional，就不用再加
-
 def write_pipeline_state(
     vdir: Path,
     last_completed_step: str,
     mode: str,
     status: str = "ok",
     error: Optional[str] = None,
-    details: Optional[list] = None,
-):
+    details: Optional[List[str]] = None,
+) -> None:
+    """寫入 pipeline_state.json（events 追溯用）。
+    - status="error" 時，會確保 details 至少有一條文字，方便你之後回溯。
+    """
     p = vdir / "pipeline_state.json"
     state = read_json_if_exists(p) or {
         "schema_version": "pipeline_state.v1",
@@ -385,17 +369,23 @@ def write_pipeline_state(
     state["last_completed_step"] = last_completed_step
     state["last_mode"] = mode
 
-    ev = {"at": now_iso(), "mode": mode, "step": last_completed_step, "status": status}
+    ev: Dict[str, Any] = {"at": now_iso(), "mode": mode, "step": last_completed_step, "status": status}
     if error:
         ev["error"] = error
-    if details:
-        ev["details"] = details
+
+    if details is not None:
+        # 去掉空值，避免存入 [None]
+        clean = [d for d in details if isinstance(d, str) and d.strip()]
+        ev["details"] = clean
+    elif status == "error":
+        # ✅ 讓 details 一定有內容（可選但很實用）
+        ev["details"] = [error] if error else ["(no details)"]
 
     state["events"].append(ev)
     write_json(p, state)
 
 
-def artifacts_panel(vdir: Path):
+def artifacts_panel(vdir: Path) -> None:
     st.subheader("Artifacts（當前版本資料夾）")
     files = [
         "inputs.json",
@@ -444,7 +434,7 @@ st.sidebar.divider()
 status_ph = st.sidebar.empty()
 
 
-def render_sidebar_status(week_id: Optional[str], vdir: Optional[Path]):
+def render_sidebar_status(week_id: Optional[str], vdir: Optional[Path]) -> None:
     with status_ph.container():
         st.subheader("流程狀態（逐步更新）")
         st.write("week_id:", week_id or "（未鎖定）")
@@ -472,7 +462,9 @@ def render_sidebar_status(week_id: Optional[str], vdir: Optional[Path]):
             st.caption(f"last_completed_step: {ps.get('last_completed_step')}｜mode: {ps.get('last_mode')}")
 
 
-# session lock
+# =========================
+# Session lock
+# =========================
 if "locked_week_id" not in st.session_state:
     st.session_state["locked_week_id"] = None
 if "locked_fp" not in st.session_state:
@@ -481,12 +473,18 @@ if "locked_vdir" not in st.session_state:
     st.session_state["locked_vdir"] = None
 
 
-def reset_session_lock():
+def reset_session_lock() -> None:
     for k in [
-        "locked_week_id", "locked_fp", "locked_vdir",
-        "report_summary", "report_insights", "consultant_notes",
-        "workflow_state", "meeting_md",
-        "workflow_state_draft", "meeting_md_draft",
+        "locked_week_id",
+        "locked_fp",
+        "locked_vdir",
+        "report_summary",
+        "report_insights",
+        "consultant_notes",
+        "workflow_state",
+        "meeting_md",
+        "workflow_state_draft",
+        "meeting_md_draft",
         "manual_inputs",
     ]:
         st.session_state.pop(k, None)
@@ -511,7 +509,7 @@ with st.expander("Step A｜上傳檔案 + 預覽（必做）", expanded=True):
         web_excel_file = st.file_uploader("官網 Excel（BVshop/後台匯出）", type=["xlsx", "xls"], key="uploader_web_excel")
 
     can_run = True
-    missing = []
+    missing: List[str] = []
     if meta_adset_file is None:
         missing.append("Meta Adset CSV")
     if meta_ads_file is None:
@@ -560,7 +558,11 @@ with st.expander("Inputs 快照（每週人工填一次｜補 Meta 匯出缺欄�
         buying_type = st.selectbox(
             "Buying type",
             options=["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"],
-            index=(["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"].index(default_manual.get("buying_type", "")) if default_manual.get("buying_type", "") in ["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"] else 0),
+            index=(
+                ["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"].index(default_manual.get("buying_type", ""))
+                if default_manual.get("buying_type", "") in ["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"]
+                else 0
+            ),
             key="mi_buying_type",
         )
     with colm2:
@@ -586,8 +588,8 @@ with st.expander("Inputs 快照（每週人工填一次｜補 Meta 匯出缺欄�
 # =========================
 # Fingerprint preview
 # =========================
-current_fp = None
-fp_code = None
+current_fp: Optional[dict] = None
+fp_code: Optional[str] = None
 if can_run:
     current_fp = compute_inputs_fingerprint(meta_adset_file, meta_ads_file, web_excel_file, detail_level)
     fp_code = fp_short(current_fp)
@@ -622,33 +624,28 @@ def load_prev_week_context(curr_week_id: str) -> dict:
             "fp": ptr["fp"],
             "workflow_state": prev_ws,
             "report_summary": prev_rs,
-        }
+        },
     }
 
 
 # =========================
 # Target dir selection (week-based) — 版本邏輯（以 fp_code 當真值）
 # =========================
-def detect_mismatch_vs_latest(week_id: str, fp_code: str) -> Tuple[bool, Optional[str]]:
-    """
-    mismatch 的第一真值：latest_ptr.fp 是否等於 current fp_code
-    - 若 latest 不存在：不算 mismatch
-    - 若相等：不算 mismatch（不因 inputs.json 缺字段就保守 mismatch）
-    - 若不相等：算 mismatch
-    """
-    ptr = read_latest_ptr(week_id)
-    if not ptr or "fp" not in ptr:
-        return (False, None)
-    latest_fp = ptr["fp"]
-    return (latest_fp != fp_code, latest_fp)
-
-
-def ensure_week_meta_dirs(week_id: str):
+def ensure_week_meta_dirs(week_id: str) -> None:
     (week_meta_dir(week_id) / "legacy").mkdir(parents=True, exist_ok=True)
     versions_root(week_id).mkdir(parents=True, exist_ok=True)
 
 
-def choose_version_dir_for_run(report_summary: dict, fp_code: str) -> Tuple[str, Path]:
+def detect_mismatch_vs_latest(week_id: str, fp_code_: str) -> Tuple[bool, Optional[str]]:
+    """mismatch 第一真值：latest_ptr.fp 是否等於 current fp_code。"""
+    ptr = read_latest_ptr(week_id)
+    if not ptr or "fp" not in ptr:
+        return (False, None)
+    latest_fp = ptr["fp"]
+    return (latest_fp != fp_code_, latest_fp)
+
+
+def choose_version_dir_for_run(report_summary: dict, fp_code_: str) -> Tuple[str, Path]:
     """
     回傳： (resolved_fp_code, vdir)
 
@@ -671,53 +668,58 @@ def choose_version_dir_for_run(report_summary: dict, fp_code: str) -> Tuple[str,
     ensure_week_meta_dirs(week_id)
     write_week_info(week_id, report_summary.get("date_range") or "")
 
-    fp_vdir = version_dir(week_id, fp_code)
-    mismatch, latest_fp = detect_mismatch_vs_latest(week_id, fp_code)
+    fp_vdir = version_dir(week_id, fp_code_)
+    mismatch, latest_fp = detect_mismatch_vs_latest(week_id, fp_code_)
 
-    # -------- Force：永遠覆蓋本 fp --------
     if force_rerun:
         fp_vdir.mkdir(parents=True, exist_ok=True)
-        return (fp_code, fp_vdir)
+        return (fp_code_, fp_vdir)
 
-    # -------- 非 Force：正常行為 --------
     if latest_fp is None:
         fp_vdir.mkdir(parents=True, exist_ok=True)
-        return (fp_code, fp_vdir)
+        return (fp_code_, fp_vdir)
 
     if mismatch:
         if auto_new_version:
             fp_vdir.mkdir(parents=True, exist_ok=True)
-            return (fp_code, fp_vdir)
+            return (fp_code_, fp_vdir)
         raise RuntimeError("偵測到與本週 latest.fp 不一致，且未啟用 Auto new version / Force，已停止以避免用錯資料。")
 
-    # match
     fp_vdir.mkdir(parents=True, exist_ok=True)
-    return (fp_code, fp_vdir)
+    return (fp_code_, fp_vdir)
 
 
-def build_inputs_snapshot(report_summary: dict, current_fp: dict, fp_code: str, meta_adset_file, meta_ads_file, web_excel_file, prev_ctx: dict) -> dict:
+def build_inputs_snapshot(
+    report_summary: dict,
+    current_fp_: dict,
+    fp_code_: str,
+    meta_adset_file_,
+    meta_ads_file_,
+    web_excel_file_,
+    prev_ctx: dict,
+) -> dict:
     return {
         "schema_version": "inputs_snapshot.v3",
         "created_at": now_iso(),
         "week_id": report_summary.get("week_id"),
         "date_range": report_summary.get("date_range"),
         "uploaded_files": {
-            "meta_adset": getattr(meta_adset_file, "name", ""),
-            "meta_ads": getattr(meta_ads_file, "name", ""),
-            "web_excel": getattr(web_excel_file, "name", ""),
+            "meta_adset": getattr(meta_adset_file_, "name", ""),
+            "meta_ads": getattr(meta_ads_file_, "name", ""),
+            "web_excel": getattr(web_excel_file_, "name", ""),
         },
-        "fingerprint": current_fp,
-        "fp_short": fp_code,
+        "fingerprint": current_fp_,
+        "fp_short": fp_code_,
         "manual_inputs": st.session_state.get("manual_inputs") or {},
         "prev_week": {"week_id": prev_ctx.get("prev_week_id")},
     }
 
 
-def rs_with_context(rs: dict, current_fp: dict, fp_code: str, prev_ctx: dict) -> dict:
+def rs_with_context(rs: dict, current_fp_: dict, fp_code_: str, prev_ctx: dict) -> dict:
     enriched = dict(rs or {})
     enriched["_context"] = {
-        "fingerprint": current_fp,
-        "fp_short": fp_code,
+        "fingerprint": current_fp_,
+        "fp_short": fp_code_,
         "manual_inputs": st.session_state.get("manual_inputs") or {},
         "prev_week": prev_ctx,
         "time": {"tz": "Asia/Taipei", "now": now_iso()},
@@ -741,7 +743,7 @@ def load_or_session(key: str, path: Path):
     return st.session_state.get(key)
 
 
-def sync_manual_inputs_to_inputs_json(vdir: Path):
+def sync_manual_inputs_to_inputs_json(vdir: Path) -> None:
     p = vdir / "inputs.json"
     if not p.exists():
         return
@@ -771,13 +773,10 @@ def run_step_b(mode_label: str) -> Tuple[str, str, Path, dict]:
         raise RuntimeError(f"report_summary.week_id 不合法：{rs_week_raw}（需 YYYY-Www）")
     rs["week_id"] = rs_week_norm
 
-    # ✅ Step B 後強制 schema validate（避免口徑漂）
-    if st.session_state.get("validate_schema", True):
-        validate_report_summary(rs)
-
     week_id = rs["week_id"]
     prev_ctx = load_prev_week_context(week_id)
 
+    # ✅ 先決定 vdir（讓 validate 失敗也能落盤到 pipeline_state）
     resolved_fp, vdir = choose_version_dir_for_run(rs, fp_code)
     vdir.mkdir(parents=True, exist_ok=True)
 
@@ -785,6 +784,16 @@ def run_step_b(mode_label: str) -> Tuple[str, str, Path, dict]:
     if st.session_state.get("validate_schema", True):
         try:
             validate_report_summary(rs)
+        except SchemaValidationError as e:
+            write_pipeline_state(
+                vdir,
+                "B(validate_error)",
+                mode_label,
+                status="error",
+                error=str(e),
+                details=e.details,
+            )
+            raise
         except Exception as e:
             write_pipeline_state(
                 vdir,
@@ -792,10 +801,9 @@ def run_step_b(mode_label: str) -> Tuple[str, str, Path, dict]:
                 mode_label,
                 status="error",
                 error=str(e),
-                details=getattr(e, "details", None) if isinstance(getattr(e, "details", None), list) else None,
+                details=[str(e)],
             )
             raise
-
 
     # inputs + report_summary
     inputs = build_inputs_snapshot(rs, current_fp, resolved_fp, meta_adset_file, meta_ads_file, web_excel_file, prev_ctx)
@@ -817,7 +825,7 @@ def run_step_b(mode_label: str) -> Tuple[str, str, Path, dict]:
     return week_id, resolved_fp, vdir, prev_ctx
 
 
-def run_step_c(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str):
+def run_step_c(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str) -> None:
     sync_manual_inputs_to_inputs_json(vdir)
 
     if (not force_rerun) and step_exists(vdir, "report_insights.json"):
@@ -831,7 +839,7 @@ def run_step_c(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolv
         rs = load_or_session("report_summary", vdir / "report_summary.json")
         if not rs:
             raise RuntimeError("缺少 report_summary（Step B 未成功）")
-        insights = generate_report_insights(rs_with_context(rs, current_fp, resolved_fp, prev_ctx))
+        insights = generate_report_insights(rs_with_context(rs, current_fp, resolved_fp, prev_ctx))  # type: ignore[arg-type]
         write_json(vdir / "report_insights.json", insights)
         st.session_state["report_insights"] = insights
 
@@ -839,7 +847,7 @@ def run_step_c(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolv
     render_sidebar_status(week_id, vdir)
 
 
-def run_step_d_draft(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str):
+def run_step_d_draft(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str) -> None:
     sync_manual_inputs_to_inputs_json(vdir)
 
     if (not force_rerun) and step_exists(vdir, "meeting_draft.md") and step_exists(vdir, "workflow_state_draft.json"):
@@ -859,7 +867,7 @@ def run_step_d_draft(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, 
         if not rs or not ri:
             raise RuntimeError("缺少 report_summary/report_insights（Step B/C 未成功）")
 
-        rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)
+        rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]
         ws = build_workflow_state(rs_ctx, ri)
         md = build_meeting_markdown(ws, rs_ctx, ri)
 
@@ -873,7 +881,7 @@ def run_step_d_draft(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, 
     render_sidebar_status(week_id, vdir)
 
 
-def run_step_e(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str):
+def run_step_e(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str) -> None:
     sync_manual_inputs_to_inputs_json(vdir)
 
     if (not force_rerun) and step_exists(vdir, "consultant_notes.json"):
@@ -890,7 +898,7 @@ def run_step_e(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolv
         if not rs or not ri:
             raise RuntimeError("缺少 report_summary/report_insights（Step B/C 未成功）")
 
-        rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)
+        rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]
         cn = run_three_consultants(rs_ctx, ri)
         write_json(vdir / "consultant_notes.json", cn)
         st.session_state["consultant_notes"] = cn
@@ -899,7 +907,7 @@ def run_step_e(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolv
     render_sidebar_status(week_id, vdir)
 
 
-def run_step_f_final(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str):
+def run_step_f_final(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str) -> None:
     sync_manual_inputs_to_inputs_json(vdir)
 
     if (not force_rerun) and step_exists(vdir, "meeting.md") and step_exists(vdir, "workflow_state.json"):
@@ -920,7 +928,7 @@ def run_step_f_final(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, 
         if not rs or not ri or not cn:
             raise RuntimeError("缺少 report_summary/report_insights/consultant_notes（Step B/C/E 未成功）")
 
-        rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)
+        rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]
         ws = build_workflow_state(rs_ctx, ri, consultant_notes=cn)
         md = build_meeting_markdown(ws, rs_ctx, ri)
         write_artifacts(vdir, md, ws)
@@ -986,6 +994,7 @@ def migrate_one_legacy_dir(src: Path) -> Optional[dict]:
             continue
         dp1 = legacy_dst / fn
         dp2 = vdst / fn
+        # 直接複製文本（不重排 JSON）
         write_text(dp1, sp.read_text(encoding="utf-8"))
         write_text(dp2, sp.read_text(encoding="utf-8"))
 
@@ -998,12 +1007,15 @@ def migrate_one_legacy_dir(src: Path) -> Optional[dict]:
         "week_id": wk_norm,
         "fp": code,
         "version_dir": str(vdst),
-        "legacy_dir": str(legacy_dst)
+        "legacy_dir": str(legacy_dst),
     }
 
 
 with st.expander("遷移工具（不丟舊資料夾｜只複製）", expanded=False):
-    st.caption("掃描 history/ 下舊命名資料夾（如 2025-W49_2025-12-04_2025-12-09），複製到新結構的 legacy/ 與 versions/。不刪原資料夾。")
+    st.caption(
+        "掃描 history/ 下舊命名資料夾（如 2025-W49_2025-12-04_2025-12-09），"
+        "複製到新結構的 legacy/ 與 versions/。不刪原資料夾。"
+    )
     legacy_candidates = [p for p in HISTORY_ROOT.iterdir() if p.is_dir() and is_legacy_folder(p.name)]
     st.write("偵測到 legacy 目錄數：", len(legacy_candidates))
 
@@ -1012,7 +1024,7 @@ with st.expander("遷移工具（不丟舊資料夾｜只複製）", expanded=Fa
             mig_map = read_json_if_exists(HISTORY_ROOT / "MIGRATION_MAP.json") or {
                 "schema_version": "migration_map.v1",
                 "updated_at": now_iso(),
-                "items": []
+                "items": [],
             }
             migrated = 0
             skipped = 0
