@@ -1,0 +1,219 @@
+{
+  "schema_version": "report_summary.v1",
+  "generated_at": "2026-01-01T23:29:29+08:00",
+  "week_id": "2025-W49",
+  "date_range": "2025-12-04~2025-12-09",
+  "kpi_truth_source": "meta_adset_csv",
+  "ad_diagnostics_source": "meta_ad_csv",
+  "kpi": {
+    "meta": {
+      "spend_twd": 33370.0,
+      "purchase_value_twd": 113193.0,
+      "purchases": 56,
+      "roas_calc": 3.3921,
+      "cpa_calc_twd": 595.89,
+      "funnel": {
+        "link_clicks": 2403,
+        "landing_page_views": 2291,
+        "add_to_cart": 522,
+        "initiate_checkout": 228
+      },
+      "ads_has_rankings": true
+    },
+    "web": {
+      "orders": 66,
+      "revenue_twd": 144415.0,
+      "aov_twd_calc": 2188.11,
+      "columns": [
+        "瀏覽量",
+        "訂單量",
+        "轉換率(%)",
+        "毛利率(%)",
+        "客單價",
+        "營業額",
+        "毛利",
+        "成交額",
+        "註冊會員數",
+        "購物車放棄率(%)"
+      ]
+    }
+  },
+  "tables": {
+    "top_adsets_by_roas": [
+      {
+        "spend_twd": 6675.0,
+        "purchase_value_twd": 83428.0,
+        "purchases": 28,
+        "roas": 12.4986,
+        "cpa_twd": 238.39,
+        "frequency": 2.44
+      },
+      {
+        "spend_twd": 7224.0,
+        "purchase_value_twd": 23325.0,
+        "purchases": 21,
+        "roas": 3.2288,
+        "cpa_twd": 344.0,
+        "frequency": 1.37
+      },
+      {
+        "spend_twd": 2786.0,
+        "purchase_value_twd": 6440.0,
+        "purchases": 7,
+        "roas": 2.3116,
+        "cpa_twd": 398.0,
+        "frequency": 1.48
+      },
+      {
+        "spend_twd": 0.0,
+        "purchase_value_twd": 0.0,
+        "purchases": 0,
+        "roas": 0.0,
+        "cpa_twd": 0.0,
+        "frequency": 0.0
+      },
+      {
+        "spend_twd": 16685.0,
+        "purchase_value_twd": 0.0,
+        "purchases": 0,
+        "roas": 0.0,
+        "cpa_twd": 0.0,
+        "frequency": 1.73
+      }
+    ],
+    "worst_adsets_by_roas": [
+      {
+        "spend_twd": 0.0,
+        "purchase_value_twd": 0.0,
+        "purchases": 0,
+        "roas": 0.0,
+        "cpa_twd": 0.0,
+        "frequency": 0.0
+      },
+      {
+        "spend_twd": 2786.0,
+        "purchase_value_twd": 6440.0,
+        "purchases": 7,
+        "roas": 2.3116,
+        "cpa_twd": 398.0,
+        "frequency": 1.48
+      },
+      {
+        "spend_twd": 7224.0,
+        "purchase_value_twd": 23325.0,
+        "purchases": 21,
+        "roas": 3.2288,
+        "cpa_twd": 344.0,
+        "frequency": 1.37
+      },
+      {
+        "spend_twd": 6675.0,
+        "purchase_value_twd": 83428.0,
+        "purchases": 28,
+        "roas": 12.4986,
+        "cpa_twd": 238.39,
+        "frequency": 2.44
+      },
+      {
+        "spend_twd": 16685.0,
+        "purchase_value_twd": 0.0,
+        "purchases": 0,
+        "roas": 0.0,
+        "cpa_twd": 0.0,
+        "frequency": 1.73
+      }
+    ],
+    "top_ads_by_roas": [
+      {
+        "spend_twd": 1961.0,
+        "purchase_value_twd": 47012.0,
+        "purchases": 8,
+        "roas": 23.9735,
+        "cpa_twd": 245.12,
+        "frequency": 2.22
+      },
+      {
+        "spend_twd": 4714.0,
+        "purchase_value_twd": 36416.0,
+        "purchases": 20,
+        "roas": 7.7251,
+        "cpa_twd": 235.7,
+        "frequency": 2.06
+      },
+      {
+        "spend_twd": 1314.0,
+        "purchase_value_twd": 9746.0,
+        "purchases": 5,
+        "roas": 7.417,
+        "cpa_twd": 262.8,
+        "frequency": 1.41
+      },
+      {
+        "spend_twd": 5808.0,
+        "purchase_value_twd": 13579.0,
+        "purchases": 16,
+        "roas": 2.338,
+        "cpa_twd": 363.0,
+        "frequency": 1.29
+      },
+      {
+        "spend_twd": 2768.0,
+        "purchase_value_twd": 6440.0,
+        "purchases": 7,
+        "roas": 2.3266,
+        "cpa_twd": 395.43,
+        "frequency": 1.47
+      }
+    ],
+    "worst_ads_by_roas": [
+      {
+        "spend_twd": 2768.0,
+        "purchase_value_twd": 6440.0,
+        "purchases": 7,
+        "roas": 2.3266,
+        "cpa_twd": 395.43,
+        "frequency": 1.47
+      },
+      {
+        "spend_twd": 5808.0,
+        "purchase_value_twd": 13579.0,
+        "purchases": 16,
+        "roas": 2.338,
+        "cpa_twd": 363.0,
+        "frequency": 1.29
+      },
+      {
+        "spend_twd": 1314.0,
+        "purchase_value_twd": 9746.0,
+        "purchases": 5,
+        "roas": 7.417,
+        "cpa_twd": 262.8,
+        "frequency": 1.41
+      },
+      {
+        "spend_twd": 4714.0,
+        "purchase_value_twd": 36416.0,
+        "purchases": 20,
+        "roas": 7.7251,
+        "cpa_twd": 235.7,
+        "frequency": 2.06
+      },
+      {
+        "spend_twd": 1961.0,
+        "purchase_value_twd": 47012.0,
+        "purchases": 8,
+        "roas": 23.9735,
+        "cpa_twd": 245.12,
+        "frequency": 2.22
+      }
+    ]
+  },
+  "missing_data": {
+    "meta_unavailable_fields": [
+      "optimization_goal",
+      "billing_event",
+      "buying_type"
+    ],
+    "note": "這三欄匯出拿不到：用命名規則 tag 或 inputs.json 快照補。"
+  }
+}

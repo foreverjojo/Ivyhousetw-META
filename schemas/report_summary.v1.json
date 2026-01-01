@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ivyhouse.local/schemas/report_summary.v1.json",
+  "title": "Ivy House Meta Weekly - report_summary.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "week_id",
+    "date_range",
+    "kpi_truth_source",
+    "ad_diagnostics_source",
+    "kpi",
+    "tables",
+    "missing_data"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "report_summary.v1"
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO8601 timestamp in Asia/Taipei (e.g. 2026-01-01T12:34:56+08:00)"
+    },
+    "week_id": {
+      "type": "string",
+      "pattern": "^\\d{4}-W\\d{2}$",
+      "description": "Normalized week id, e.g. 2025-W49"
+    },
+    "date_range": {
+      "type": "string",
+      "description": "Display only, e.g. 2025-12-04~2025-12-09"
+    },
+    "kpi_truth_source": {
+      "type": "string",
+      "const": "meta_adset_csv",
+      "description": "Source of truth for KPI totals in report_summary (Adset-level CSV)."
+    },
+    "ad_diagnostics_source": {
+      "type": "string",
+      "const": "meta_ad_csv",
+      "description": "Source for Ad-level diagnostics (winners/losers), not for KPI truth totals."
+    },
+    "kpi": {
+      "type": "object",
+      "required": [
+        "meta",
+        "web"
+      ],
+      "properties": {
+        "meta": {
+          "type": "object",
+          "required": [
+            "spend_twd",
+            "purchase_value_twd",
+            "purchases",
+            "roas_calc",
+            "cpa_calc_twd",
+            "funnel",
+            "ads_has_rankings"
+          ],
+          "properties": {
+            "spend_twd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "purchase_value_twd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "purchases": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "roas_calc": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cpa_calc_twd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "funnel": {
+              "type": "object",
+              "required": [
+                "link_clicks",
+                "landing_page_views",
+                "add_to_cart",
+                "initiate_checkout"
+              ],
+              "properties": {
+                "link_clicks": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "landing_page_views": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "add_to_cart": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "initiate_checkout": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": true
+            },
+            "ads_has_rankings": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        },
+        "web": {
+          "type": "object",
+          "required": [
+            "orders",
+            "revenue_twd",
+            "aov_twd_calc",
+            "columns"
+          ],
+          "properties": {
+            "orders": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "revenue_twd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "aov_twd_calc": {
+              "type": "number",
+              "minimum": 0
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "tables": {
+      "type": "object",
+      "required": [
+        "top_adsets_by_roas",
+        "worst_adsets_by_roas",
+        "top_ads_by_roas",
+        "worst_ads_by_roas"
+      ],
+      "properties": {
+        "top_adsets_by_roas": {
+          "$ref": "#/$defs/roas_rows"
+        },
+        "worst_adsets_by_roas": {
+          "$ref": "#/$defs/roas_rows"
+        },
+        "top_ads_by_roas": {
+          "$ref": "#/$defs/roas_rows"
+        },
+        "worst_ads_by_roas": {
+          "$ref": "#/$defs/roas_rows"
+        }
+      },
+      "additionalProperties": true
+    },
+    "missing_data": {
+      "type": "object",
+      "required": [
+        "meta_unavailable_fields",
+        "note"
+      ],
+      "properties": {
+        "meta_unavailable_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "roas_row": {
+      "type": "object",
+      "required": [
+        "spend_twd",
+        "purchase_value_twd",
+        "purchases",
+        "roas",
+        "cpa_twd",
+        "frequency"
+      ],
+      "properties": {
+        "spend_twd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "purchase_value_twd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "purchases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "roas": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cpa_twd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "frequency": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "roas_rows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/roas_row"
+      },
+      "minItems": 0
+    }
+  },
+  "additionalProperties": true
+}
