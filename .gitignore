@@ -152,9 +152,21 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# runtime artifacts
+# ---- runtime artifacts ----
 history/
 *.log
+
+# ---- python ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ---- streamlit ----
+.streamlit/
+
+# ---- OS ----
+.DS_Store
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
