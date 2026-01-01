@@ -365,32 +365,34 @@ def restore_from_version_dir(vdir: Path):
 # =========================
 # pipeline_state + sidebar status
 # =========================
-    def write_pipeline_state(
-        vdir: Path,
-        last_completed_step: str,
-        mode: str,
-        status: str = "ok",
-        error: Optional[str] = None,
-        details: Optional[list] = None,
-    ):
-        p = vdir / "pipeline_state.json"
-        state = read_json_if_exists(p) or {
-            "schema_version": "pipeline_state.v1",
-            "created_at": now_iso(),
-            "events": [],
-        }
-        state["updated_at"] = now_iso()
-        state["last_completed_step"] = last_completed_step
-        state["last_mode"] = mode
+from typing import Optional  # 如果你最上方已經有 Optional，就不用再加
 
-        ev = {"at": now_iso(), "mode": mode, "step": last_completed_step, "status": status}
-        if error:
-            ev["error"] = error
-        if details:
-            ev["details"] = details
+def write_pipeline_state(
+    vdir: Path,
+    last_completed_step: str,
+    mode: str,
+    status: str = "ok",
+    error: Optional[str] = None,
+    details: Optional[list] = None,
+):
+    p = vdir / "pipeline_state.json"
+    state = read_json_if_exists(p) or {
+        "schema_version": "pipeline_state.v1",
+        "created_at": now_iso(),
+        "events": [],
+    }
+    state["updated_at"] = now_iso()
+    state["last_completed_step"] = last_completed_step
+    state["last_mode"] = mode
 
-        state["events"].append(ev)
-        write_json(p, state)
+    ev = {"at": now_iso(), "mode": mode, "step": last_completed_step, "status": status}
+    if error:
+        ev["error"] = error
+    if details:
+        ev["details"] = details
+
+    state["events"].append(ev)
+    write_json(p, state)
 
 
 def artifacts_panel(vdir: Path):
@@ -779,12 +781,11 @@ def run_step_b(mode_label: str) -> Tuple[str, str, Path, dict]:
     resolved_fp, vdir = choose_version_dir_for_run(rs, fp_code)
     vdir.mkdir(parents=True, exist_ok=True)
 
-    # ✅ Step B 後強制 schema validate（避免口徑漂）
+    # ✅ Step B 後強制 schema validate（避免口徑漂）+ 失敗寫入 pipeline_state events
     if st.session_state.get("validate_schema", True):
         try:
             validate_report_summary(rs)
         except Exception as e:
-            # 只記錄，不在這裡 st.error，避免跟外層重複顯示
             write_pipeline_state(
                 vdir,
                 "B(validate_error)",
@@ -794,6 +795,7 @@ def run_step_b(mode_label: str) -> Tuple[str, str, Path, dict]:
                 details=getattr(e, "details", None) if isinstance(getattr(e, "details", None), list) else None,
             )
             raise
+
 
     # inputs + report_summary
     inputs = build_inputs_snapshot(rs, current_fp, resolved_fp, meta_adset_file, meta_ads_file, web_excel_file, prev_ctx)

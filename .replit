@@ -33,13 +33,26 @@ args = "Run Main App"
 name = "Run Main App"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python check_env.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
+args = "streamlit run main.py --server.port 5000 --server.address 0.0.0.0"
+waitForPort = 5000
 
 [[ports]]
 localPort = 3000
+externalPort = 80
+
+[[ports]]
+localPort = 8501
+externalPort = 3000
+
+[[ports]]
+localPort = 8502
+externalPort = 3001
+
+[[ports]]
+localPort = 5000
 externalPort = 80
