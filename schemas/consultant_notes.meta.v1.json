@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "consultant_notes.meta.v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version", "week_id", "timezone", "generated_at", "notes"],
+  "properties": {
+    "version": { "type": "string", "const": "consultant_notes.meta.v1" },
+    "week_id": { "type": "string", "minLength": 3 },
+    "timezone": { "type": "string", "const": "Asia/Taipei" },
+    "generated_at": { "type": "string", "minLength": 10 },
+    "notes": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["performance_marketing", "ecommerce", "finance", "fulfillment", "gm_coo"],
+      "properties": {
+        "performance_marketing": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "ecommerce": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "finance": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "fulfillment": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "gm_coo": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+      }
+    }
+  }
+}

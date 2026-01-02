@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "report_insights.meta.v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version", "week_id", "timezone", "generated_at", "date_range", "kpi", "creative_diagnostics", "anomalies", "next_actions"],
+  "properties": {
+    "version": { "type": "string", "const": "report_insights.meta.v1" },
+    "week_id": { "type": "string", "minLength": 3 },
+    "timezone": { "type": "string", "const": "Asia/Taipei" },
+    "generated_at": { "type": "string", "minLength": 10 },
+    "date_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "end": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "kpi": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["spend_twd", "website_purchases", "website_purchase_value", "roas"],
+      "properties": {
+        "spend_twd": { "type": "number", "minimum": 0 },
+        "website_purchases": { "type": "number", "minimum": 0 },
+        "website_purchase_value": { "type": "number", "minimum": 0 },
+        "roas": { "type": "number", "minimum": 0 },
+        "purchases": { "type": "number", "minimum": 0 },
+        "purchase_value": { "type": "number", "minimum": 0 }
+      }
+    },
+    "creative_diagnostics": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["top_ads", "bottom_ads"],
+      "properties": {
+        "top_ads": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 0 },
+        "bottom_ads": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 0 }
+      }
+    },
+    "anomalies": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 0 },
+    "next_actions": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 1 }
+  }
+}

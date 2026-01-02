@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "inputs_snapshot.meta_ad.v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version", "source", "timezone", "attribution_setting", "report_start", "report_end", "rows"],
+  "properties": {
+    "version": { "type": "string", "const": "inputs_snapshot.meta_ad.v1" },
+    "source": { "type": "string", "const": "meta_ad_csv" },
+    "timezone": { "type": "string", "const": "Asia/Taipei" },
+    "attribution_setting": {
+      "type": "string",
+      "const": "點擊後 7 天、瀏覽後 1 天或互動觀看後 1 天"
+    },
+    "report_start": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "report_end": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "currency": { "type": "string", "const": "TWD" },
+    "dropped_rows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_rows_dropped"],
+      "properties": { "total_rows_dropped": { "type": "integer", "minimum": 1 } }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "ad_name",
+          "ad_delivery",
+          "adset_name",
+          "campaign_name",
+          "account_name",
+          "objective",
+          "spend_twd",
+          "impressions",
+          "reach",
+          "frequency",
+          "link_clicks",
+          "lpv",
+          "add_to_cart",
+          "initiate_checkout",
+          "website_purchases",
+          "website_purchase_value",
+          "purchases",
+          "purchase_value",
+          "attribution_setting"
+        ],
+        "properties": {
+          "ad_name": { "type": "string", "minLength": 1 },
+          "ad_delivery": { "type": "string", "minLength": 1 },
+          "adset_name": { "type": "string", "minLength": 1 },
+          "campaign_name": { "type": "string", "minLength": 1 },
+          "account_name": { "type": "string", "minLength": 1 },
+          "objective": { "type": "string", "minLength": 1 },
+
+          "spend_twd": { "type": "number", "minimum": 0 },
+          "impressions": { "type": "number", "minimum": 0 },
+          "reach": { "type": "number", "minimum": 0 },
+          "frequency": { "type": "number", "minimum": 0 },
+
+          "link_clicks": { "type": "number", "minimum": 0 },
+          "lpv": { "type": "number", "minimum": 0 },
+          "add_to_cart": { "type": "number", "minimum": 0 },
+          "initiate_checkout": { "type": "number", "minimum": 0 },
+
+          "website_purchases": { "type": "number", "minimum": 0 },
+          "website_purchase_value": { "type": "number", "minimum": 0 },
+          "purchases": { "type": "number", "minimum": 0 },
+          "purchase_value": { "type": "number", "minimum": 0 },
+
+          "cpp_twd": { "type": ["number", "null"], "minimum": 0 },
+          "ctr_link": { "type": ["number", "null"], "minimum": 0 },
+          "cpc_link_twd": { "type": ["number", "null"], "minimum": 0 },
+          "cpm_twd": { "type": ["number", "null"], "minimum": 0 },
+          "cost_per_lpv_twd": { "type": ["number", "null"], "minimum": 0 },
+
+          "quality_ranking": { "type": ["string", "null"] },
+          "engagement_ranking": { "type": ["string", "null"] },
+          "conversion_ranking": { "type": ["string", "null"] },
+
+          "end_time": { "type": ["string", "null"] },
+
+          "attribution_setting": {
+            "type": "string",
+            "const": "點擊後 7 天、瀏覽後 1 天或互動觀看後 1 天"
+          }
+        }
+      }
+    }
+  }
+}

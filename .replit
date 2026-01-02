@@ -38,7 +38,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
+args = "streamlit run app.py --server.port 5000 --server.address 0.0.0.0 --browser.gatherUsageStats false"
 waitForPort = 5000
 
 [[ports]]
@@ -48,11 +48,3 @@ externalPort = 80
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 8502
-externalPort = 3001
-
-[[ports]]
-localPort = 8503
-externalPort = 3002
