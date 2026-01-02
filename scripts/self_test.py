@@ -1,218 +1,338 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# scripts/self_test.py
+"""
+Regression self-test for Ivy House Meta weekly MVP.
+
+What it checks (minimum, deterministic):
+1) report_summary.v1 schema: const locks + required fields are present in schema
+2) Step-2 schemas validate: inputs_snapshot(meta_adset/meta_ad), report_insights, consultant_notes, workflow_state
+3) Total-row drop must happen (names cannot be empty after drop)
+4) Attribution setting must be const
+5) Language drift guard: missing required Chinese raw columns triggers a clear error message (simulated)
+
+Run:
+  python scripts/self_test.py
+"""
+
+from __future__ import annotations
 
 import json
-import tempfile
+import sys
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Callable
-
-from jsonschema import validators
+from typing import Any, Dict, List, Tuple
 
 try:
-    from zoneinfo import ZoneInfo
-    TAIPEI_TZ = ZoneInfo("Asia/Taipei")
-except Exception:
-    TAIPEI_TZ = None
+    from jsonschema import Draft202012Validator
+except Exception as e:
+    print("ERROR: jsonschema is required. Install it first (pip install jsonschema).")
+    raise
 
 
-def now_iso() -> str:
-    if TAIPEI_TZ:
-        return datetime.now(TAIPEI_TZ).isoformat(timespec="seconds")
-    return datetime.now().isoformat(timespec="seconds")
+ROOT = Path(__file__).resolve().parents[1]
+SCHEMAS = ROOT / "schemas"
 
 
-def read_json(p: Path) -> dict:
-    return json.loads(p.read_text(encoding="utf-8"))
+# ---------------------------
+# Helpers
+# ---------------------------
 
+def load_json(path: Path) -> Dict[str, Any]:
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
-def write_json(p: Path, obj: dict) -> None:
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+def must_exist(path: Path) -> None:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing required file: {path}")
 
-
-# ---- schema validate ----
-SCHEMAS_DIR = Path(__file__).resolve().parents[1] / "schemas"
-
-
-def _load_schema(schema_filename: str) -> dict:
-    sp = SCHEMAS_DIR / schema_filename
-    if not sp.exists():
-        raise RuntimeError(f"Schema file not found: {sp}")
-    return json.loads(sp.read_text(encoding="utf-8"))
-
-
-class SchemaValidationError(RuntimeError):
-    def __init__(self, message: str, details: Optional[List[str]] = None):
-        super().__init__(message)
-        self.details: List[str] = details or []
-
-
-def validate_json(instance: dict, schema: dict, *, label: str = "") -> None:
-    ValidatorCls = validators.validator_for(schema)
-    ValidatorCls.check_schema(schema)
-    v = ValidatorCls(schema)
-
+def validate_instance(instance: Any, schema: Dict[str, Any]) -> List[str]:
+    v = Draft202012Validator(schema)
     errors = sorted(v.iter_errors(instance), key=lambda e: list(e.path))
-    if not errors:
-        return
+    out: List[str] = []
+    for e in errors:
+        p = "$"
+        for seg in e.path:
+            p += f".{seg}" if isinstance(seg, str) else f"[{seg}]"
+        out.append(f"{p}: {e.message}")
+    return out
 
-    lines: List[str] = []
-    for e in errors[:20]:
-        path = ".".join(str(p) for p in e.path) or "(root)"
-        lines.append(f"- {path}: {e.message}")
+def expect_pass(name: str, instance: Any, schema_path: Path) -> None:
+    schema = load_json(schema_path)
+    errs = validate_instance(instance, schema)
+    if errs:
+        raise AssertionError(f"[FAIL] {name} should PASS but got errors:\n- " + "\n- ".join(errs))
+    print(f"[PASS] {name}")
 
-    prefix = f"[{label}] " if label else ""
-    msg = prefix + "Schema validate failed:\n" + "\n".join(lines)
-    raise SchemaValidationError(msg, details=lines)
+def expect_fail(name: str, instance: Any, schema_path: Path, must_contain: str | None = None) -> None:
+    schema = load_json(schema_path)
+    errs = validate_instance(instance, schema)
+    if not errs:
+        raise AssertionError(f"[FAIL] {name} should FAIL but passed")
+    if must_contain and not any(must_contain in e for e in errs):
+        raise AssertionError(
+            f"[FAIL] {name} failed but error did not contain '{must_contain}'.\nErrors:\n- " + "\n- ".join(errs)
+        )
+    print(f"[PASS] {name} (expected fail)")
+
+def assert_schema_const(schema: Dict[str, Any], prop: str, expected: str) -> None:
+    props = schema.get("properties", {})
+    if prop not in props:
+        raise AssertionError(f"Schema missing property: {prop}")
+    const = props[prop].get("const")
+    if const != expected:
+        raise AssertionError(f"Schema property {prop}.const mismatch: expected '{expected}', got '{const}'")
+
+def assert_schema_required(schema: Dict[str, Any], field: str) -> None:
+    req = schema.get("required", [])
+    if field not in req:
+        raise AssertionError(f"Schema required[] missing: {field}")
 
 
-def validate_report_summary(rs: dict) -> None:
-    schema = _load_schema("report_summary.v1.json")
-    validate_json(rs, schema, label="report_summary.v1")
+# ---------------------------
+# Simulated language drift guard (unit test target)
+# ---------------------------
+
+META_REQUIRED_ZH_ADSET = [
+    "分析報告開始", "分析報告結束", "廣告組合名稱", "廣告組合投遞", "廣告組合預算", "廣告組合預算類型",
+    "花費金額 (TWD)", "觸及人數", "頻率", "歸因設定", "結束時間", "開始", "曝光次數",
+    "CPM（每千次廣告曝光成本） (TWD)", "連結點擊次數", "CPC（單次連結點擊成本） (TWD)", "CTR（連結點閱率）",
+    "連結頁面瀏覽次數", "每次連結頁面瀏覽成本 (TWD)", "購買次數", "每次購買的成本 (TWD)",
+    "加到購物車次數", "帳號名稱", "行銷活動名稱", "購買轉換值", "網站直接購買次數", "網站直接購買轉換值", "開始結帳次數"
+]
+
+META_REQUIRED_ZH_AD = [
+    "分析報告開始", "分析報告結束", "廣告名稱", "廣告投遞", "廣告組合預算", "廣告組合預算類型",
+    "花費金額 (TWD)", "觸及人數", "頻率", "歸因設定", "結束時間", "品質排名", "互動率排名", "轉換率排名",
+    "曝光次數", "CPM（每千次廣告曝光成本） (TWD)", "連結點擊次數", "CPC（單次連結點擊成本） (TWD)",
+    "CTR（連結點閱率）", "連結頁面瀏覽次數", "每次連結頁面瀏覽成本 (TWD)", "購買次數", "每次購買的成本 (TWD)",
+    "加到購物車次數", "帳號名稱", "目標", "行銷活動名稱", "購買轉換值", "網站直接購買次數", "網站直接購買轉換值",
+    "開始結帳次數", "廣告組合名稱"
+]
+
+def detect_lang_drift(headers: List[str], required_zh: List[str]) -> Tuple[bool, List[str]]:
+    missing = [c for c in required_zh if c not in headers]
+    return (len(missing) > 0, missing)
 
 
-# ---- pipeline_state writer (minimal) ----
-def write_pipeline_state(
-    vdir: Path,
-    step: str,
-    *,
-    mode: str = "self_test",
-    status: str = "ok",
-    error: Optional[str] = None,
-    details: Optional[List[str]] = None,
-) -> None:
-    p = vdir / "pipeline_state.json"
-    state = read_json(p) if p.exists() else {
-        "schema_version": "pipeline_state.v1",
-        "created_at": now_iso(),
-        "events": [],
+# ---------------------------
+# Minimal fixtures for Step-2 schemas
+# ---------------------------
+
+ATTR_CONST = "點擊後 7 天、瀏覽後 1 天或互動觀看後 1 天"
+
+def fixture_inputs_snapshot_adset() -> Dict[str, Any]:
+    return {
+        "version": "inputs_snapshot.meta_adset.v1",
+        "source": "meta_adset_csv",
+        "timezone": "Asia/Taipei",
+        "attribution_setting": ATTR_CONST,
+        "report_start": "2025-12-04",
+        "report_end": "2025-12-09",
+        "currency": "TWD",
+        "dropped_rows": {"total_rows_dropped": 1},
+        "rows": [
+            {
+                "adset_name": "測試廣告組合",
+                "adset_delivery": "active",
+                "account_name": "102796323413794， TWD",
+                "campaign_name": "測試 - 2025-常態影片廣告",
+                "spend_twd": 100.0,
+                "impressions": 1000,
+                "reach": 800,
+                "link_clicks": 10,
+                "lpv": 8,
+                "add_to_cart": 2,
+                "initiate_checkout": 1,
+                "website_purchases": 1,
+                "website_purchase_value": 500.0,
+                "purchases": 1,
+                "purchase_value": 500.0,
+                "adset_budget": 300,
+                "adset_budget_type": "每日",
+                "frequency": 1.2,
+                "ctr_link": None,
+                "cpc_link_twd": None,
+                "cpm_twd": None,
+                "cost_per_lpv_twd": None,
+                "cpp_twd": None,
+                "end_time": None,
+                "start_date": None,
+                "attribution_setting": ATTR_CONST,
+            }
+        ],
     }
 
-    state["updated_at"] = now_iso()
-    state["last_completed_step"] = step
-    state["last_mode"] = mode
-
-    ev = {"at": now_iso(), "mode": mode, "step": step, "status": status}
-    if error:
-        ev["error"] = error
-    if details:
-        ev["details"] = details
-
-    state["events"].append(ev)
-    write_json(p, state)
-
-
-# ---- fixtures ----
-def make_valid_report_summary() -> dict:
+def fixture_inputs_snapshot_ad() -> Dict[str, Any]:
     return {
-        "schema_version": "report_summary.v1",
-        "generated_at": now_iso(),
-        "week_id": "2025-W49",
-        "date_range": "2025-12-04~2025-12-09",
-        "kpi_truth_source": "meta_adset_csv",
-        "ad_diagnostics_source": "meta_ad_csv",
-        "kpi": {
-            "meta": {
-                "spend_twd": 1.0,
-                "purchase_value_twd": 2.0,
+        "version": "inputs_snapshot.meta_ad.v1",
+        "source": "meta_ad_csv",
+        "timezone": "Asia/Taipei",
+        "attribution_setting": ATTR_CONST,
+        "report_start": "2025-12-04",
+        "report_end": "2025-12-09",
+        "currency": "TWD",
+        "dropped_rows": {"total_rows_dropped": 1},
+        "rows": [
+            {
+                "ad_name": "測試廣告",
+                "ad_delivery": "active",
+                "adset_name": "測試廣告組合",
+                "campaign_name": "測試 - 2025-常態影片廣告",
+                "account_name": "102796323413794， TWD",
+                "objective": "銷售",
+                "spend_twd": 50.0,
+                "impressions": 500,
+                "reach": 400,
+                "frequency": 1.1,
+                "link_clicks": 5,
+                "lpv": 4,
+                "add_to_cart": 1,
+                "initiate_checkout": 1,
+                "website_purchases": 1,
+                "website_purchase_value": 300.0,
                 "purchases": 1,
-                "roas_calc": 2.0,
-                "cpa_calc_twd": 1.0,
-                "funnel": {
-                    "link_clicks": 1,
-                    "landing_page_views": 1,
-                    "add_to_cart": 0,
-                    "initiate_checkout": 0
-                },
-                "ads_has_rankings": False
-            },
-            "web": {
-                "orders": 1,
-                "revenue_twd": 100.0,
-                "aov_twd_calc": 100.0,
-                "columns": ["訂單量", "營業額"]
+                "purchase_value": 300.0,
+                "cpp_twd": None,
+                "ctr_link": None,
+                "cpc_link_twd": None,
+                "cpm_twd": None,
+                "cost_per_lpv_twd": None,
+                "quality_ranking": None,
+                "engagement_ranking": None,
+                "conversion_ranking": None,
+                "end_time": None,
+                "attribution_setting": ATTR_CONST,
             }
+        ],
+    }
+
+def fixture_report_insights() -> Dict[str, Any]:
+    return {
+        "version": "report_insights.meta.v1",
+        "week_id": "2025-W49",
+        "timezone": "Asia/Taipei",
+        "generated_at": "2025-12-10 10:00:00",
+        "date_range": {"start": "2025-12-04", "end": "2025-12-09"},
+        "kpi": {
+            "spend_twd": 150.0,
+            "website_purchases": 2,
+            "website_purchase_value": 800.0,
+            "roas": 5.3333,
+            "purchases": 2,
+            "purchase_value": 800.0
         },
-        "tables": {
-            "top_adsets_by_roas": [],
-            "worst_adsets_by_roas": [],
-            "top_ads_by_roas": [],
-            "worst_ads_by_roas": []
-        },
-        "missing_data": {
-            "meta_unavailable_fields": ["optimization_goal", "billing_event", "buying_type"],
-            "note": "test"
+        "creative_diagnostics": {"top_ads": [], "bottom_ads": []},
+        "anomalies": [],
+        "next_actions": [{"owner": "Marketing", "action": "Test", "kpi": "ROAS"}]
+    }
+
+def fixture_consultant_notes() -> Dict[str, Any]:
+    return {
+        "version": "consultant_notes.meta.v1",
+        "week_id": "2025-W49",
+        "timezone": "Asia/Taipei",
+        "generated_at": "2025-12-10 10:00:00",
+        "notes": {
+            "performance_marketing": ["A"],
+            "ecommerce": ["B"],
+            "finance": ["C"],
+            "fulfillment": ["D"],
+            "gm_coo": ["E"]
         }
     }
 
+def fixture_workflow_state() -> Dict[str, Any]:
+    return {
+        "version": "workflow_state.meta_weekly.v1",
+        "week_id": "2025-W49",
+        "timezone": "Asia/Taipei",
+        "date_range": {"start": "2025-12-04", "end": "2025-12-09"},
+        "kpi": {
+            "meta_spend": 150.0,
+            "meta_website_purchases": 2,
+            "meta_website_purchase_value": 800.0,
+            "meta_roas": 5.3333
+        },
+        "guardrail_check": {"tier1": {}, "tier2": {}},
+        "department_actions": {
+            "gm_coo": [{"task": "t"}],
+            "finance": [{"task": "t"}],
+            "ecommerce": [{"task": "t"}],
+            "marketing": [{"task": "t"}],
+            "fulfillment": [{"task": "t"}]
+        },
+        "risks": [{"risk": "r"}],
+        "validation_plan": {"day3": {}, "day7": {}, "day14": {}}
+    }
 
-def expect_validate_error_and_event(rs: dict, vdir: Path) -> None:
+
+# ---------------------------
+# Tests
+# ---------------------------
+
+def test_report_summary_schema_locks() -> None:
+    schema_path = SCHEMAS / "report_summary.v1.json"
+    must_exist(schema_path)
+    schema = load_json(schema_path)
+
+    # const locks
+    assert_schema_const(schema, "kpi_truth_source", "meta_adset_csv")
+    assert_schema_const(schema, "ad_diagnostics_source", "meta_ad_csv")
+
+    # required locks
+    assert_schema_required(schema, "generated_at")
+
+    print("[PASS] report_summary.v1 schema locks (const + required)")
+
+def test_step2_schemas_pass_fail() -> None:
+    # Must exist
+    p_adset = SCHEMAS / "inputs_snapshot.meta_adset.v1.json"
+    p_ad = SCHEMAS / "inputs_snapshot.meta_ad.v1.json"
+    p_insights = SCHEMAS / "report_insights.meta.v1.json"
+    p_notes = SCHEMAS / "consultant_notes.meta.v1.json"
+    p_ws = SCHEMAS / "workflow_state.meta_weekly.v1.json"
+
+    for p in [p_adset, p_ad, p_insights, p_notes, p_ws]:
+        must_exist(p)
+
+    # PASS
+    expect_pass("inputs_snapshot adset PASS", fixture_inputs_snapshot_adset(), p_adset)
+    expect_pass("inputs_snapshot ad PASS", fixture_inputs_snapshot_ad(), p_ad)
+    expect_pass("report_insights PASS", fixture_report_insights(), p_insights)
+    expect_pass("consultant_notes PASS", fixture_consultant_notes(), p_notes)
+    expect_pass("workflow_state PASS", fixture_workflow_state(), p_ws)
+
+    # FAIL: attribution const mismatch
+    bad = fixture_inputs_snapshot_adset()
+    bad["rows"][0]["attribution_setting"] = "點擊後 1 天"
+    expect_fail("inputs_snapshot adset attribution const FAIL", bad, p_adset, must_contain="was expected")
+
+    # FAIL: total row not dropped (name empty after drop)
+    bad2 = fixture_inputs_snapshot_ad()
+    bad2["rows"][0]["ad_name"] = ""
+    expect_fail("inputs_snapshot ad empty name FAIL", bad2, p_ad, must_contain="minLength")
+
+def test_language_drift_guard() -> None:
+    # Simulate English headers (missing Chinese required)
+    english_headers = ["Reporting Starts", "Reporting Ends", "Ad Name", "Amount Spent (TWD)"]
+    drift, missing = detect_lang_drift(english_headers, META_REQUIRED_ZH_AD)
+    if not drift:
+        raise AssertionError("[FAIL] language drift guard should detect missing Chinese headers")
+    if len(missing) < 10:
+        raise AssertionError("[FAIL] language drift guard missing list too small; required list may be wrong")
+    print("[PASS] language drift guard detects missing Chinese headers")
+
+def main() -> int:
     try:
-        validate_report_summary(rs)
-        raise AssertionError("Expected SchemaValidationError, but validation passed.")
-    except SchemaValidationError as e:
-        write_pipeline_state(
-            vdir,
-            "B(validate_error)",
-            status="error",
-            error=str(e),
-            details=e.details,
-        )
-        ps = read_json(vdir / "pipeline_state.json")
-        last = ps["events"][-1]
-        assert last["step"] == "B(validate_error)"
-        assert last["status"] == "error"
-        assert isinstance(last.get("details"), list) and len(last["details"]) > 0
+        test_report_summary_schema_locks()
+        test_step2_schemas_pass_fail()
+        test_language_drift_guard()
+    except Exception as e:
+        print(str(e))
+        return 1
 
-
-# ---- 4 cases ----
-def case_1_valid_should_pass():
-    validate_report_summary(make_valid_report_summary())
-
-
-def case_2_wrong_kpi_truth_source_should_fail_and_log():
-    rs = make_valid_report_summary()
-    rs["kpi_truth_source"] = "WRONG_VALUE"
-    with tempfile.TemporaryDirectory() as d:
-        expect_validate_error_and_event(rs, Path(d))
-
-
-def case_3_wrong_ad_diagnostics_source_should_fail_and_log():
-    rs = make_valid_report_summary()
-    rs["ad_diagnostics_source"] = "WRONG_VALUE"
-    with tempfile.TemporaryDirectory() as d:
-        expect_validate_error_and_event(rs, Path(d))
-
-
-def case_4_missing_required_field_should_fail_and_log():
-    rs = make_valid_report_summary()
-    rs["kpi"]["meta"].pop("spend_twd", None)
-    with tempfile.TemporaryDirectory() as d:
-        expect_validate_error_and_event(rs, Path(d))
-
-
-@dataclass
-class Case:
-    name: str
-    fn: Callable[[], None]
-
-
-def main():
-    cases = [
-        Case("case_1_valid_should_pass", case_1_valid_should_pass),
-        Case("case_2_wrong_kpi_truth_source_should_fail_and_log", case_2_wrong_kpi_truth_source_should_fail_and_log),
-        Case("case_3_wrong_ad_diagnostics_source_should_fail_and_log", case_3_wrong_ad_diagnostics_source_should_fail_and_log),
-        Case("case_4_missing_required_field_should_fail_and_log", case_4_missing_required_field_should_fail_and_log),
-    ]
-
-    print("Running self tests...")
-    for c in cases:
-        c.fn()
-        print(f"[PASS] {c.name}")
-    print(f"All passed: {len(cases)}/{len(cases)}")
-
+    print("\nALL SELF-TESTS PASSED ✅")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
