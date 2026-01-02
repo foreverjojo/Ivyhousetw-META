@@ -206,6 +206,43 @@ def fixture_inputs_snapshot_ad() -> Dict[str, Any]:
         ],
     }
 
+
+def fixture_inputs_snapshot_v3() -> Dict[str, Any]:
+    # Metadata-only snapshot (MVP route A)
+    return {
+        "schema_version": "inputs_snapshot.v3",
+        "created_at": "2025-12-10T10:00:00+08:00",
+        "week_id": "2025-W49",
+        "date_range": "2025-12-04~2025-12-09",
+        "uploaded_files": {
+            "meta_adset": "ivyhouse_meta_adset_2025-W49.csv",
+            "meta_ads": "ivyhouse_meta_ad_2025-W49.csv",
+            "web_excel": "web.xlsx",
+        },
+        "fingerprint": {
+            "schema_version": "inputs_fingerprint.v2",
+            "generated_at": "2025-12-10T10:00:00+08:00",
+            "config": {"detail_level": "adset+ads"},
+            "files": {
+                "meta_adset": {"name": "a.csv", "size": 1, "sha256": "0"*64},
+                "meta_ads": {"name": "b.csv", "size": 1, "sha256": "1"*64},
+                "web_excel": {"name": "c.xlsx", "size": 1, "sha256": "2"*64},
+            },
+        },
+        "fp_short": "abcdef12",
+        "manual_inputs": {
+            "schema_version": "manual_inputs.v1",
+            "updated_at": "2025-12-10T10:00:00+08:00",
+            "buying_type": "UNKNOWN",
+            "optimization_goal": "",
+            "billing_event": "",
+            "weekly_changes": "",
+            "note_for_consultants": "",
+        },
+        "prev_week": {"week_id": "2025-W48"},
+    }
+
+
 def fixture_report_insights() -> Dict[str, Any]:
     return {
         "version": "report_insights.meta.v1",
@@ -285,32 +322,49 @@ def test_report_summary_schema_locks() -> None:
     print("[PASS] report_summary.v1 schema locks (const + required)")
 
 def test_step2_schemas_pass_fail() -> None:
-    # Must exist
-    p_adset = SCHEMAS / "inputs_snapshot.meta_adset.v1.json"
-    p_ad = SCHEMAS / "inputs_snapshot.meta_ad.v1.json"
-    p_insights = SCHEMAS / "report_insights.meta.v1.json"
-    p_notes = SCHEMAS / "consultant_notes.meta.v1.json"
-    p_ws = SCHEMAS / "workflow_state.meta_weekly.v1.json"
+    # Step-2 schemas we validate in the MVP pipeline
+    p_inputs = SCHEMAS / "inputs_snapshot.v3.json"
+    p_insights = SCHEMAS / "report_insights.v1.json"
+    p_notes = SCHEMAS / "consultant_notes.v1.json"
+    p_ws = SCHEMAS / "workflow_state.v1.json"
 
-    for p in [p_adset, p_ad, p_insights, p_notes, p_ws]:
+    for p in [p_inputs, p_insights, p_notes, p_ws]:
         must_exist(p)
 
-    # PASS
-    expect_pass("inputs_snapshot adset PASS", fixture_inputs_snapshot_adset(), p_adset)
-    expect_pass("inputs_snapshot ad PASS", fixture_inputs_snapshot_ad(), p_ad)
+    # PASS (pipeline artifacts)
+    expect_pass("inputs_snapshot.v3 PASS", fixture_inputs_snapshot_v3(), p_inputs)
     expect_pass("report_insights PASS", fixture_report_insights(), p_insights)
     expect_pass("consultant_notes PASS", fixture_consultant_notes(), p_notes)
     expect_pass("workflow_state PASS", fixture_workflow_state(), p_ws)
 
-    # FAIL: attribution const mismatch
-    bad = fixture_inputs_snapshot_adset()
-    bad["rows"][0]["attribution_setting"] = "點擊後 1 天"
-    expect_fail("inputs_snapshot adset attribution const FAIL", bad, p_adset, must_contain="was expected")
+    # FAIL (common drift): missing required field
+    bad = fixture_report_insights()
+    bad.pop("week_id", None)
+    expect_fail("report_insights missing week_id FAIL", bad, p_insights, must_contain="required")
 
-    # FAIL: total row not dropped (name empty after drop)
-    bad2 = fixture_inputs_snapshot_ad()
-    bad2["rows"][0]["ad_name"] = ""
-    expect_fail("inputs_snapshot ad empty name FAIL", bad2, p_ad, must_contain="minLength")
+    bad2 = fixture_workflow_state()
+    bad2.pop("week_id", None)
+    expect_fail("workflow_state missing week_id FAIL", bad2, p_ws, must_contain="required")
+
+    # Optional: row-level input schemas (only if you keep them in schemas/)
+    p_adset = SCHEMAS / "inputs_snapshot.meta_adset.v1.json"
+    p_ad = SCHEMAS / "inputs_snapshot.meta_ad.v1.json"
+    if p_adset.exists() and p_ad.exists():
+        expect_pass("inputs_snapshot adset PASS", fixture_inputs_snapshot_adset(), p_adset)
+        expect_pass("inputs_snapshot ad PASS", fixture_inputs_snapshot_ad(), p_ad)
+
+        # FAIL: attribution const mismatch
+        bad3 = fixture_inputs_snapshot_adset()
+        bad3["rows"][0]["attribution_setting"] = "點擊後 1 天"
+        expect_fail("inputs_snapshot adset attribution const FAIL", bad3, p_adset, must_contain="expected")
+
+        # FAIL: total row not dropped (name empty after drop)
+        bad4 = fixture_inputs_snapshot_ad()
+        bad4["rows"][0]["ad_name"] = ""
+        expect_fail("inputs_snapshot ad empty name FAIL", bad4, p_ad, must_contain="minLength")
+    else:
+        print("[SKIP] row-level input snapshot schemas not found (ok for metadata-only MVP)")
+
 
 def test_language_drift_guard() -> None:
     # Simulate English headers (missing Chinese required)

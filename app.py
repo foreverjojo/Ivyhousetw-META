@@ -1,6 +1,7 @@
 import json
 import hashlib
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -415,6 +416,46 @@ validate_schema = st.sidebar.checkbox(
     help="用 schemas/report_summary.v1.json 強制驗證 Step B 產物，避免口徑漂移。",
 )
 
+def safe_stamp() -> str:
+    """filesystem-safe stamp for staging folders."""
+    if TAIPEI_TZ:
+        return datetime.now(TAIPEI_TZ).strftime("%Y%m%d_%H%M%S")
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def staging_version_dir(fp_code: str) -> Path:
+    """A staging vdir to record early Step-B errors before week_id/vdir is resolved."""
+    return HISTORY_ROOT / "_staging" / safe_stamp() / "meta" / "versions" / f"fp-{fp_code}"
+
+
+def _cleanup_staging_on_success(stage_vdir: Path) -> None:
+    """Delete only the single staging run folder (<stamp>) after Step B succeeds.
+
+    Expected structure:
+      history/_staging/<stamp>/meta/versions/fp-xxxxxxxx  <-- stage_vdir
+    We delete:
+      history/_staging/<stamp>
+    """
+    try:
+        p = str(stage_vdir).replace("\\", "/")
+        if "/_staging/" not in p:
+            return
+
+        stamp_dir = None
+        for parent in stage_vdir.parents:
+            if parent.parent and parent.parent.name == "_staging":
+                stamp_dir = parent
+                break
+
+        if not stamp_dir:
+            return
+        if stamp_dir.name in ("", "_staging"):
+            return
+
+        shutil.rmtree(stamp_dir, ignore_errors=True)
+    except Exception:
+        pass
+
 st.sidebar.divider()
 st.sidebar.caption("版本模式（互斥）")
 
@@ -759,71 +800,94 @@ def run_step_b(mode_label: str) -> Tuple[str, str, Path, dict]:
     if not current_fp or not fp_code:
         raise RuntimeError("缺少 fingerprint（請先完成 Step A）。")
 
-    with st.spinner(f"{mode_label}｜Step B：deterministic KPI -> report_summary.json..."):
-        rs = build_report_summary(
-            meta_adset_file.getvalue(),
-            meta_ads_file.getvalue(),
-            web_excel_file.getvalue(),
-        )
+    # staging vdir: record early failures (e.g., language-drift guard) before week_id is resolved
+    stage_vdir = staging_version_dir(fp_code)
+    stage_vdir.mkdir(parents=True, exist_ok=True)
 
-    # ✅ week_id 正規化（W 補零）
-    rs_week_raw = rs.get("week_id")
-    rs_week_norm = normalize_week_id(rs_week_raw or "")
-    if not rs_week_norm:
-        raise RuntimeError(f"report_summary.week_id 不合法：{rs_week_raw}（需 YYYY-Www）")
-    rs["week_id"] = rs_week_norm
-
-    week_id = rs["week_id"]
-    prev_ctx = load_prev_week_context(week_id)
-
-    # ✅ 先決定 vdir（讓 validate 失敗也能落盤到 pipeline_state）
-    resolved_fp, vdir = choose_version_dir_for_run(rs, fp_code)
-    vdir.mkdir(parents=True, exist_ok=True)
-
-    # ✅ Step B 後強制 schema validate（避免口徑漂）+ 失敗寫入 pipeline_state events
-    if st.session_state.get("validate_schema", True):
+    cleanup_ok = False
+    try:
         try:
-            validate_report_summary(rs)
-        except SchemaValidationError as e:
-            write_pipeline_state(
-                vdir,
-                "B(validate_error)",
-                mode_label,
-                status="error",
-                error=str(e),
-                details=e.details,
-            )
-            raise
+            with st.spinner(f"{mode_label}｜Step B：deterministic KPI -> report_summary.json..."):
+                rs = build_report_summary(
+                    meta_adset_file.getvalue(),
+                    meta_ads_file.getvalue(),
+                    web_excel_file.getvalue(),
+                )
         except Exception as e:
+            msg = str(e)
+            step_name = "B(lang_drift_error)" if ("請用中文欄位匯出" in msg or "中文欄位" in msg) else "B(preflight_error)"
             write_pipeline_state(
-                vdir,
-                "B(validate_error)",
+                stage_vdir,
+                step_name,
                 mode_label,
                 status="error",
-                error=str(e),
-                details=[str(e)],
+                error=msg,
+                details=[msg],
+                extra={"staging_vdir": str(stage_vdir)},
             )
             raise
 
-    # inputs + report_summary
-    inputs = build_inputs_snapshot(rs, current_fp, resolved_fp, meta_adset_file, meta_ads_file, web_excel_file, prev_ctx)
-    write_json(vdir / "inputs.json", inputs)
-    write_json(vdir / "report_summary.json", rs)
+            # ✅ week_id 正規化（W 補零）
+            rs_week_raw = rs.get("week_id")
+            rs_week_norm = normalize_week_id(rs_week_raw or "")
+            if not rs_week_norm:
+                raise RuntimeError(f"report_summary.week_id 不合法：{rs_week_raw}（需 YYYY-Www）")
+            rs["week_id"] = rs_week_norm
 
-    # lock
-    st.session_state["locked_week_id"] = week_id
-    st.session_state["locked_fp"] = resolved_fp
-    st.session_state["locked_vdir"] = str(vdir)
-    st.session_state["report_summary"] = rs
+            week_id = rs["week_id"]
+            prev_ctx = load_prev_week_context(week_id)
 
-    # 更新 latest 指標 -> 指向「本次 fp_code」（相對路徑存 latest.json）
-    write_latest_ptr(week_id, resolved_fp)
+            # ✅ 先決定 vdir（讓 validate 失敗也能落盤到 pipeline_state）
+            resolved_fp, vdir = choose_version_dir_for_run(rs, fp_code)
+            vdir.mkdir(parents=True, exist_ok=True)
 
-    write_pipeline_state(vdir, "B", mode_label)
-    render_sidebar_status(week_id, vdir)
+            # ✅ Step B 後強制 schema validate（避免口徑漂）+ 失敗寫入 pipeline_state events
+            if st.session_state.get("validate_schema", True):
+                try:
+                    validate_report_summary(rs)
+                except SchemaValidationError as e:
+                    write_pipeline_state(
+                        vdir,
+                        "B(validate_error)",
+                        mode_label,
+                        status="error",
+                        error=str(e),
+                        details=e.details,
+                    )
+                    raise
+                except Exception as e:
+                    write_pipeline_state(
+                        vdir,
+                        "B(validate_error)",
+                        mode_label,
+                        status="error",
+                        error=str(e),
+                        details=[str(e)],
+                    )
+                    raise
 
-    return week_id, resolved_fp, vdir, prev_ctx
+            # inputs + report_summary
+            inputs = build_inputs_snapshot(rs, current_fp, resolved_fp, meta_adset_file, meta_ads_file, web_excel_file, prev_ctx)
+            write_json(vdir / "inputs.json", inputs)
+            write_json(vdir / "report_summary.json", rs)
 
+            # lock
+            st.session_state["locked_week_id"] = week_id
+            st.session_state["locked_fp"] = resolved_fp
+            st.session_state["locked_vdir"] = str(vdir)
+            st.session_state["report_summary"] = rs
+
+            # 更新 latest 指標 -> 指向「本次 fp_code」（相對路徑存 latest.json）
+            write_latest_ptr(week_id, resolved_fp)
+
+            write_pipeline_state(vdir, "B", mode_label)
+            render_sidebar_status(week_id, vdir)
+
+        cleanup_ok = True
+        return week_id, resolved_fp, vdir, prev_ctx
+    finally:
+        if cleanup_ok:
+            _cleanup_staging_on_success(stage_vdir)
 
 def run_step_c(mode_label: str, week_id: str, vdir: Path, prev_ctx: dict, resolved_fp: str) -> None:
     sync_manual_inputs_to_inputs_json(vdir)

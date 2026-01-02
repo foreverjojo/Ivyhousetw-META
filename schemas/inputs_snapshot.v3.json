@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "inputs_snapshot.v3 (metadata-only)",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "const": "inputs_snapshot.v3"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "week_id": {
+      "type": "string",
+      "pattern": "^\\d{4}-W\\d{2}$"
+    },
+    "date_range": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "uploaded_files": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "meta_adset": {
+          "type": "string",
+          "minLength": 1
+        },
+        "meta_ads": {
+          "type": "string",
+          "minLength": 1
+        },
+        "web_excel": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "meta_adset",
+        "meta_ads",
+        "web_excel"
+      ]
+    },
+    "fingerprint": {
+      "type": "object"
+    },
+    "fp_short": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}$"
+    },
+    "manual_inputs": {
+      "type": "object"
+    },
+    "prev_week": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "week_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-W\\d{2}$"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "created_at",
+    "week_id",
+    "uploaded_files",
+    "fingerprint",
+    "fp_short",
+    "manual_inputs",
+    "prev_week"
+  ]
+}
