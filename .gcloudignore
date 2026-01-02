@@ -1,0 +1,67 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore, with the addition of
+# "#!include" directives (which insert the entries of the given .gitignore-style
+# file at that point).
+
+#!include:.gitignore
+
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# History and data (will be recreated)
+history/
+
+# Testing
+.pytest_cache/
+*.coverage
+htmlcov/
+
+# Documentation (keep only essential)
+*.md
+!readme.md
+!DEPLOY.md
+
+# Replit specific
+.replit
+replit.md
+
+# Examples
+examples/
+
+# Large files
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Development
+.idx/
+deploy.ps1

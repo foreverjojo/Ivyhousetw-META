@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# History and data (will be recreated)
+history/
+
+# Testing
+.pytest_cache/
+*.coverage
+htmlcov/
+
+# Documentation
+*.md
+!readme.md
+
+# Replit specific
+.replit
+replit.md
+
+# Examples
+examples/
+
+# Large files
+uv.lock
+*.png
+*.jpg
+*.jpeg

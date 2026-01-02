@@ -1,0 +1,8 @@
+crewai>=1.7.2
+openpyxl>=3.1.5
+pandas>=2.3.3
+python-dateutil>=2.9.0.post0
+requests>=2.32.5
+streamlit>=1.52.2
+flask>=3.0.0
+jsonschema>=4.20.0
