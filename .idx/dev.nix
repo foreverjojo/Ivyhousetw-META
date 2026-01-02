@@ -24,17 +24,19 @@
     
     # Workspace settings
     workspace = {
-      # On create, install Python dependencies via pip
+      # On create, create venv and install dependencies
       onCreate = {
         install-deps = ''
-          python -m pip install --upgrade pip
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
           pip install -r requirements.txt
         '';
       };
       
       # On start, provide helpful commands
       onStart = {
-        info = "echo 'Ivy House Meta Analyzer ready! Run: python main.py'";
+        info = "echo 'Ivy House Meta Analyzer ready! Run: source .venv/bin/activate && python main.py'";
       };
     };
     
@@ -43,10 +45,10 @@
       enable = true;
       previews = {
         web = {
-          # Run Streamlit directly in dev environment (not main.py)
+          # Run Streamlit using the virtual environment
           command = [
             "sh" "-c"
-            "pip install -q -r requirements.txt && streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
+            "source .venv/bin/activate && pip install -q -r requirements.txt && streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
           ];
           manager = "web";
           env = {
