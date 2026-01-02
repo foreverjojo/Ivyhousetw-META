@@ -48,7 +48,7 @@
           # Run Streamlit using the virtual environment
           command = [
             "sh" "-c"
-            "source .venv/bin/activate && pip install -q -r requirements.txt && streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
+            "if [ ! -d .venv ]; then python -m venv .venv; fi && source .venv/bin/activate && pip install -q -r requirements.txt && streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
           ];
           manager = "web";
           env = {
