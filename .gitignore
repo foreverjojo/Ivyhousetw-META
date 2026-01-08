@@ -167,4 +167,5 @@ venv/
 .python311/
 *.exe
 uv.exe
-uv.lock
+ifp.env
+.env
