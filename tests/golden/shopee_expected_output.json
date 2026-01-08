@@ -1,0 +1,129 @@
+{
+  "version": "unified_ad_data.v1",
+  "source": "shopee_ad_csv",
+  "timezone": "Asia/Taipei",
+  "generated_at": "1970-01-01T00:00:00+00:00",
+  "data": [
+    {
+      "platform": "shopee",
+      "level": "ad",
+      "id": "-",
+      "name": "賣場廣告 (自動投放)",
+      "time_range": {
+        "start": "",
+        "end": ""
+      },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 5050.65,
+        "impressions": 28817,
+        "clicks": 3211,
+        "conversions": {
+          "truth": {
+            "count": 35,
+            "value": 12240.0
+          },
+          "platform": {
+            "count": 54,
+            "value": 16993.0
+          }
+        },
+        "funnel": {
+          "atc": 0,
+          "ic": 0,
+          "lpv": 0
+        }
+      },
+      "source": {
+        "kind": "shopee_ad_csv",
+        "row_index": 0,
+        "raw_id": "-",
+        "product_id": "-",
+        "ad_type": "賣場廣告",
+        "status": "正在進行",
+        "placement": "-"
+      }
+    },
+    {
+      "platform": "shopee",
+      "level": "ad",
+      "id": "1375165434",
+      "name": "【艾薇手工坊】夏威夷豆塔-蜂蜜蔓越莓口味10入 (袋裝) [6]",
+      "time_range": {
+        "start": "",
+        "end": ""
+      },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 20014.53,
+        "impressions": 241129,
+        "clicks": 2575,
+        "conversions": {
+          "truth": {
+            "count": 48,
+            "value": 24000.0
+          },
+          "platform": {
+            "count": 106,
+            "value": 41727.0
+          }
+        },
+        "funnel": {
+          "atc": 0,
+          "ic": 0,
+          "lpv": 0
+        }
+      },
+      "source": {
+        "kind": "shopee_ad_csv",
+        "row_index": 1,
+        "raw_id": "1375165434",
+        "product_id": "1375165434",
+        "ad_type": "商品廣告",
+        "status": "正在進行",
+        "placement": "所有"
+      }
+    },
+    {
+      "platform": "shopee",
+      "level": "ad",
+      "id": "3404746635",
+      "name": "【艾薇手工坊】經典杏仁瓦片-原味 90g/135g (袋裝) [5]",
+      "time_range": {
+        "start": "",
+        "end": ""
+      },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 4104.96,
+        "impressions": 90719,
+        "clicks": 1465,
+        "conversions": {
+          "truth": {
+            "count": 47,
+            "value": 12442.0
+          },
+          "platform": {
+            "count": 75,
+            "value": 17808.0
+          }
+        },
+        "funnel": {
+          "atc": 0,
+          "ic": 0,
+          "lpv": 0
+        }
+      },
+      "source": {
+        "kind": "shopee_ad_csv",
+        "row_index": 2,
+        "raw_id": "3404746635",
+        "product_id": "3404746635",
+        "ad_type": "商品廣告",
+        "status": "正在進行",
+        "placement": "所有"
+      }
+    }
+  ],
+  "__comment": "檔案用途：Shopee Adapter Golden Test 預期輸出"
+}

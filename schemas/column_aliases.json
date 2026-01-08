@@ -1,0 +1,183 @@
+{
+    "$comment": "檔案用途：定義 Meta CSV 欄位的雙語別名對應，供 kpi_calc.py 動態載入。支援英文與繁體中文欄位名稱。",
+    "spend": [
+        "Amount spent (TWD)",
+        "Amount spent",
+        "花費金額 (TWD)",
+        "花費金額",
+        "已花費金額"
+    ],
+    "impressions": [
+        "Impressions",
+        "曝光次數"
+    ],
+    "reach": [
+        "Reach",
+        "觸及人數"
+    ],
+    "frequency": [
+        "Frequency",
+        "頻率"
+    ],
+    "link_clicks": [
+        "Link clicks",
+        "Link Clicks",
+        "連結點擊次數"
+    ],
+    "lpv": [
+        "Landing page views",
+        "Landing Page Views",
+        "連結頁面瀏覽次數"
+    ],
+    "atc": [
+        "Adds to cart",
+        "Adds to Cart",
+        "加到購物車次數",
+        "加入購物車"
+    ],
+    "ic": [
+        "Checkouts initiated",
+        "Initiate Checkout",
+        "Initiate checkout",
+        "開始結帳次數",
+        "開始結帳"
+    ],
+    "purchases_platform": [
+        "Purchases",
+        "購買次數"
+    ],
+    "purchases_value_platform": [
+        "Purchases conversion value",
+        "Purchase Conversion Value",
+        "Purchase conversion value",
+        "購買轉換值"
+    ],
+    "purchases_website": [
+        "Website purchases",
+        "Website Purchases",
+        "網站購買",
+        "網站直接購買次數"
+    ],
+    "purchases_value_website": [
+        "Website purchases conversion value",
+        "Website Purchase Conversion Value",
+        "Website purchase conversion value",
+        "網站直接購買轉換值"
+    ],
+    "adset_name": [
+        "Ad set name",
+        "Ad Set Name",
+        "Ad Set name",
+        "廣告組合名稱"
+    ],
+    "ad_name": [
+        "Ad name",
+        "Ad Name",
+        "廣告名稱"
+    ],
+    "campaign_name": [
+        "Campaign name",
+        "Campaign Name",
+        "行銷活動名稱"
+    ],
+    "date_start": [
+        "Reporting starts",
+        "分析報告開始"
+    ],
+    "date_end": [
+        "Reporting ends",
+        "分析報告結束"
+    ],
+    "video_3s": [
+        "3-second video plays",
+        "3-Second Video Plays",
+        "ThruPlay views",
+        "影片播放 3 秒以上次數",
+        "3 秒影片觀看次數"
+    ],
+    "thruplays": [
+        "ThruPlays",
+        "Thruplay views",
+        "影片完整播放次數"
+    ],
+    "video_25": [
+        "Video plays at 25%",
+        "影片觀看進度達 25%"
+    ],
+    "video_50": [
+        "Video plays at 50%",
+        "影片觀看進度達 50%"
+    ],
+    "video_75": [
+        "Video plays at 75%",
+        "影片觀看進度達 75%"
+    ],
+    "video_95": [
+        "Video plays at 95%",
+        "影片觀看進度達 95%"
+    ],
+    "video_100": [
+        "Video plays at 100%",
+        "影片觀看進度達 100%"
+    ],
+    "video_avg_time": [
+        "Video average play time",
+        "影片平均播放時間"
+    ],
+    "delivery": [
+        "Delivery",
+        "Ad set delivery",
+        "Ad delivery",
+        "投遞狀態"
+    ],
+    "budget": [
+        "Ad set budget",
+        "Budget",
+        "預算"
+    ],
+    "budget_type": [
+        "Ad set budget type",
+        "Budget type",
+        "預算類型"
+    ],
+    "bid_type": [
+        "Bid type",
+        "Bid strategy",
+        "出價類型",
+        "出價策略"
+    ],
+    "ends": [
+        "Ends",
+        "結束時間"
+    ],
+    "ad_id": [
+        "Ad ID",
+        "Ad id",
+        "廣告編號"
+    ],
+    "adset_id": [
+        "Ad set ID",
+        "Ad set id",
+        "廣告組合編號"
+    ],
+    "campaign_id": [
+        "Campaign ID",
+        "Campaign id",
+        "行銷活動編號"
+    ],
+    "quality_ranking": [
+        "Quality ranking",
+        "Quality Ranking",
+        "品質排名"
+    ],
+    "engagement_ranking": [
+        "Engagement rate ranking",
+        "Engagement Rate Ranking",
+        "互動率排名"
+    ],
+    "conversion_ranking": [
+        "Conversion rate ranking",
+        "Conversion Rate Ranking",
+        "轉換率排名"
+    ]
+}

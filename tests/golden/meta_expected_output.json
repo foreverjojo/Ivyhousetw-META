@@ -1,0 +1,86 @@
+{ "__comment": "檔案用途：Meta Adset CSV 轉換為 Unified 格式後的 golden 預期產出（不含總計列）。",
+  "version": "unified_ad_data.v1",
+  "source": "meta_adset_csv",
+  "timezone": "Asia/Taipei",
+  "generated_at": "1970-01-01T00:00:00+00:00",
+  "data": [
+    {
+      "platform": "meta",
+      "level": "adset",
+      "id": "2380001",
+      "name": "ADSET_A",
+      "time_range": { "start": "2026-01-01", "end": "2026-01-03" },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 1200.0,
+        "impressions": 10000,
+        "clicks": 350,
+        "conversions": {
+          "truth": { "count": 4, "value": 7200.0 },
+          "platform": { "count": 5, "value": 8500.0 }
+        },
+        "funnel": { "atc": 40, "ic": 18, "lpv": 600 }
+      },
+      "source": {
+        "kind": "meta_adset_csv",
+        "row_index": 0,
+        "raw_id": "2380001",
+        "account_name": "IvyHouse",
+        "campaign_name": "Cold Audience",
+        "adset_name": "ADSET_A"
+      }
+    },
+    {
+      "platform": "meta",
+      "level": "adset",
+      "id": "2380002",
+      "name": "ADSET_B",
+      "time_range": { "start": "2026-01-01", "end": "2026-01-03" },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 800.0,
+        "impressions": 6000,
+        "clicks": 210,
+        "conversions": {
+          "truth": { "count": 2, "value": 3600.0 },
+          "platform": { "count": 2, "value": 3800.0 }
+        },
+        "funnel": { "atc": 28, "ic": 12, "lpv": 420 }
+      },
+      "source": {
+        "kind": "meta_adset_csv",
+        "row_index": 1,
+        "raw_id": "2380002",
+        "account_name": "IvyHouse",
+        "campaign_name": "Cold Audience",
+        "adset_name": "ADSET_B"
+      }
+    },
+    {
+      "platform": "meta",
+      "level": "adset",
+      "id": "2380003",
+      "name": "ADSET_C",
+      "time_range": { "start": "2026-01-01", "end": "2026-01-03" },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 500.0,
+        "impressions": 4000,
+        "clicks": 140,
+        "conversions": {
+          "truth": { "count": 1, "value": 1500.0 },
+          "platform": { "count": 1, "value": 1600.0 }
+        },
+        "funnel": { "atc": 18, "ic": 7, "lpv": 260 }
+      },
+      "source": {
+        "kind": "meta_adset_csv",
+        "row_index": 2,
+        "raw_id": "2380003",
+        "account_name": "IvyHouse",
+        "campaign_name": "Retargeting",
+        "adset_name": "ADSET_C"
+      }
+    }
+  ]
+}

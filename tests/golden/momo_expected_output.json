@@ -1,0 +1,189 @@
+{
+  "version": "unified_ad_data.v1",
+  "source": "momo_ad_report",
+  "timezone": "Asia/Taipei",
+  "generated_at": "1970-01-01T00:00:00+00:00",
+  "data": [
+    {
+      "platform": "momo",
+      "level": "ad",
+      "id": "207705",
+      "name": "【艾薇手工坊】經典杏仁瓦片-原味 135g/袋裝杏仁瓦片",
+      "time_range": {
+        "start": "1970-01-01",
+        "end": "1970-01-01"
+      },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 280.0,
+        "impressions": 1729,
+        "clicks": 35,
+        "conversions": {
+          "truth": {
+            "count": 0,
+            "value": 0.0
+          },
+          "platform": {
+            "count": 0,
+            "value": 0.0
+          }
+        },
+        "funnel": {
+          "atc": 3,
+          "ic": 0,
+          "lpv": 0
+        }
+      },
+      "source": {
+        "kind": "momo_ad_report",
+        "row_index": 0,
+        "raw_id": "207705"
+      }
+    },
+    {
+      "platform": "momo",
+      "level": "ad",
+      "id": "207703",
+      "name": "【艾薇手工坊】濾掛式咖啡 - 綜合風味 - 40入 盒裝選用頂級咖啡豆研磨製成",
+      "time_range": {
+        "start": "1970-01-01",
+        "end": "1970-01-01"
+      },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 1264.0,
+        "impressions": 28146,
+        "clicks": 158,
+        "conversions": {
+          "truth": {
+            "count": 0,
+            "value": 0.0
+          },
+          "platform": {
+            "count": 0,
+            "value": 0.0
+          }
+        },
+        "funnel": {
+          "atc": 6,
+          "ic": 0,
+          "lpv": 0
+        }
+      },
+      "source": {
+        "kind": "momo_ad_report",
+        "row_index": 1,
+        "raw_id": "207703"
+      }
+    },
+    {
+      "platform": "momo",
+      "level": "ad",
+      "id": "209546",
+      "name": "【艾薇手工坊】那年花開禮盒 17入豆塔+雪花餅+鳳梨酥 / 鐵盒禮盒附提袋",
+      "time_range": {
+        "start": "1970-01-01",
+        "end": "1970-01-01"
+      },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 80.0,
+        "impressions": 440,
+        "clicks": 10,
+        "conversions": {
+          "truth": {
+            "count": 0,
+            "value": 0.0
+          },
+          "platform": {
+            "count": 0,
+            "value": 0.0
+          }
+        },
+        "funnel": {
+          "atc": 2,
+          "ic": 0,
+          "lpv": 0
+        }
+      },
+      "source": {
+        "kind": "momo_ad_report",
+        "row_index": 2,
+        "raw_id": "209546"
+      }
+    },
+    {
+      "platform": "momo",
+      "level": "ad",
+      "id": "207716",
+      "name": "【艾薇手工坊】夏威夷豆塔-綜合口味 10入/袋裝",
+      "time_range": {
+        "start": "1970-01-01",
+        "end": "1970-01-01"
+      },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 32.0,
+        "impressions": 61,
+        "clicks": 4,
+        "conversions": {
+          "truth": {
+            "count": 0,
+            "value": 0.0
+          },
+          "platform": {
+            "count": 0,
+            "value": 0.0
+          }
+        },
+        "funnel": {
+          "atc": 0,
+          "ic": 0,
+          "lpv": 0
+        }
+      },
+      "source": {
+        "kind": "momo_ad_report",
+        "row_index": 3,
+        "raw_id": "207716"
+      }
+    },
+    {
+      "platform": "momo",
+      "level": "ad",
+      "id": "209520",
+      "name": "【艾薇手工坊】暖暖幸福禮盒手工餅乾36入 / 鐵盒禮盒附提袋",
+      "time_range": {
+        "start": "1970-01-01",
+        "end": "1970-01-01"
+      },
+      "currency": "TWD",
+      "metrics": {
+        "spend": 1792.0,
+        "impressions": 38157,
+        "clicks": 224,
+        "conversions": {
+          "truth": {
+            "count": 0,
+            "value": 0.0
+          },
+          "platform": {
+            "count": 0,
+            "value": 0.0
+          }
+        },
+        "funnel": {
+          "atc": 24,
+          "ic": 0,
+          "lpv": 0
+        }
+      },
+      "source": {
+        "kind": "momo_ad_report",
+        "row_index": 4,
+        "raw_id": "209520"
+      }
+    }
+  ],
+  "__comment": "檔案用途：MOMO Adapter Golden Test 預期輸出"
+}

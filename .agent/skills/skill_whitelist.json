@@ -1,0 +1,19 @@
+{
+    "version": "1.0",
+    "approved_sources": [
+        "openai/*",
+        "google/*",
+        "anthropic/*",
+        "ivyhouse-tw/*",
+        "crewai/*",
+        "langchain-ai/*"
+    ],
+    "approval_policy": {
+        "auto_approve_official_orgs": true,
+        "require_manual_approval_for_personal_repos": true,
+        "minimum_stars": 100,
+        "maximum_repo_age_months": 6
+    },
+    "last_updated": "2026-01-04T01:47:00Z",
+    "approved_by": "QA Team"
+}

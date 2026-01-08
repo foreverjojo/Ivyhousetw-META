@@ -1,0 +1,40 @@
+# Task List
+
+專案任務追蹤與記憶管理。
+
+## 2026-01-06 Memory Reset Prep Skill 開發
+
+### 已完成
+- [x] 理解 Agent 記憶管理機制
+- [x] 分析清除記憶的時機與必要性
+- [x] 規劃 Memory Reset Prep Skill 架構
+- [x] 實作 `scripts/skills/reset_memory_prep.py` 核心邏輯
+  - [x] 備份機制（`.agent/backup/`）
+  - [x] 互動式任務狀態更新
+  - [x] Walkthrough 同步功能
+  - [x] Handover 文件生成
+- [x] 實作 `safe_read_file` 錯誤處理（回傳 Tuple）
+- [x] 實作 `safe_write_file` Atomic Write 機制
+  - [x] tempfile.mkstemp() 建立暫存檔
+  - [x] os.fsync() 確保資料落盤
+  - [x] Path.replace() atomic rename
+  - [x] fd 洩漏防護
+  - [x] 暫存檔清理容錯
+- [x] Codex CLI 交叉審核通過
+- [x] Claude CLI 實作驗證通過
+
+### 技術細節
+- **檔案**：`scripts/skills/reset_memory_prep.py` (483 行)
+- **語法驗證**：✅ Pass
+- **QA 審核**：✅ Pass (Codex CLI)
+- **安全特性**：企業級 Atomic Write 機制
+
+### 下一步
+- [ ] 執行 `python -m scripts.skills.reset_memory_prep`
+- [ ] 驗證生成的 `handover.md.resolved`
+- [ ] 清除 Agent 記憶
+- [ ] 使用 handover 文件恢復上下文
+
+## 備註
+- 本次開發完成了完整的「記憶清除準備工作流程」
+- 此 Skill 將作為未來所有記憶清除前的標準程序
