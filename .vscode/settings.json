@@ -113,15 +113,39 @@
   "cSpell.configFile": "${workspaceFolder}/cspell.json",
 
   // =====================================================================
-  // ====== B Group: Git / Review (GitLens + GitHub PR) — minimal + quiet ======
+  // ====== B Group: Git / Review (GitLens + GitHub PR) — stable & quiet ======
   // =====================================================================
 
-  // GitLens: keep blame info via hover/current line, but avoid visual noise (CodeLens)
-  "gitlens.currentLine.enabled": true,
+  // --- GitLens: keep audit value, reduce noise
+  // Disable inline "current line" annotations + status bar clutter; keep hover blame when you need it.
+  "gitlens.currentLine.enabled": false,
   "gitlens.hovers.enabled": true,
-  "gitlens.codeLens.enabled": false,
+  "gitlens.hovers.currentLine.over": "line",
+  "gitlens.statusBar.enabled": false,
 
-  // Optional: keep GitLens from spamming UI with status bar clutter
-  "gitlens.statusBar.enabled": true,
-  "gitlens.statusBar.command": "gitlens.showQuickRepoStatus"
+  // Avoid CodeLens noise
+  "gitlens.codeLens.enabled": false,
+  "gitlens.codeLens.recentChange.enabled": false,
+  "gitlens.codeLens.authors.enabled": false,
+
+  // Views: keep only what helps audit / compare
+  "gitlens.views.repositories.enabled": true,
+  "gitlens.views.fileHistory.enabled": true,
+  "gitlens.views.lineHistory.enabled": false,
+  "gitlens.views.compare.enabled": true,
+
+  // Date readability in hovers/history
+  "gitlens.defaultDateFormat": "YYYY-MM-DD",
+  "gitlens.defaultDateShortFormat": "MM/DD",
+
+  // Reduce nag messages
+  "gitlens.advanced.messages": {
+    "suppressCommitHasNoPreviousCommitWarning": true
+  },
+
+  // --- GitHub Pull Requests and Issues: keep it as a viewer (avoid auto branch operations)
+  "githubPullRequests.pullBranch": "never",
+  "githubPullRequests.showPullRequestNumberInEditor": true,
+  "githubPullRequests.terminalLinksHandler": "github",
+  "githubPullRequests.fileListLayout": "tree"
 }
