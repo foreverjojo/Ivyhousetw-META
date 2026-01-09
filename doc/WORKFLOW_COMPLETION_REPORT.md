@@ -128,7 +128,11 @@ python scripts/benchmark.py
 ```
 
 
-## 📋 快速開始指南
+## � 環境與 IDE 一致性
+- 本專案同步維護下列檔案以確保開發環境一致：`.devcontainer/devcontainer.json`、`.vscode/extensions.json` 與 `.idx/dev.nix`。
+- Dev Container（本地開發）會使用 `.devcontainer/devcontainer.json` 安裝 extensions；IDX / Firebase Studio（雲端 IDE）會參照 `.idx/dev.nix` 安裝，以減少環境差異與 onboarding 成本。
+
+## �📋 快速開始指南
 
 ### Step 1: 安裝依賴
 ```powershell
