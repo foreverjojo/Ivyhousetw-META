@@ -9,7 +9,11 @@
 ## Run app
 ```bash
 streamlit run app.py
+```
 
+### Development environment（Dev Container & Cloud IDE）
+- 本專案維護下列 extension 清單：`.devcontainer/devcontainer.json`（Dev Container）、`.vscode/extensions.json`（工作區建議）、`.idx/dev.nix`（IDX / Firebase Studio）。
+- 在 Dev Container 中開啟工作區時，VS Code 會根據 `.devcontainer/devcontainer.json` 安裝 extensions；在 IDX / Firebase Studio 開啟時，會安裝 `.idx/dev.nix` 內列的 extensions，以確保本地與雲端 IDE 的一致性。
 
 ### ========================================
 ## Data Contracts（唯一真值 / 不可漂移）
