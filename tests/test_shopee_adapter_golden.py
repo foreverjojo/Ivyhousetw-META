@@ -36,34 +36,34 @@ def test_shopee_adapter_matches_golden(sample_shopee_csv, test_data_dir):
     expected_path = test_data_dir / "shopee_expected_output.json"
     if not expected_path.exists():
         pytest.skip(f"Golden file 不存在：{expected_path}")
-    
+
     expected = _load_json(expected_path)
     expected.pop("__comment", None)
-    
+
     from scripts.adapters.shopee_adapter import adapt_shopee_ad_csv
-    
+
     actual = adapt_shopee_ad_csv(sample_shopee_csv)
     # 忽略時間戳差異
     actual["generated_at"] = expected["generated_at"]
-    
+
     assert actual == expected
 
 
 def test_shopee_adapter_record_count(sample_shopee_csv):
     """測試蝦皮 adapter 資料筆數正確"""
     from scripts.adapters.shopee_adapter import adapt_shopee_ad_csv
-    
+
     result = adapt_shopee_ad_csv(sample_shopee_csv)
-    
+
     assert len(result["data"]) == 3, f"預期 3 筆資料，實際 {len(result['data'])} 筆"
 
 
 def test_shopee_adapter_required_fields(sample_shopee_csv):
     """測試蝦皮 adapter 產出包含必要欄位"""
     from scripts.adapters.shopee_adapter import adapt_shopee_ad_csv
-    
+
     result = adapt_shopee_ad_csv(sample_shopee_csv)
-    
+
     for record in result["data"]:
         # 必填欄位
         assert "platform" in record
@@ -74,7 +74,7 @@ def test_shopee_adapter_required_fields(sample_shopee_csv):
         assert "time_range" in record
         assert "currency" in record
         assert "metrics" in record
-        
+
         # metrics 結構
         metrics = record["metrics"]
         assert "spend" in metrics
@@ -82,7 +82,7 @@ def test_shopee_adapter_required_fields(sample_shopee_csv):
         assert "clicks" in metrics
         assert "conversions" in metrics
         assert "funnel" in metrics
-        
+
         # conversions 結構
         conv = metrics["conversions"]
         assert "truth" in conv

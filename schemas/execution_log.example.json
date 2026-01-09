@@ -1,0 +1,106 @@
+{
+  "$comment": "此為 execution_log.schema.json 的範例檔案，展示正確的格式",
+  "schema_version": "1.0.0",
+  "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "started_at": "2026-01-10T16:00:00+08:00",
+  "ended_at": "2026-01-10T16:30:00+08:00",
+  "duration_seconds": 1800,
+  "executor": {
+    "tool": "Copilot Chat",
+    "model": "gpt-5.2",
+    "agent_role": "Engineer"
+  },
+  "context": {
+    "project": "Ivyhousetw-META",
+    "branch": "main",
+    "working_directory": "/workspaces/ivyhousetw ad analyzer/Ivyhousetw-META",
+    "triggered_by": "user_command"
+  },
+  "tasks_executed": [
+    {
+      "index": "Idx-004",
+      "title": "補齊 engineer.md 加入 Scope 檢測 Checklist",
+      "status": "COMPLETED",
+      "qa_result": "PASS",
+      "started_at": "2026-01-10T16:00:00+08:00",
+      "completed_at": "2026-01-10T16:15:00+08:00",
+      "changed_files": [
+        { "path": ".agent/roles/engineer.md", "action": "MODIFY" },
+        { "path": "doc/logs/Idx-004_log.md", "action": "NEW" }
+      ],
+      "log_file": "doc/logs/Idx-004_log.md"
+    },
+    {
+      "index": "Idx-005",
+      "title": "建立 .agent/execution_log.json Schema",
+      "status": "COMPLETED",
+      "qa_result": "PASS",
+      "started_at": "2026-01-10T16:15:00+08:00",
+      "completed_at": "2026-01-10T16:30:00+08:00",
+      "changed_files": [
+        { "path": "schemas/execution_log.schema.json", "action": "NEW" },
+        { "path": "schemas/execution_log.example.json", "action": "NEW" },
+        { "path": "doc/logs/Idx-005_log.md", "action": "NEW" }
+      ],
+      "log_file": "doc/logs/Idx-005_log.md"
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_name": "read_file",
+      "timestamp": "2026-01-10T16:01:00+08:00",
+      "parameters": { "filepath": "doc/logs/Idx-000_log.template.md" },
+      "success": true,
+      "duration_ms": 50
+    },
+    {
+      "tool_name": "multi_edit",
+      "timestamp": "2026-01-10T16:05:00+08:00",
+      "parameters": { "filepath": ".agent/roles/engineer.md" },
+      "success": true,
+      "duration_ms": 120
+    },
+    {
+      "tool_name": "create_new_file",
+      "timestamp": "2026-01-10T16:20:00+08:00",
+      "parameters": { "filepath": "schemas/execution_log.schema.json" },
+      "success": true,
+      "duration_ms": 80
+    }
+  ],
+  "decisions": [
+    {
+      "timestamp": "2026-01-10T16:02:00+08:00",
+      "context": "Scope 檢測 Checklist 的位置選擇",
+      "decision": "放在「行為準則」區塊之後",
+      "rationale": "遵循自然流程：先定義準則，再執行檢核",
+      "alternatives_considered": ["放在文件開頭", "放在「可用技能」之後"],
+      "impact": "low"
+    },
+    {
+      "timestamp": "2026-01-10T16:18:00+08:00",
+      "context": "execution_log schema 設計",
+      "decision": "採用會話級別結構，包含多任務追蹤",
+      "rationale": "支援未來自動化分析，可追蹤完整會話脈絡",
+      "alternatives_considered": ["單任務結構", "簡化版只記錄 metrics"],
+      "impact": "medium"
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "total_tasks": 2,
+    "tasks_passed": 2,
+    "tasks_failed": 0,
+    "files_created": 4,
+    "files_modified": 2,
+    "files_deleted": 0,
+    "total_tool_calls": 8,
+    "tokens_consumed": 15000
+  },
+  "summary": "本會話完成 Idx-004 與 Idx-005 兩個治理框架強化任務。Idx-004 為 engineer.md 加入 9 項 Scope 檢測 Checklist，防止功能蔓延。Idx-005 建立會話級別的執行日誌 Schema，支援未來自動化分析。",
+  "next_actions": [
+    "考慮建立 execution_log 自動生成腳本",
+    "整合 Schema 驗證至 CI/CD Pipeline",
+    "設計會話分析 Dashboard"
+  ]
+}

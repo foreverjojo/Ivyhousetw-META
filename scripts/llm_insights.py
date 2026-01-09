@@ -77,7 +77,7 @@ def _openrouter_chat_completion(
     prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
     completion_tokens = int(usage.get("completion_tokens", 0) or 0)
     total_tokens = int(usage.get("total_tokens", prompt_tokens + completion_tokens) or 0)
-    
+
     if not data.get("choices"):
         raise RuntimeError(f"OpenRouter returned no choices. Model: {model}. Response: {json.dumps(data)}")
 
@@ -100,7 +100,7 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
     last = s.rfind("}")
     if first != -1 and last != -1 and last > first:
         s = s[first:last + 1]
-    
+
     try:
         return json.loads(s)
     except json.JSONDecodeError as e:
@@ -225,5 +225,3 @@ def generate_report_insights(
     if return_usage:
         return (out, total_usage)
     return out
-
-

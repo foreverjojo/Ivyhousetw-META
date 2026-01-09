@@ -2,9 +2,42 @@
 
 ## 🎯 當前狀態：Phase 4 Stage 2 完成，Meta V2 核心整合達成 (100%)
 
-**最後更新**：2026-01-06 19:35
+**最後更新**：2026-01-10 17:00
 
 ---
+
+## 📊 任務追蹤表（State Gate 與治理）
+
+> 本表用於追蹤核心任務的狀態、執行者與 QA 結果。遵循五條鐵律。
+
+| Index | 任務標題 | 優先級 | Status | Executor Tool | QA Result | Plan Version | Log 檔 | 備註 |
+|-------|----------|--------|--------|---------------|-----------|-------------|--------|------|
+| Idx-001 | 建立 `doc/logs/` 資料夾 + Log 範本 | P0 | ✅ 已完成 | Manual | PASS | — | — | 已建立範本 `Idx-000_log.template.md` |
+| Idx-002 | 更新 Index 表欄位與治理資訊 | P0 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v1 | `doc/logs/Idx-002_log.md` | Index 清理與統一完成 |
+| Idx-003 | Workflow 治理框架落地 | P0 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v1 | `doc/logs/Idx-003_log.md` | 26 檔案 + smoke tests 全數通過 |
+| Idx-004 | 補齊 `engineer.md` 加入「Scope 檢測 Checklist」 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v2 | `doc/logs/Idx-004_ld` | 9 項檢核 + 違規處理機制 |
+| Idx-005 | 建立 `.agent/execution_log.json` Schema | P2 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v2 | `doc/logs/Idx-005_log.md` | 會話級別 Schema + 範例檔 |
+| Idx-006 | 清償 TD-001：修復 skill_converter.py 語法錯誤 | P2 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v3 | `doc/logs/Idx-006_log.md` | 修正縮排錯誤，TD-001 已清償 |
+| Idx-007 | 補齊 Plan.md 產出規範 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v4 | `doc/logs/Idx-007_log.md` | 建立 plan template + 更新 workflow |
+| Idx-008 | 實現 Plan Summary + 完成後刪除 plan.md | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v5 | `doc/logs/Idx-008_log.md` | log template 加入 summary 區段 |
+
+### 狀態說明
+- ✅ 已完成 (CLOSED)
+- 🔄 進行中 (IN_PROGRESS)
+- ⏳ 待處理 (NOT_STARTED)
+- ⚠️ 有風險 (PASS_WITH_RISK)
+- ❌ 不通過 (FAIL)
+
+### Executor Tool 選項
+- **Copilot Chat**: Moderator 主工具
+- **Continue**: 備用 Moderator（複雜多輪）
+- **Codex**: 代碼執行
+- **Manual**: 手動操作
+
+### QA Result 選項
+- **PASS**: 全部通過，可合併
+- **PASS WITH RISK**: 通過但有記錄風險
+- **FAIL**: 不通過，需重做
 
 ## ✅ 已完成項目
 

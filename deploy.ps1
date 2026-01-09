@@ -4,19 +4,19 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$ProjectId,
-    
+
     [Parameter(Mandatory=$false)]
     [string]$ServiceName = "ivyhouse-meta-analyzer",
-    
+
     [Parameter(Mandatory=$false)]
     [string]$Region = "asia-east1",
-    
+
     [Parameter(Mandatory=$false)]
     [string]$Memory = "2Gi",
-    
+
     [Parameter(Mandatory=$false)]
     [int]$Cpu = 2,
-    
+
     [Parameter(Mandatory=$false)]
     [int]$Timeout = 3600
 )
@@ -82,14 +82,14 @@ try {
         --cpu $Cpu `
         --timeout $Timeout `
         --project $ProjectId
-    
+
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
         Write-Host "========================================" -ForegroundColor Green
         Write-Host "  ✓ 部署成功！" -ForegroundColor Green
         Write-Host "========================================" -ForegroundColor Green
         Write-Host ""
-        
+
         # 取得服務 URL
         $serviceUrl = gcloud run services describe $ServiceName --region $Region --format="value(status.url)"
         Write-Host "服務 URL: $serviceUrl" -ForegroundColor Cyan

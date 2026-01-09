@@ -1,10 +1,10 @@
 { pkgs, ... }: {
   # IDX configuration for Firebase Studio
   # This enables the project to be opened in Firebase Studio (Google's cloud IDE)
-  
+
   # Channel to use for packages
   channel = "stable-23.11";
-  
+
   # Packages to install (only system-level packages)
   packages = [
     pkgs.python311
@@ -13,7 +13,7 @@
     pkgs.curl
     pkgs.gcc
   ];
-  
+
   # IDX workspace configuration
   idx = {
     # Extensions to install
@@ -21,7 +21,7 @@
       "ms-python.python"
       "ms-python.vscode-pylance"
     ];
-    
+
     # Workspace settings
     workspace = {
       # On create, create venv and install dependencies
@@ -33,13 +33,13 @@
           pip install -r requirements.txt
         '';
       };
-      
+
       # On start, provide helpful commands
       onStart = {
         info = "echo 'Ivy House Meta Analyzer ready! Run: source .venv/bin/activate && python main.py'";
       };
     };
-    
+
     # Preview configuration
     previews = {
       enable = true;

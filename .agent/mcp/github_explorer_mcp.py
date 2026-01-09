@@ -75,10 +75,10 @@ mcp = FastMCP("ivy-github-explorer")
 def github_skill_search(keyword: str) -> str:
     """
     在 GitHub 搜尋含有 SKILL.md 的技能庫。
-    
+
     Args:
         keyword: 搜尋關鍵字（如 'crewai', 'langchain'）
-    
+
     Returns:
         JSON 格式的搜尋結果
     """
@@ -90,11 +90,11 @@ def github_skill_search(keyword: str) -> str:
 def github_skill_preview(repo: str, skill_path: str = "SKILL.md") -> str:
     """
     預覽指定 GitHub Repo 的 SKILL.md 內容（唯讀，不會下載）
-    
+
     Args:
         repo: Repo 的 full_name (如 'owner/repo') 或完整 URL
         skill_path: SKILL.md 在 Repo 中的路徑（預設為 'SKILL.md'）
-    
+
     Returns:
         JSON 格式的預覽結果
     """
@@ -106,12 +106,12 @@ def github_skill_preview(repo: str, skill_path: str = "SKILL.md") -> str:
 def github_skill_download(repo: str, file_path: str, confirm: bool = False) -> str:
     """
     下載指定的技能檔案（需通過白名單檢查與安全掃描）
-    
+
     Args:
         repo: Repo 的 full_name (如 'owner/repo')
         file_path: 要下載的檔案路徑
         confirm: 是否確認下載（必須為 true 才會執行）
-    
+
     Returns:
         JSON 格式的下載結果
     """
@@ -123,7 +123,7 @@ def github_skill_download(repo: str, file_path: str, confirm: bool = False) -> s
 def github_skill_list() -> str:
     """
     列出本地已安裝的所有技能
-    
+
     Returns:
         JSON 格式的技能清單
     """
@@ -135,10 +135,10 @@ def github_skill_list() -> str:
 def github_skill_rollback(skill_name: str) -> str:
     """
     回滾（移除）已安裝的技能
-    
+
     Args:
         skill_name: 要移除的技能名稱（不含 .py 後綴）
-    
+
     Returns:
         JSON 格式的回滾結果
     """

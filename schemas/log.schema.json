@@ -1,0 +1,137 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Task Log Schema",
+  "description": "驗證任務 Log 的完整性（對應鐵律 #5：Log 強制綁定）",
+  "type": "object",
+  "required": [
+    "index",
+    "plan_version",
+    "executor_tool",
+    "changed_files",
+    "qa_result",
+    "commit_hashes"
+  ],
+  "properties": {
+    "index": {
+      "type": "string",
+      "pattern": "^Idx-\\d{3}$",
+      "description": "任務索引，格式為 Idx-NNN"
+    },
+    "title": {
+      "type": "string",
+      "description": "任務標題"
+    },
+    "plan_version": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-v\\d+$",
+      "description": "Plan 版本，格式為 YYYY-MM-DD-vN"
+    },
+    "plan_approved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Plan 核准時間"
+    },
+    "executor_tool": {
+      "type": "string",
+      "enum": ["Codex", "Copilot Chat", "Continue", "Manual", "Claude", "Cursor"],
+      "description": "執行工具"
+    },
+    "executor_person": {
+      "type": "string",
+      "description": "執行者名稱"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "開始時間"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "完成時間"
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "action"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "檔案路徑"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["NEW", "MODIFY", "DELETE"],
+            "description": "動作類型"
+          },
+          "lines": {
+            "type": "integer",
+            "description": "變更行數"
+          }
+        }
+      },
+      "minItems": 1,
+      "description": "變更的檔案清單"
+    },
+    "qa_result": {
+      "type": "string",
+      "enum": ["PASS", "PASS WITH RISK", "FAIL"],
+      "description": "QA 結果"
+    },
+    "qa_reviewer": {
+      "type": "string",
+      "description": "QA 審查者"
+    },
+    "qa_completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "QA 完成時間"
+    },
+    "risk_description": {
+      "type": "string",
+      "description": "風險描述（PASS WITH RISK 時建議填寫）"
+    },
+    "mitigation": {
+      "type": "string",
+      "description": "風險緩解措施"
+    },
+    "commit_hashes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{7,40}$"
+      },
+      "minItems": 1,
+      "description": "相關的 Git commit hash"
+    },
+    "verification_plan": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "驗證計畫描述"
+        },
+        "due_date": {
+          "type": "string",
+          "format": "date",
+          "description": "驗證期限"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "verified_ok", "verified_failed", "skipped"],
+          "description": "驗證狀態"
+        }
+      },
+      "description": "驗證計畫（PASS WITH RISK 時使用）"
+    }
+  },
+  "if": {
+    "properties": {
+      "qa_result": { "const": "PASS WITH RISK" }
+    }
+  },
+  "then": {
+    "required": ["risk_description"]
+  }
+}

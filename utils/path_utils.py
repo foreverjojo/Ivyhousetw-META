@@ -57,7 +57,7 @@ def write_latest_ptr(week_id: str, fp_code: str, history_root: Path) -> None:
     避免搬環境時路徑失效
     """
     from utils.file_io import write_json
-    
+
     rel = f"versions/fp-{fp_code}"
     write_json(
         latest_ptr_path(week_id, history_root),
@@ -74,13 +74,13 @@ def write_latest_ptr(week_id: str, fp_code: str, history_root: Path) -> None:
 def write_week_info(week_id: str, date_range: str, history_root: Path) -> None:
     """寫入 week_info.json，確保保留或初始化 created_at"""
     from utils.file_io import read_json_if_exists, write_json
-    
+
     path = week_meta_dir(week_id, history_root) / "week_info.json"
     existing = read_json_if_exists(path) or {}
-    
+
     # 保留現有的 created_at，若無則用當前時間初始化
     created_at = existing.get("created_at") or existing.get("updated_at") or now_iso()
-    
+
     write_json(
         path,
         {

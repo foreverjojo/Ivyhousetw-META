@@ -47,7 +47,7 @@ codex exec "請審查 scripts/adapters/momo_adapter.py 的安全性"
 ```
 
 > **注意**: 在 prompt 中指定路徑時，Codex 會嘗試讀取該檔案。
-> 
+>
 > **Sandbox 受限時的替代方案**：
 > 1. **Pipeline 方式**：`Get-Content file.py | codex exec "prompt"`
 > 2. **調整權限**：`codex exec -c 'sandbox_permissions=["disk-full-read-access"]' "prompt"`

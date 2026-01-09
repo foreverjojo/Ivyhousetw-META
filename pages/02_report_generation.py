@@ -99,13 +99,13 @@ def render_status(week_id: Optional[str], vdir: Optional[Path]) -> None:
         # 但我們要複雜佈局。
         # Hack: 每次呼叫前，Streamlit 的 execution flow 是線性的。
         # 但若是 callback，則會即時寫入。
-        
+
         # 為了確保「替換」，我們應該在外部定義 placeholder，然後這裡用:
         # with main_status_placeholder.container(): ...
         # 但 Streamlit 的 placeholder.container() 行為是：
         # "Inserts a container into your app. If used as a context manager, anything written inside the block will be appended to the container."
         # 如果要替換內容，必須用 placeholder.empty() 先清空？不，container 不能被 empty()。
-        
+
         # 修正策略：render_status 透過 st.empty() 每次重新輸出。
         pass
 
@@ -119,7 +119,7 @@ def render_status(week_id: Optional[str], vdir: Optional[Path]) -> None:
         st.markdown("---")
         st.subheader(f"📋 流程狀態 (Week: {week_id or '?'})")
         # st.caption(f"Dir: {vdir}")
-        
+
         if not vdir:
             st.info("尚未建立版本目錄")
             return
@@ -135,13 +135,13 @@ def render_status(week_id: Optional[str], vdir: Optional[Path]) -> None:
             ("E", "consultant_notes.json", "三顧問"),
             ("F", "meeting.md", "最終會議"),
         ]
-        
+
         for i, (step_char, filename, label) in enumerate(steps):
             is_ok = ok(filename)
             with cols[i]:
                 st.metric(
-                    label=f"{step_char}. {label}", 
-                    value="✅ 完成" if is_ok else "⋯", 
+                    label=f"{step_char}. {label}",
+                    value="✅ 完成" if is_ok else "⋯",
                     delta="OK" if is_ok else None,
                     delta_color="normal"
                 )
@@ -243,7 +243,7 @@ with st.expander("▼ Step A｜上傳檔案 + 預覽", expanded=True):
         else:
             can_run = True
             st.success("✅ 蝦皮檔案已上傳")
-            
+
     elif platform == "Momo":
         momo_file = st.file_uploader("MOMO 廣告素材報表 (XLSX)", type=["xlsx"], key="uploader_momo")
         if momo_file is None:
@@ -293,7 +293,7 @@ with st.expander("▼ Manual Inputs（人工快照）", expanded=False):
         )
         if default_buying_type not in buying_type_options:
             default_buying_type = ""
-        
+
         buying_type = st.selectbox(
             "購買類型",
             options=buying_type_options,
@@ -302,16 +302,16 @@ with st.expander("▼ Manual Inputs（人工快照）", expanded=False):
         )
     with col2:
         optimization_goal_options = [
-            "", 
-            "OFFSITE_CONVERSIONS (網站轉換)", 
-            "LANDING_PAGE_VIEWS (到達頁面瀏覽)", 
-            "LINK_CLICKS (連結點擊)", 
-            "IMPRESSIONS (曝光)", 
-            "REACH (觸及)", 
-            "THRUPLAY (影片完整觀看)", 
-            "VALUE (價值)", 
-            "APP_INSTALLS (應用程式安裝)", 
-            "LEAD_GENERATION (名單型)", 
+            "",
+            "OFFSITE_CONVERSIONS (網站轉換)",
+            "LANDING_PAGE_VIEWS (到達頁面瀏覽)",
+            "LINK_CLICKS (連結點擊)",
+            "IMPRESSIONS (曝光)",
+            "REACH (觸及)",
+            "THRUPLAY (影片完整觀看)",
+            "VALUE (價值)",
+            "APP_INSTALLS (應用程式安裝)",
+            "LEAD_GENERATION (名單型)",
             "VISIT_INSTAGRAM_PROFILE (IG 個人檔案瀏覽)"
         ]
         default_optimization_goal = (
@@ -321,7 +321,7 @@ with st.expander("▼ Manual Inputs（人工快照）", expanded=False):
         )
         if default_optimization_goal not in optimization_goal_options:
             default_optimization_goal = ""
-            
+
         optimization_goal = st.selectbox(
             "優化目標",
             options=optimization_goal_options,
@@ -330,10 +330,10 @@ with st.expander("▼ Manual Inputs（人工快照）", expanded=False):
         )
     with col3:
         billing_event_options = [
-            "", 
-            "IMPRESSIONS (曝光)", 
-            "LINK_CLICKS (連結點擊)", 
-            "THRUPLAY (影片完整觀看)", 
+            "",
+            "IMPRESSIONS (曝光)",
+            "LINK_CLICKS (連結點擊)",
+            "THRUPLAY (影片完整觀看)",
             "APP_INSTALLS (安裝)"
         ]
         default_billing_event = (
@@ -343,7 +343,7 @@ with st.expander("▼ Manual Inputs（人工快照）", expanded=False):
         )
         if default_billing_event not in billing_event_options:
             default_billing_event = ""
-            
+
         billing_event = st.selectbox(
             "計費事件",
             options=billing_event_options,
@@ -385,7 +385,7 @@ if can_run:
         if momo_file: content += momo_file.getvalue()
         fp_hash = hashlib.md5(content).hexdigest()[:8]
         current_fp = {"platform": platform, "hash": fp_hash}
-    
+
     fp_code = fp_short(current_fp)
 
 with st.expander("▼ Fingerprint（版本碼）", expanded=False):
@@ -449,19 +449,19 @@ if btn_quick:
     try:
         # 使用 st.status 取代 spinner 以顯示詳細進度
         with st.status("🚀 啟動一鍵快篩流程...", expanded=True) as status:
-            
+
             # Step B
             status.write("執行 Step B: 數據計算與指標聚合...")
             week_id, resolved_fp, vdir, prev_ctx = run_step_b(
-                mode, can_run, current_fp, fp_code, 
-                meta_adset_file=meta_adset_file, 
-                meta_ads_file=meta_ads_file, 
+                mode, can_run, current_fp, fp_code,
+                meta_adset_file=meta_adset_file,
+                meta_ads_file=meta_ads_file,
                 web_excel_file=web_excel_file,
                 shopee_file=shopee_file,
                 momo_file=momo_file,
                 platform=platform,
-                force_rerun=force_rerun, 
-                auto_new_version=auto_new_version, 
+                force_rerun=force_rerun,
+                auto_new_version=auto_new_version,
                 render_sidebar_status_fn=render_status
             )
             restore_from_version_dir(vdir)
@@ -472,7 +472,7 @@ if btn_quick:
             status.write(f"執行 Step C: LLM 洞察生成 (使用模型: **{model_c_name}**)...")
             run_step_c(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_status)
             restore_from_version_dir(vdir)
-            
+
             # Step D
             model_d_name = get_active_model("MODEL_MODERATOR", MODEL_MODERATOR)
             status.write(f"執行 Step D: 草擬會議記錄 (使用模型: **{model_d_name}**)...")
@@ -490,19 +490,19 @@ if btn_final:
     mode = "oneclick_final_BCEF"
     try:
         with st.status("🚀 啟動一鍵最終流程...", expanded=True) as status:
-            
+
             # Step B
             status.write("執行 Step B: 數據計算與指標聚合...")
             week_id, resolved_fp, vdir, prev_ctx = run_step_b(
-                mode, can_run, current_fp, fp_code, 
-                meta_adset_file=meta_adset_file, 
-                meta_ads_file=meta_ads_file, 
+                mode, can_run, current_fp, fp_code,
+                meta_adset_file=meta_adset_file,
+                meta_ads_file=meta_ads_file,
                 web_excel_file=web_excel_file,
                 shopee_file=shopee_file,
                 momo_file=momo_file,
                 platform=platform,
-                force_rerun=force_rerun, 
-                auto_new_version=auto_new_version, 
+                force_rerun=force_rerun,
+                auto_new_version=auto_new_version,
                 render_sidebar_status_fn=render_status
             )
             restore_from_version_dir(vdir)
@@ -526,14 +526,14 @@ if btn_final:
             model_ec = get_active_model("MODEL_CONSULTANT_C", MODEL_CONSULTANT_C)
             status.write(f"執行 Step E: 三顧問諮詢...")
             status.caption(f"- 顧問 A (成效): **{model_ea}**\n- 顧問 B (圖文): **{model_eb}**\n- 顧問 C (策略): **{model_ec}**")
-            
+
             def consultant_callback(name, model):
                 role_map = {"A": "成效顧問 A", "B": "視覺顧問 B", "C": "策略顧問 C"}
                 icon_map = {"A": "📊", "B": "🎨", "C": "🧠"}
                 role = role_map.get(name, f"顧問 {name}")
                 icon = icon_map.get(name, "🤖")
                 status.write(f"{icon} {role} 正在思考... (Model: **{model}**)")
-            
+
             run_step_e(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_status, status_callback=consultant_callback, realtime_container=step_e_display)
             restore_from_version_dir(vdir)
 
@@ -548,7 +548,7 @@ if btn_final:
 
         st.success("✅ 一鍵最終完成（B→C→E→F final）")
         artifacts_panel(vdir)
-        
+
         # Step G: 技能包管理員 (New Feature) - 在 status 外部渲染
         run_step_g(st.session_state)
     except Exception as e:

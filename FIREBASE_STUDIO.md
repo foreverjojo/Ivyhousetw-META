@@ -159,10 +159,10 @@ gcloud run deploy ivyhouse-meta-analyzer \
    ```bash
    # 登入 Google Cloud
    gcloud auth login
-   
+
    # 設定專案
    gcloud config set project YOUR_PROJECT_ID
-   
+
    # 部署
    gcloud run deploy ivyhouse-meta-analyzer --source .
    ```

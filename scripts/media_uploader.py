@@ -54,10 +54,10 @@ def get_gdrive_access_token(cfg: CloudConfig) -> str:
         )
         creds.refresh(Request())
         return creds.token
-    
+
     if cfg.google_drive_access_token:
         return cfg.google_drive_access_token
-    
+
     raise RuntimeError("缺少 Google Drive 認證方式 (需提供 SA JSON 或 Access Token)。")
 
 
@@ -68,16 +68,16 @@ def ensure_gdrive_folder(token: str, folder_name: str, parent_id: Optional[str] 
     query = f"name='{safe_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
     if parent_id:
         query += f" and '{parent_id}' in parents"
-    
+
     url = f"https://www.googleapis.com/drive/v3/files?q={requests.utils.quote(query)}&fields=files(id,name)"
     headers = {"Authorization": f"Bearer {token}"}
-    
+
     resp = requests.get(url, headers=headers, timeout=timeout)
     if resp.status_code == 200:
         files = resp.json().get("files", [])
         if files:
             return files[0]["id"]
-    
+
     # 不存在則建立
     print(f"📁 雲端資料夾 '{folder_name}' 不存在，正在建立...")
     create_url = "https://www.googleapis.com/drive/v3/files"
@@ -87,29 +87,29 @@ def ensure_gdrive_folder(token: str, folder_name: str, parent_id: Optional[str] 
     }
     if parent_id:
         metadata["parents"] = [parent_id]
-        
+
     resp = requests.post(create_url, headers=headers, json=metadata, timeout=timeout)
     if resp.status_code == 200:
         return resp.json()["id"]
-    
+
     raise RuntimeError(f"無法建立雲端資料夾 '{folder_name}'：{resp.text}")
 
 
 def get_target_folder_id_by_type(token: str, root_id: str, file_path: Path) -> str:
     """根據檔案類型決定目標子資料夾 ID。"""
     ext = file_path.suffix.lower()
-    
+
     if ext in ('.json', '.csv', '.xlsx'):
         return ensure_gdrive_folder(token, "reports", parent_id=root_id)
-    
+
     if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
         assets_id = ensure_gdrive_folder(token, "assets", parent_id=root_id)
         return ensure_gdrive_folder(token, "images", parent_id=assets_id)
-    
+
     if ext in ('.mp4', '.mov', '.avi'):
         assets_id = ensure_gdrive_folder(token, "assets", parent_id=root_id)
         return ensure_gdrive_folder(token, "videos", parent_id=assets_id)
-        
+
     return root_id
 
 
@@ -159,7 +159,7 @@ def upload_media_assets(
     media_dir = media_dir or MEDIA_ASSETS_DIR
     cfg = load_cloud_config()
     chosen_provider = (provider or cfg.provider or "none").strip().lower()
-    
+
     scan = scan_media_assets(media_dir=media_dir, recursive=True)
     all_files: List[Path] = []
     all_files.extend(scan.images)
@@ -170,7 +170,7 @@ def upload_media_assets(
 
     results: List[UploadResult] = []
     token = None
-    
+
     if not dry_run and chosen_provider == "gdrive":
         token = get_gdrive_access_token(cfg)
 
@@ -204,11 +204,11 @@ def upload_media_assets(
                 # 自動判斷子資料夾
                 root_id = cfg.google_drive_folder_id
                 target_id = get_target_folder_id_by_type(token, root_id, p) if root_id else None
-                
+
                 data = _drive_upload_file(
-                    token=token, 
-                    target_folder_id=target_id, 
-                    file_path=p, 
+                    token=token,
+                    target_folder_id=target_id,
+                    file_path=p,
                     upload_name=upload_name,
                     timeout=cfg.http_timeout_s
                 )
@@ -227,7 +227,7 @@ def upload_media_assets(
                 continue
 
             raise RuntimeError(f"不支援的雲端提供者：{chosen_provider}")
-            
+
         except Exception as e:
             results.append(
                 UploadResult(
@@ -261,7 +261,7 @@ def write_upload_manifest(
 ) -> None:
     """將結果追加至 upload_manifest.json。"""
     manifest_path = manifest_path or UPLOAD_MANIFEST_PATH
-    
+
     existing: List[Dict[str, Any]] = []
     if manifest_path.exists():
         try:
@@ -309,4 +309,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

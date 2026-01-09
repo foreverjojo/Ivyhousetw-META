@@ -153,7 +153,7 @@ def _build_shopee_record(
     """建立單筆 Unified Ad Data record。"""
     name = _get_str(row, "廣告名稱")
     product_id = _get_str(row, "商品 ID") or _get_str(row, "商品ID")
-    
+
     # ID 策略：優先用商品 ID，否則用 fallback
     record_id = product_id or _stable_fallback_id(
         platform="shopee",
@@ -162,18 +162,18 @@ def _build_shopee_record(
         time_range=time_range,
         salt=_get_str(row, "廣告類型"),
     )
-    
+
     # 指標
     spend = _to_float(row.get("花費"))
     impressions = _to_int(row.get("瀏覽數"))
     clicks = _to_int(row.get("點擊數"))
-    
+
     # 轉換 (platform = 歸因口徑, truth = 直接口徑)
     conv_platform_count = _to_int(row.get("轉換數"))
     conv_platform_value = _to_float(row.get("銷售金額"))
     conv_truth_count = _to_int(row.get("直接轉換數"))
     conv_truth_value = _to_float(row.get("直接銷售金額"))
-    
+
     return {
         "platform": "shopee",
         "level": "ad",
@@ -218,11 +218,11 @@ def adapt_shopee_ad_csv(path: Path) -> Dict[str, Any]:
     """將蝦皮廣告 CSV 轉換為 Unified Ad Data 格式。"""
     df = _clean_cols(_read_shopee_csv(path))
     df = _drop_empty_rows(df)
-    
+
     # 擷取時間範圍
     start, end = _extract_date_range_from_filename(path.name)
     time_range = {"start": start or "", "end": end or ""}
-    
+
     # 轉換每一筆資料
     records: List[Dict[str, Any]] = []
     for i, row in df.iterrows():
@@ -230,7 +230,7 @@ def adapt_shopee_ad_csv(path: Path) -> Dict[str, Any]:
         if not name:
             continue
         records.append(_build_shopee_record(row=row, row_index=int(i), time_range=time_range))
-    
+
     return {
         "version": "unified_ad_data.v1",
         "source": "shopee_ad_csv",
@@ -248,18 +248,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--out", type=Path, required=True, help="輸出 unified JSON 檔案路徑")
     p.add_argument("--validate", action="store_true", help="輸出後用 schemas/unified_ad_data.json 驗證")
     args = p.parse_args(argv)
-    
+
     payload = adapt_shopee_ad_csv(args.input)
-    
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    
+
     print(f"✅ 已轉換 {len(payload['data'])} 筆資料至 {args.out}")
-    
+
     if args.validate:
         from scripts.validator import validate_file
         validate_file(payload, schema_filename="unified_ad_data.json", label="unified_ad_data")
-    
+
     return 0
 
 

@@ -1,0 +1,19 @@
+# Keep this directory in Git
+
+This directory stores implementation plans for all tasks.
+
+## Naming Convention
+
+`Idx-NNN_plan.md`
+
+Example: `Idx-001_plan.md`
+
+## Plan Version Format
+
+`YYYY-MM-DD-vN`
+
+Example: `2026-01-10-v1`
+
+## Example
+
+See: `Idx-003_plan.md`

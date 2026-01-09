@@ -97,22 +97,22 @@ def safe_read_file(path: Path) -> Tuple[Optional[str], Optional[str]]:
 def safe_write_file(path: Path, content: str) -> Tuple[bool, Optional[str]]:
     """
     安全寫入檔案 (Atomic Write)
-    
+
     使用 temp 檔 + fsync + rename 機制確保檔案完整性：
     1. 先寫入 .tmp 暫存檔
     2. fsync 確保資料落盤
     3. atomic rename 覆蓋原檔
-    
+
     回傳 (成功與否, 錯誤訊息)
     """
     import tempfile
-    
+
     fd = None
     tmp_file = None
-    
+
     try:
         ensure_dir(path.parent)
-        
+
         # Step 1: 建立暫存檔 (同目錄以確保同一檔案系統)
         fd, tmp_path = tempfile.mkstemp(
             suffix=".tmp",
@@ -120,7 +120,7 @@ def safe_write_file(path: Path, content: str) -> Tuple[bool, Optional[str]]:
             dir=path.parent
         )
         tmp_file = Path(tmp_path)
-        
+
         # Step 2: 寫入內容並 fsync
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -136,11 +136,11 @@ def safe_write_file(path: Path, content: str) -> Tuple[bool, Optional[str]]:
                 except OSError:
                     pass
             raise
-        
+
         # Step 3: Atomic rename (覆蓋原檔)
         tmp_file.replace(path)
         return True, None
-        
+
     except Exception as e:
         # 清理暫存檔 (容錯)
         if tmp_file is not None:
@@ -404,7 +404,7 @@ def run_reset_memory_prep(
     if task_err:
         result.warnings.append(task_err)
     task_content = task_content or ""
-    
+
     walkthrough_content, wt_err = safe_read_file(walkthrough_file)
     if wt_err and walkthrough_file.exists():  # 不存在不算錯誤
         result.warnings.append(wt_err)

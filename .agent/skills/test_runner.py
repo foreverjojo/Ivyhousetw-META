@@ -23,7 +23,7 @@ from typing import Dict, Any, Optional
 def find_project_root() -> Path:
     """從當前腳本位置往上找專案根目錄 (含有 pyproject.toml 或 requirements.txt)"""
     current = Path(__file__).resolve().parent
-    
+
     # 往上搜尋最多 5 層
     for _ in range(5):
         if (current / "pyproject.toml").exists():
@@ -33,7 +33,7 @@ def find_project_root() -> Path:
         if current.parent == current:
             break
         current = current.parent
-    
+
     # 找不到就回傳腳本所在目錄的上三層 (假設 .agent/skills/ 結構)
     return Path(__file__).resolve().parent.parent.parent
 
@@ -41,7 +41,7 @@ def find_project_root() -> Path:
 def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
     """執行 pytest 並回傳結果"""
     project_root = find_project_root()
-    
+
     # 組裝 pytest 指令
     cmd = [
         sys.executable, "-m", "pytest",
@@ -49,10 +49,10 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
         "-q",
         "--no-header",
     ]
-    
+
     if test_path:
         cmd.append(test_path)
-    
+
     # 執行 pytest
     try:
         result = subprocess.run(
@@ -92,23 +92,23 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
             "errors": 0,
             "details": []
         }
-    
+
     # 解析輸出
     output = result.stdout + result.stderr
     lines = output.strip().split("\n")
-    
+
     # 嘗試解析最後一行的摘要 (如 "5 passed, 2 failed")
     passed = 0
     failed = 0
     errors = 0
-    
+
     for line in reversed(lines):
         if "passed" in line or "failed" in line or "error" in line:
             import re
             passed_match = re.search(r'(\d+)\s*passed', line)
             failed_match = re.search(r'(\d+)\s*failed', line)
             error_match = re.search(r'(\d+)\s*error', line)
-            
+
             if passed_match:
                 passed = int(passed_match.group(1))
             if failed_match:
@@ -116,7 +116,7 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
             if error_match:
                 errors = int(error_match.group(1))
             break
-    
+
     # 判定狀態
     if failed > 0 or errors > 0:
         status = "fail"
@@ -124,7 +124,7 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
         status = "pass"
     else:
         status = "no_tests"
-    
+
     return {
         "status": status,
         "project_root": str(project_root),
@@ -142,7 +142,7 @@ def main():
     test_path = sys.argv[1] if len(sys.argv) > 1 else None
     result = run_pytest(test_path)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    
+
     # 根據狀態設定退出碼
     if result["status"] == "fail":
         sys.exit(1)

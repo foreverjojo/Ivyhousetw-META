@@ -12,11 +12,11 @@ from scripts.skills.budget_rules import run_budget_rules
 def test_creative_fatigue():
     print("Testing Creative Fatigue...")
     report_summary = {"week_id": "TEST"}
-    
+
     # Case 1: Empty
     res = run_creative_fatigue_diagnostic(report_summary, [])
     print(f"Empty input result: {res['triggered']}")
-    
+
     # Case 2: Fatigued Ad
     # Freq > 2.5, CTR < Avg * 0.8
     # Let's say Avg CTR is 1.0%
@@ -43,7 +43,7 @@ def test_creative_fatigue():
     # Avg CTR = (0.4 + 2.0) / 2 = 1.2%
     # Threshold = 1.2 * 0.8 = 0.96%
     # Ad 1 CTR 0.4% < 0.96%, Freq 3.0 > 2.5 -> Should trigger
-    
+
     res = run_creative_fatigue_diagnostic(report_summary, ads)
     print(f"Fatigued case triggered: {res['triggered']}")
     if res['triggered']:
@@ -67,18 +67,18 @@ def test_budget_rules():
         "target_cpa": 500,
         "breakeven_roas": 2.0
     }
-    
+
     # Case 1: KILL (Spend 5000 > 1.5*500=750, Purchases 0)
     res = run_budget_rules(report_summary, manual_inputs)
-    
+
     actions = {a['level']: a['action'] for a in res['actions']}
     print(f"KILL case action: {actions.get('overall')}")
-    
+
     # Case 2: SCALE UP
     report_summary['kpi']['meta']['purchases'] = 10
     report_summary['kpi']['meta']['purchase_value_twd'] = 20000 # ROAS 4.0
     # ROAS 4.0 > 2.0 * 1.2 = 2.4 -> Scale Up
-    
+
     res = run_budget_rules(report_summary, manual_inputs)
     actions = {a['level']: a['action'] for a in res['actions']}
     print(f"SCALE UP case action: {actions.get('overall')}")

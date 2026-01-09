@@ -60,19 +60,19 @@ def get_versions_for_week(week_id: str) -> List[Dict[str, Any]]:
     """取得指定週的所有版本"""
     versions = []
     week_dir = HISTORY_ROOT / week_id / "meta" / "versions"
-    
+
     if week_dir.exists():
         for version_dir in week_dir.iterdir():
             if version_dir.is_dir() and version_dir.name.startswith("fp-"):
                 # 讀取 pipeline_state.json 取得詳細資訊
                 ps = read_json_if_exists(version_dir / "pipeline_state.json")
                 ws = read_json_if_exists(version_dir / "workflow_state.json")
-                
+
                 # 判斷是否為 latest
                 latest_file = HISTORY_ROOT / week_id / "meta" / "latest.json"
                 latest_data = read_json_if_exists(latest_file)
                 is_latest = latest_data and latest_data.get("rel_path", "").endswith(version_dir.name)
-                
+
                 # 取得時間戳記
                 if ps and ps.get("updated_at"):
                     timestamp = ps["updated_at"]
@@ -83,11 +83,11 @@ def get_versions_for_week(week_id: str) -> List[Dict[str, Any]]:
                         timestamp = datetime.fromtimestamp(version_dir.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
                     except Exception:
                         timestamp = "N/A"
-                
+
                 # 判斷狀態
                 has_meeting = (version_dir / "meeting.md").exists() or (version_dir / "meeting_final.md").exists()
                 status = "completed" if has_meeting else "pending"
-                
+
                 versions.append({
                     "fingerprint": version_dir.name,
                     "path": version_dir,
@@ -97,7 +97,7 @@ def get_versions_for_week(week_id: str) -> List[Dict[str, Any]]:
                     "last_step": ps.get("last_completed_step") if ps else "N/A",
                     "mode": ps.get("last_mode") if ps else "N/A",
                 })
-    
+
     # 按時間戳記降序排列
     versions.sort(key=lambda x: x["timestamp"], reverse=True)
     return versions
@@ -206,13 +206,13 @@ if not weeks:
 with st.sidebar:
     st.divider()
     st.markdown("### 📅 週報列表")
-    
+
     # 搜尋篩選
     search_query = st.text_input("🔍 搜尋 Week ID", placeholder="例如：2026-W01")
-    
+
     # 篩選週報
     filtered_weeks = [w for w in weeks if search_query.lower() in w.lower()] if search_query else weeks
-    
+
     # 選擇週報
     selected_week = st.radio(
         "選擇週報",
@@ -227,7 +227,7 @@ with st.sidebar:
 
 if selected_week:
     st.markdown(f"## 📅 {selected_week}")
-    
+
     # 讀取 week_info
     week_info = read_json_if_exists(HISTORY_ROOT / selected_week / "meta" / "week_info.json")
     if week_info:
@@ -240,32 +240,32 @@ if selected_week:
             # 若是 ISO 格式，取前 10 碼 (日期)
             display_time = created_time[:10] if len(created_time) >= 10 else created_time
             st.metric("建立時間", display_time)
-    
+
     st.divider()
-    
+
     # 取得版本列表
     versions = get_versions_for_week(selected_week)
-    
+
     if not versions:
         st.warning("此週報尚無版本記錄。")
     else:
         st.markdown(f"### 📦 版本列表 ({len(versions)} 個)")
-        
+
         # 版本選擇
         version_options = [
             f"{'⭐ ' if v['is_latest'] else ''}{v['fingerprint']} | {v['timestamp']}"
             for v in versions
         ]
-        
+
         selected_version_idx = st.selectbox(
             "選擇版本",
             range(len(versions)),
             format_func=lambda i: version_options[i],
             key="selected_version"
         )
-        
+
         selected_version = versions[selected_version_idx]
-        
+
         # 版本狀態
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -277,7 +277,7 @@ if selected_week:
             st.metric("最後步驟", selected_version["last_step"])
         with col3:
             st.metric("模式", selected_version["mode"])
-        
+
         st.divider()
 
         # Token usage（移出 02_report_generation，改在 history viewer 顯示）
@@ -295,23 +295,23 @@ if selected_week:
             with m2:
                 st.metric("Total Cost (USD)", f"{total_cost:.6f}")
             st.dataframe(usage_rows, use_container_width=True)
-        
+
         # 版本詳細資訊
         details = get_version_details(selected_version["path"])
-        
+
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 會議摘要", "📊 KPI 彙總", "🛠️ 技能分析", "⚙️ 工作流程狀態", "📋 管線狀態"])
-        
+
         with tab1:
             meeting_content = details["meeting_md"] or details["meeting_draft_md"]
             if meeting_content:
                 st.markdown(meeting_content)
             else:
                 st.info("尚無 meeting.md 內容")
-        
+
         with tab2:
             if details["report_summary"]:
                 rs = details["report_summary"]
-                
+
                 # 顯示關鍵 KPI
                 if "total" in rs:
                     t = rs["total"]
@@ -325,24 +325,24 @@ if selected_week:
                         st.metric("ROAS", f"{roas:.2f}x" if roas else "N/A")
                     with c4:
                         st.metric("CPA", f"${t.get('cpa', 0):,.2f}")
-                
+
                 # 完整 JSON
                 with st.expander("完整 JSON"):
                     st.json(rs)
             else:
                 st.info("尚無 report_summary.json")
-        
+
         with tab3:
             # 技能分析 Tab（新增）
             from ui.skill_manager import render_skill_manager_from_files
             render_skill_manager_from_files(selected_version["path"])
-        
+
         with tab4:
             if details["workflow_state"]:
                 st.json(details["workflow_state"])
             else:
                 st.info("尚無 workflow_state.json")
-        
+
         with tab5:
             if details["pipeline_state"]:
                 st.json(details["pipeline_state"])

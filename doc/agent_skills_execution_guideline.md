@@ -130,4 +130,3 @@
   - `date_range` 必須是整段（min start ~ max end）
   - KPI/Top tables 必須是週彙總而非單日排名
 - 缺欄位時技能 JSON 必須回報 `warnings/missing_fields`，且報告不得顯示「待補」。
-

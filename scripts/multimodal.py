@@ -101,4 +101,3 @@ def openrouter_multimodal_completion(
 
     data = resp.json()
     return data["choices"][0]["message"]["content"]
-

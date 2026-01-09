@@ -31,12 +31,12 @@ def ensure_persistent_session(tool_name: str, context):
         tool_name (str): The name of the tool/session (e.g., 'codex', 'claude').
     """
     global active_sessions
-    
+
     # 1. Memory Check: Do we already have a CommandId for this tool?
     cached_id = active_sessions.get(tool_name)
     if cached_id and context.is_command_running(cached_id):
         return cached_id
-    
+
     # 2. Heuristic Check: Scan active terminals for running command line
     # (If agent restarted and lost memory, look for prompt or process)
     active_cmds = context.get_running_commands()
@@ -47,10 +47,10 @@ def ensure_persistent_session(tool_name: str, context):
 
     # 3. Start New Session
     command_id = context.run_command(
-        CommandLine=tool_name, 
+        CommandLine=tool_name,
         WaitMsBeforeAsync=5000
     )
-    
+
     # Update Memory
     active_sessions[tool_name] = command_id
     return command_id

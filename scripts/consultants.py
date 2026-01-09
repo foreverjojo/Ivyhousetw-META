@@ -68,7 +68,7 @@ def _openrouter_chat_completion(
 
     if not data.get("choices"):
         raise RuntimeError(f"OpenRouter returned no choices. Model: {model}. Response: {json.dumps(data)}")
-        
+
     content = data["choices"][0]["message"].get("content")
     if content is None:
         content = ""
@@ -91,7 +91,7 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
     first, last = s.find("{"), s.rfind("}")
     if first != -1 and last != -1 and last > first:
         s = s[first:last + 1]
-    
+
     try:
         # 使用 raw_decode 容忍「多個 JSON object 串接」或尾端雜訊（常見於 LLM 輸出）
         decoder = json.JSONDecoder()
@@ -241,7 +241,7 @@ def generate_consultant_notes(
 ) -> Dict[str, Any]:
     """
     分別呼叫三位顧問（A:成效, B:視覺/文案, C:策略），回傳各自的 JSON。
-    
+
     參數:
         on_consultant_done: 顧問完成時的回呼 (role, parsed_json)，用於即時 UI 更新
     """
@@ -253,7 +253,7 @@ def generate_consultant_notes(
     ctx_str = _prepare_context(report_summary, report_insights)
     # 注意：回傳欄位需要引用 compact 後的結果，因此另外保留 payload（僅做整理，不重算 KPI）
     payload = _compact_inputs(report_summary, report_insights)
-      
+
     # Prompts
     sys_a = (
         "你是艾薇手工坊三顧問系統之一：顧問A｜成效與數據分析專家。\n"
@@ -270,7 +270,7 @@ def generate_consultant_notes(
         "任務：結合成效與創意，提供宏觀策略建議（預算分配、受眾拓展、促銷活動）。\n"
         "輸出：單一 JSON object（schema: consultant_c.v1）。\n"
     )
-    
+
     # Execute
     # 明確提供欄位要求，降低模型輸出非 JSON 或 schema 漂移機率
     task_a = _consultant_task("A")

@@ -1,0 +1,60 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: 移除尾隨空白
+      - id: end-of-file-fixer
+        name: 確保檔案以換行結尾
+      - id: check-yaml
+        name: YAML 語法檢查
+      - id: check-json
+        name: JSON 語法檢查
+        exclude: ^\.vscode/
+      - id: check-added-large-files
+        name: 檢查大檔案
+        args: ['--maxkb=5000']
+      - id: detect-private-key
+        name: 私鑰洩漏檢測
+        exclude: ^doc/.*\.md$
+      - id: check-ast
+        name: Python AST 檢查
+        exclude: ^scripts/skill_converter\.py$
+      - id: check-docstring-first
+        name: Docstring 順序檢查
+        exclude: ^scripts/debug_pipeline\.py$
+
+  # Python linting with Ruff (只阻擋高風險錯誤)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.8
+    hooks:
+      - id: ruff
+        name: Ruff Linting
+        args: ['--select', 'E9,F821,F822,F823']
+        # E9: 語法錯誤
+        # F821: 未定義變數
+        # F822: 未定義名稱
+        # F823: 局部變數未定義
+
+  # State Gate 驗證（自訂 hook）
+  - repo: local
+    hooks:
+      - id: state-gate-check
+        name: State Gate 驗證
+        entry: python scripts/validate_state_gate.py
+        language: system
+        stages: [commit-msg]
+        always_run: true
+        pass_filenames: true
+
+# 安裝指令：
+# pip install pre-commit
+# pre-commit install
+# pre-commit install --hook-type commit-msg
+
+# 手動執行：
+# pre-commit run --all-files

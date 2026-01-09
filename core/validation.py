@@ -14,7 +14,7 @@ from jsonschema import validators
 
 class SchemaValidationError(RuntimeError):
     """給 pipeline_state.json 落盤用：保留可讀錯誤清單在 details"""
-    
+
     def __init__(self, message: str, details: Optional[List[str]] = None):
         super().__init__(message)
         self.details: List[str] = details or []

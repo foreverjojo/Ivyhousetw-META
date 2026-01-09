@@ -85,7 +85,7 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
     last = s.rfind("}")
     if first != -1 and last != -1 and last > first:
         s = s[first:last + 1]
-    
+
     try:
         # 使用 raw_decode 容忍「多個 JSON object 串接」或尾端雜訊（常見於 LLM 輸出）
         decoder = json.JSONDecoder()
@@ -492,5 +492,3 @@ def build_workflow_state(
             "14天": "在守門值與頻次監控下逐步放量主力組合，同步驗證網站口徑是否已恢復可用。",
         }
     return out
-
-

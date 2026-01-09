@@ -13,18 +13,18 @@ $PythonUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64
 if (-not (Test-Path $PythonDir)) {
     Write-Host "正在下載 Python 3.11 (因為 crewai 不支援 Python 3.14)..." -ForegroundColor Cyan
     Invoke-WebRequest -Uri $PythonUrl -OutFile $PythonZip
-    
+
     Write-Host "正在解壓縮 Python 3.11..." -ForegroundColor Cyan
     Expand-Archive -Path $PythonZip -DestinationPath $PythonDir
     Remove-Item $PythonZip
-    
+
     # 修正 embed 版的 pip 路徑問題 (開啟 import site)
     $PthFile = Get-ChildItem -Path $PythonDir -Filter "*._pth" | Select-Object -First 1
     $Content = Get-Content $PthFile.FullName
     # 取消註解 import site
     $Content = $Content -replace "#import site", "import site"
     Set-Content -Path $PthFile.FullName -Value $Content
-    
+
     # 下載 get-pip.py
     Write-Host "正在安裝 pip..." -ForegroundColor Cyan
     Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile (Join-Path $PythonDir "get-pip.py")

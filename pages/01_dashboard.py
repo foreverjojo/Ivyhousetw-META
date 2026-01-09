@@ -46,7 +46,7 @@ def get_run_stats():
     completed = 0
     pending = 0
     recent_runs = []
-    
+
     if HISTORY_ROOT.exists():
         for week_dir in HISTORY_ROOT.iterdir():
             if week_dir.is_dir() and week_dir.name.startswith("20"):
@@ -54,22 +54,22 @@ def get_run_stats():
                 versions_dir = week_dir / "meta" / "versions"
                 if not versions_dir.exists():
                     continue
-                    
+
                 for version_dir in versions_dir.iterdir():
                     if version_dir.is_dir() and version_dir.name.startswith("fp-"):
                         total += 1
-                        
+
                         # 檢查是否完成（有 meeting.md 或 meeting_final.md）
                         meeting_file = version_dir / "meeting.md"
                         meeting_final = version_dir / "meeting_final.md"
-                        
+
                         if meeting_final.exists() or meeting_file.exists():
                             completed += 1
                             status = "completed"
                         else:
                             pending += 1
                             status = "pending"
-                        
+
                         # 取得時間戳記
                         try:
                             state_file = version_dir / "workflow_state.json"
@@ -80,17 +80,17 @@ def get_run_stats():
                                 timestamp = datetime.fromtimestamp(version_dir.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
                         except Exception:
                             timestamp = "N/A"
-                        
+
                         recent_runs.append({
                             "week_id": week_dir.name,
                             "fingerprint": version_dir.name,
                             "status": status,
                             "timestamp": timestamp
                         })
-    
+
     # 依時間排序（最新在前）
     recent_runs.sort(key=lambda x: x["timestamp"], reverse=True)
-    
+
     return {
         "total": total,
         "completed": completed,

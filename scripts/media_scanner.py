@@ -69,4 +69,3 @@ def get_top_images(images: List[Path], n: int = 6) -> List[Path]:
 
     images_sorted = sorted(images, key=_mtime, reverse=True)
     return images_sorted[:n]
-

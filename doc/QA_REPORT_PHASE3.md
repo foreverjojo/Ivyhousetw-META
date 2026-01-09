@@ -2,7 +2,7 @@
 
 **審查者**: Codex CLI (`codex exec`) + 自動化腳本
 **審查日期**: 2026-01-04
-**審查對象**: 
+**審查對象**:
 - `scripts/adapters/momo_adapter.py`
 - `tests/test_momo_adapter_golden.py`
 

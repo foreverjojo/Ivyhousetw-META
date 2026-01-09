@@ -72,4 +72,3 @@ Adapters（例如 `scripts/adapters/meta_adapter.py`）負責：
 2. 清洗（移除總計列、空值轉 0、欄位名稱正規化）
 3. 轉換為 Unified 格式並輸出 JSON
 4. （可選）用 `scripts/validator.py` 依 `schemas/unified_ad_data.json` 進行驗證
-

@@ -18,7 +18,7 @@ def start_streamlit():
     """Start Streamlit server"""
     global streamlit_process
     port = int(os.environ.get("PORT", 8080))
-    
+
     # Streamlit configuration
     streamlit_cmd = [
         "streamlit",
@@ -31,10 +31,10 @@ def start_streamlit():
         "--server.enableXsrfProtection", "false",
         "--browser.gatherUsageStats", "false"
     ]
-    
+
     streamlit_process = subprocess.Popen(streamlit_cmd)
     print(f"Streamlit started on port {port}")
-    
+
     # Wait for streamlit process
     streamlit_process.wait()
 
@@ -72,9 +72,9 @@ def health():
 if __name__ == "__main__":
     # Get port from environment
     port = int(os.environ.get("PORT", 8080))
-    
+
     print(f"Starting application on port {port}")
     print("Starting Streamlit server...")
-    
+
     # Start Streamlit in the main process
     start_streamlit()

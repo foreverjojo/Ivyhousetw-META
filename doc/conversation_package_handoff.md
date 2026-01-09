@@ -98,4 +98,3 @@
    - (A) 安全性 P0：移除私鑰並改用 Secret Manager / `.env`
    - (B) Token usage：依規格移動 UI 顯示 + 補 log_call
    - (C) Skills v1：依 `doc/agent_skills_execution_guideline.md` 開始實作 deterministic skill JSON 產物與注入點
-

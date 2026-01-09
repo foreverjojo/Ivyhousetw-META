@@ -98,11 +98,11 @@ if "chat_histories" not in st.session_state:
 def call_openrouter(messages: List[Dict], model: str) -> str:
     """呼叫 OpenRouter API"""
     import requests
-    
+
     api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return "⚠️ 錯誤：缺少 OPENROUTER_API_KEY 環境變數"
-    
+
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -114,12 +114,12 @@ def call_openrouter(messages: List[Dict], model: str) -> str:
         "temperature": 0.7,
         "max_tokens": 2000,
     }
-    
+
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=60)
         if resp.status_code >= 400:
             return f"⚠️ API 錯誤 {resp.status_code}: {resp.text[:200]}"
-        
+
         data = resp.json()
         return data["choices"][0]["message"]["content"]
     except Exception as e:
@@ -161,10 +161,10 @@ render_page_header("AI 助手", icon="🤖", subtitle="顧問諮詢台 - 與 AI 
 with st.sidebar:
     st.divider()
     st.markdown("### 🎭 角色選擇")
-    
+
     consultant_options = list(CONSULTANTS.keys())
     consultant_labels = [f"{CONSULTANTS[k]['icon']} {CONSULTANTS[k]['name']}" for k in consultant_options]
-    
+
     selected_idx = st.radio(
         "選擇顧問",
         range(len(consultant_options)),
@@ -173,10 +173,10 @@ with st.sidebar:
         index=consultant_options.index(st.session_state["selected_consultant"])
     )
     st.session_state["selected_consultant"] = consultant_options[selected_idx]
-    
+
     st.divider()
     st.markdown("### 💬 對話管理")
-    
+
     # 對話歷史列表
     if st.session_state["chat_histories"]:
         st.markdown("**歷史對話：**")
@@ -184,7 +184,7 @@ with st.sidebar:
             if st.button(f"💬 {name}", key=f"load_{name}"):
                 load_chat_history(name)
                 st.rerun()
-    
+
     # 新對話按鈕
     if st.button("➕ 新對話", key="new_chat"):
         # 儲存當前對話（如果有內容）
@@ -193,10 +193,10 @@ with st.sidebar:
             save_chat_history(save_name)
         clear_chat()
         st.rerun()
-    
+
     st.divider()
     st.markdown("### ⚙️ 設定")
-    
+
     # 技能啟用
     st.checkbox("📊 資料分析", value=True, key="skill_data")
     st.checkbox("🖼️ 圖片分析", value=True, key="skill_image")
@@ -230,38 +230,38 @@ if user_input:
         "content": user_input,
         "avatar": "👤"
     })
-    
+
     # 顯示使用者訊息
     with st.chat_message("user", avatar="👤"):
         st.markdown(user_input)
-    
+
     # 準備 API 呼叫
     api_messages = [
         {"role": "system", "content": current_consultant["system_prompt"]}
     ]
-    
+
     # 添加歷史訊息（最多保留 10 輪）
     for msg in st.session_state["chat_messages"][-20:]:
         api_messages.append({
             "role": msg["role"],
             "content": msg["content"]
         })
-    
+
     # 呼叫 API
     with st.spinner("思考中..."):
         response = call_openrouter(api_messages, current_consultant["model"])
-    
+
     # 添加助手回覆
     st.session_state["chat_messages"].append({
         "role": "assistant",
         "content": response,
         "avatar": current_consultant["icon"]
     })
-    
+
     # 顯示助手回覆
     with st.chat_message("assistant", avatar=current_consultant["icon"]):
         st.markdown(response)
-    
+
     # 重新渲染
     st.rerun()
 

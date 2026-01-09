@@ -315,7 +315,7 @@ def run_step_b(
 ):
     """
     Step B: 資料整合與基礎 KPI 計算 (Deterministic)
-    
+
     支援多平台：
       - Meta: 使用舊有邏輯 (kpi_calc.build_report_summary)
       - Shopee: 使用 adapt_shopee_ad_csv -> 統一格式 -> Aggregate -> Report Summary
@@ -325,11 +325,11 @@ def run_step_b(
         return None, None, None, None
 
     logger.info(f"[{mode_label}] Starting Step B... (Platform: {platform})")
-    
+
     # === 第一步：生成 report_summary（需要先有 week_id 才能建立版本目錄） ===
-    
+
     report_summary = {}
-    
+
     if platform.startswith("Shopee") and shopee_file:
         st.info("🛒 執行蝦皮數據轉換 (Adapter)...")
         # 暫時使用 staging 目錄
@@ -338,18 +338,18 @@ def run_step_b(
         temp_shopee_path = staging_dir / "raw_shopee_report.csv"
         with open(temp_shopee_path, "wb") as f:
             f.write(shopee_file.getvalue())
-            
+
         # 呼叫 Adapter
         unified_payload = adapt_shopee_ad_csv(temp_shopee_path)
         unified_data = unified_payload.get("data", [])
-        
+
         # 簡易 Aggregation
         total_spend = sum(d["metrics"]["spend"] for d in unified_data)
         total_rev = sum(d["metrics"]["conversions"]["platform"]["value"] for d in unified_data)
-        
+
         from datetime import datetime
         now_iso = datetime.now().isoformat()
-        
+
         report_summary = {
             "platform": "Shopee",
             "currency": "TWD",
@@ -369,7 +369,7 @@ def run_step_b(
             "week_id": f"Shopee_{now_iso[:10]}"
         }
         st.write(f"Parsed {len(unified_data)} records from Shopee.")
-        
+
     elif platform.startswith("Momo") and momo_file:
         st.info("🛍️ 執行 Momo 數據轉換 (Adapter)...")
         # 暫時使用 staging 目錄
@@ -378,18 +378,18 @@ def run_step_b(
         temp_momo_path = staging_dir / "raw_momo_report.xlsx"
         with open(temp_momo_path, "wb") as f:
             f.write(momo_file.getvalue())
-            
+
         # 呼叫 Adapter
         unified_payload = adapt_momo_ad_report(temp_momo_path)
         unified_data = unified_payload.get("data", [])
-        
+
         # 簡易 Aggregation
         total_spend = sum(d["metrics"]["spend"] for d in unified_data)
         total_rev = sum(d["metrics"]["conversions"]["platform"]["value"] for d in unified_data)
-        
+
         from datetime import datetime
         now_iso = datetime.now().isoformat()
-        
+
         report_summary = {
             "platform": "Momo",
             "currency": "TWD",
@@ -409,44 +409,44 @@ def run_step_b(
             "week_id": f"Momo_{now_iso[:10]}"
         }
         st.write(f"Parsed {len(unified_data)} records from Momo.")
-        
+
     else:
         # Default: Meta
         st.info("執行 Meta KPI 計算...")
-        
+
         # 讀檔為 bytes (build_report_summary 期望 bytes 輸入)
         meta_adset_file.seek(0)
         meta_ads_file.seek(0)
         web_excel_file.seek(0)
-        
+
         meta_adset_bytes = meta_adset_file.read()
         meta_ads_bytes = meta_ads_file.read()
         web_excel_bytes = web_excel_file.read()
-        
+
         report_summary = build_report_summary(meta_adset_bytes, meta_ads_bytes, web_excel_bytes)
 
-    
+
     # === 第二步：有了 report_summary，現在可以取得/建立版本目錄 ===
-    
+
     resolved_fp_code, vdir = choose_version_dir_for_run(
         report_summary,
         fp_code,
         force_rerun,
         auto_new_version
     )
-    
+
     # 確保目錄存在
     vdir.mkdir(parents=True, exist_ok=True)
-    
+
     # === 第三步：儲存產出物 ===
-    
+
     # 儲存 Report Summary
     (vdir / "report_summary.json").write_text(json.dumps(report_summary, indent=2, ensure_ascii=False), encoding="utf-8")
-    
+
     # 載入前一週 Context
     week_id = report_summary.get("week_id", "Unknown")
     prev_ctx = load_prev_week_context(week_id)
-    
+
     # 儲存 Inputs Snapshot
     snapshot_inputs = {
         "platform": platform,
@@ -458,11 +458,11 @@ def run_step_b(
         }
     }
     (vdir / "inputs.json").write_text(json.dumps(snapshot_inputs, indent=2, ensure_ascii=False), encoding="utf-8")
-    
+
     # 更新 Sidebar
     if render_sidebar_status_fn:
         render_sidebar_status_fn(week_id, vdir)
-        
+
     logger.info(f"[{mode_label}] Step B Done. WeekID: {week_id}, VDir: {vdir}")
     return week_id, resolved_fp_code, vdir, prev_ctx
 
@@ -480,7 +480,7 @@ def run_step_c(
 ) -> None:
     """
     Step C: LLM 洞察生成
-    
+
     參數:
         realtime_container: Streamlit 容器，用於即時顯示可讀摘要
     """
@@ -515,14 +515,14 @@ def run_step_c(
         try:
             mi = st.session_state.get("manual_inputs") or {}
             skills_ctx = {}
-            
+
             # Skill 1: Metric Tree Diagnostic (Top 1)
             # 診斷 KPI 樹狀結構與異常歸因
             from scripts.skills.metric_tree_diagnostic import run_metric_tree_diagnostic
             skill_t1 = run_metric_tree_diagnostic(rs)
             skills_ctx["metric_tree_diagnostic"] = skill_t1
             write_json(vdir / "skill_metric_tree_diagnostic.json", skill_t1)
-            
+
             # Skill 2: Creative Fatigue (Top 2)
             # 偵測素材疲乏與高潛力素材
             # 注意：因架構限制，我們使用 report_summary 中的 top/worst tables 作為樣本
@@ -532,7 +532,7 @@ def run_step_c(
             if "tables" in rs:
                ads_samples.extend(rs["tables"].get("top_ads_by_roas", []))
                ads_samples.extend(rs["tables"].get("worst_ads_by_roas", []))
-            
+
             skill_t2 = run_creative_fatigue_diagnostic(rs, ads_samples)
             skills_ctx["creative_fatigue"] = skill_t2
             write_json(vdir / "skill_creative_fatigue.json", skill_t2)
@@ -543,10 +543,10 @@ def run_step_c(
             skill_t3 = run_budget_rules(rs, mi)
             skills_ctx["budget_rules"] = skill_t3
             write_json(vdir / "skill_budget_rules.json", skill_t3)
-            
+
             # Store in session for subsequent steps
             st.session_state["skills_context"] = skills_ctx
-            
+
         except Exception as e:
             logger.error(f"Skills execution failed: {e}")
             # skill failure must not block pipeline
@@ -635,7 +635,7 @@ def run_step_e(
 ) -> None:
     """
     Step E: 三顧問分析
-    
+
     參數:
         status_callback: 顧問開始處理時的回呼 (role, model)
         realtime_container: Streamlit 容器，用於即時顯示顧問分析結果
@@ -683,7 +683,7 @@ def run_step_e(
         )
         write_json(vdir / "consultant_notes.json", cn)
         st.session_state["consultant_notes"] = cn
-        
+
         # 將三位顧問的自然語句（Markdown）落盤到 history 版本資料夾，便於 QA/回溯
         try:
             notes = {
@@ -752,14 +752,14 @@ def run_step_g(session_state: Dict[str, Any]) -> None:
     執行 Step G：顯示技能包管理員與可視化結果
     """
     st.header("Step G: 技能包管理員 (Skill Manager)")
-    
+
     # 從 session_state 讀取技能結果（Step C 寫入的位置）
     skills_context = session_state.get("skills_context", {})
-    
+
     if not skills_context:
         st.info("ℹ️ 本次執行尚未包含技能分析結果 (可能是舊版報告或未開啟技能)。")
         return
-        
+
     # 呼叫獨立 UI 模組渲染
     from ui.skill_manager import render_skill_manager
     render_skill_manager(skills_context)

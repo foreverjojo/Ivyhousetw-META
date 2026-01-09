@@ -352,7 +352,7 @@ with st.expander("Step A｜上傳檔案 + 預覽（必做）", expanded=True):
             if saved_count > 0:
                 st.toast(f"✅ 已存入 {saved_count} 個新素材至 {MEDIA_ASSETS_DIR.name}")
         # ---------------------------------
-        
+
         try:
             adset_df = read_csv(meta_adset_file)
             ads_df = read_csv(meta_ads_file)
@@ -445,7 +445,7 @@ with st.expander("防呆｜Fingerprint（deterministic version code）", expande
 from utils.legacy_migration import render_legacy_migration_ui
 
 render_legacy_migration_ui(
-    st, week_meta_dir, version_dir, read_latest_ptr, 
+    st, week_meta_dir, version_dir, read_latest_ptr,
     write_latest_ptr, write_week_info, ensure_week_meta_dirs, fp_short
 )
 
@@ -550,19 +550,19 @@ with colv2:
 st.divider()
 with st.expander("Step G｜雲端同步 (Google Drive)", expanded=True):
     st.write("將 attached_assets/ 內的圖片與影片素材同步至 Google Drive。")
-    
+
     if st.session_state.get("locked_vdir"):
         c_sync1, c_sync2 = st.columns([1, 2])
         with c_sync1:
             btn_sync = st.button("☁️ 上傳素材至雲端", type="secondary", key="btn_cloud_sync")
-        
+
         if btn_sync:
             with st.spinner("🚀 正在同步至雲端..."):
                 try:
                     # 1. 執行掃描與上傳
                     from scripts.media_uploader import upload_media_assets
                     sync_results = upload_media_assets(dry_run=False)
-                    
+
                     st.success("✅ 雲端同步完成！")
                     st.json(sync_results)
                 except Exception as e:

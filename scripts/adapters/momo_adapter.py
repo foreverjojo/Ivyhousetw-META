@@ -41,7 +41,7 @@ def _read_momo_csv(path: Path) -> pd.DataFrame:
     if suffix in (".xlsx", ".xls"):
         # Excel 讀取
         return pd.read_excel(path, header=MOMO_HEADER_ROW)
-    
+
     # CSV 讀取
     for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
         try:
@@ -59,7 +59,7 @@ def _extract_date_range_from_filename(filename: str) -> Tuple[str, str]:
         start = f"{match.group(1)[:4]}-{match.group(1)[4:6]}-{match.group(1)[6:]}"
         end = f"{match.group(2)[:4]}-{match.group(2)[4:6]}-{match.group(2)[6:]}"
         return start, end
-    
+
     # 支援 YYYY_MM_DD-YYYY_MM_DD
     match2 = re.search(r"(\d{4}_\d{2}_\d{2})[-_](\d{4}_\d{2}_\d{2})", filename)
     if match2:
@@ -133,18 +133,18 @@ def _build_momo_record(
     time_range: Dict[str, str],
 ) -> Optional[Dict[str, Any]]:
     """建立單筆 Unified Ad Data record。"""
-    
+
     # 欄位值擷取 (使用 MOMO_COL_MAP)
     raw_name_val = _find_col(row, MOMO_COL_MAP["name"])
     raw_name = _get_str(raw_name_val)
-    
+
     raw_id_val = _find_col(row, MOMO_COL_MAP["product_id"])
     raw_id = _get_str(raw_id_val)
-    
+
     spend = _to_float(_find_col(row, MOMO_COL_MAP["spend"]))
     impressions = _to_int(_find_col(row, MOMO_COL_MAP["impressions"]))
     clicks = _to_int(_find_col(row, MOMO_COL_MAP["clicks"]))
-    
+
     conv_count = _to_int(_find_col(row, MOMO_COL_MAP["conversions_count"]))
     conv_value = _to_float(_find_col(row, MOMO_COL_MAP["conversions_value"]))
     atc = _to_int(_find_col(row, MOMO_COL_MAP["atc"]))
@@ -194,17 +194,17 @@ def _build_momo_record(
 def adapt_momo_ad_report(path: Path) -> Dict[str, Any]:
     """將 MOMO 報表轉換為 Unified Ad Data 格式。"""
     df = _clean_cols(_read_momo_csv(path))
-    
+
     # 擷取時間範圍
     start, end = _extract_date_range_from_filename(path.name)
     time_range = {"start": start, "end": end}
-    
+
     records: List[Dict[str, Any]] = []
     for i, row in df.iterrows():
         record = _build_momo_record(row=row, row_index=int(i), time_range=time_range)
         if record:
             records.append(record)
-    
+
     return {
         "version": "unified_ad_data.v1",
         "source": "momo_ad_report",
@@ -222,18 +222,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--out", type=Path, required=True, help="輸出 unified JSON 檔案路徑")
     p.add_argument("--validate", action="store_true", help="輸出後用 schemas/unified_ad_data.json 驗證")
     args = p.parse_args(argv)
-    
+
     payload = adapt_momo_ad_report(args.input)
-    
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    
+
     print(f"✅ 已轉換 {len(payload['data'])} 筆資料至 {args.out}")
-    
+
     if args.validate:
         from scripts.validator import validate_file
         validate_file(payload, schema_filename="unified_ad_data.json", label="unified_ad_data")
-    
+
     return 0
 
 

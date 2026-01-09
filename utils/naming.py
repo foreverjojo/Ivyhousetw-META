@@ -244,4 +244,3 @@ def build_media_filename(
         sha256_8=sha256_8,
         filename=filename,
     )
-

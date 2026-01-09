@@ -157,14 +157,14 @@ def run_ivy_dev_flow(user_request: str):
 
     # 2. 定義 Tasks (這裡示範循序執行，後一個任務吃前一個的輸出)
     #    CrewAI 預設會將前一個 Task 的 output 作為 context 傳給下一個 Task
-    
+
     task_plan = tasks.plan_task(planner, user_request)
     task_implement = tasks.implement_task(engineer, user_request) # Engineer 也需要知道原始需求，或者只依賴 spec
     # 更好的做法是讓 Crew 自動傳遞 context，這裡我們先簡單設定
     # 在 Crew 中，tasks 順序決定了執行順序
 
     task_implement.context = [task_plan] # 明確指定依賴
-    
+
     task_review = tasks.review_task(qa, user_request) # QA 審查的是 Engineer 的產出
     task_review.context = [task_implement] # QA 依賴實作結果
 

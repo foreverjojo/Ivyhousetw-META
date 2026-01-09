@@ -38,32 +38,32 @@ api_key = os.getenv("GOOGLE_API_KEY")
 if "gemini" in model_name.lower() or api_key:
     # 使用 Google Gemini
     print(f"🤖 使用 Google Gemini 模型: {model_name}")
-    
+
     # CrewAI 對於 Gemini 的支援：
     # 1. 模型名稱需要以 "gemini/" 開頭 (例如 "gemini/gemini-1.5-pro")
     # 2. 需要環境變數 GOOGLE_API_KEY (已由 .env載入)
     # 3. 為了避開 OpenAI Key 檢查，有時需要設個假值
     if "OPENAI_API_KEY" not in os.environ:
          os.environ["OPENAI_API_KEY"] = "NA"
-         
+
     # 處理模型名稱
     if model_name.startswith("openai/"):
          # 如果原本是 openai/gemini... (怪怪的) 就只取後面
          clean_name = model_name.replace("openai/", "")
     else:
          clean_name = model_name
-         
+
     if not clean_name.startswith("gemini/"):
         # 確保有 gemini/ 前綴
         final_model = f"gemini/{clean_name}"
     else:
         final_model = clean_name
-    
+
     # [FIX] 自動修正目前 API 不支援的模型名稱
     if "gemini-3.0" in final_model:
         print(f"⚠️ 偵測到尚未開放的 {final_model}，自動切換至穩定的 gemini-1.5-pro")
         final_model = "gemini/gemini-1.5-pro"
-        
+
     default_llm = final_model
     advanced_llm = final_model
 else:
@@ -224,7 +224,7 @@ def run_dev_team(request: str):
     plan = tasks.plan_task(planner, request)
     implement = tasks.implement_task(engineer, [plan])
     review = tasks.review_task(qa, [implement])
-    
+
     # 專家可以在 Engineer 實作時提供協助 (透過 CrewAI 的協作機制，或者我們可以在這裡不顯式分配任務，
     # 僅作為 resource，也可以讓 Engineer 有權限 delegate 問題給專家)
     # 但為了展現專家的價值，我們這裡把專家加入 Crew agents 列表
@@ -244,6 +244,6 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("請提供開發需求。例如：python scripts/dev_team.py '幫我新增一個 user_login 模組'")
         sys.exit(1)
-    
+
     user_req = sys.argv[1]
     run_dev_team(user_req)

@@ -38,23 +38,23 @@ def get_function_signature(node: ast.FunctionDef) -> str:
         if arg.annotation:
             arg_str += f": {ast.unparse(arg.annotation)}"
         args.append(arg_str)
-    
+
     signature = f"{node.name}({', '.join(args)})"
-    
+
     if node.returns:
         signature += f" -> {ast.unparse(node.returns)}"
-    
+
     return signature
 
 
 def generate_markdown(file_path: str) -> str:
     """從 Python 檔案生成 Markdown 文件"""
     path = Path(file_path)
-    
+
     # 檢查檔案是否存在
     if not path.exists():
         return f"# 錯誤\n\n檔案不存在：`{file_path}`"
-    
+
     # 讀取並解析檔案
     try:
         content = path.read_text(encoding="utf-8")
@@ -63,14 +63,14 @@ def generate_markdown(file_path: str) -> str:
         return f"# 錯誤\n\n無法解析 Python 檔案：`{str(e)}`"
     except Exception as e:
         return f"# 錯誤\n\n讀取檔案失敗：`{str(e)}`"
-    
+
     # 開始生成 Markdown
     md_lines: List[str] = []
-    
+
     # 標題 (使用檔案名稱)
     md_lines.append(f"# {path.name}")
     md_lines.append("")
-    
+
     # 模組層級 docstring
     module_doc = extract_docstring(tree)
     if module_doc:
@@ -78,17 +78,17 @@ def generate_markdown(file_path: str) -> str:
         md_lines.append("")
         md_lines.append(module_doc)
         md_lines.append("")
-    
+
     # 收集類別與函式
     classes: List[ast.ClassDef] = []
     functions: List[ast.FunctionDef] = []
-    
+
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             classes.append(node)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             functions.append(node)
-    
+
     # 生成類別文件
     if classes:
         md_lines.append("## 類別 (Classes)")
@@ -100,7 +100,7 @@ def generate_markdown(file_path: str) -> str:
             if cls_doc:
                 md_lines.append(cls_doc)
                 md_lines.append("")
-            
+
             # 列出類別方法
             methods = [n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
             if methods:
@@ -115,7 +115,7 @@ def generate_markdown(file_path: str) -> str:
                         first_line = method_doc.split('\n')[0]
                         md_lines.append(f"  - {first_line}")
                 md_lines.append("")
-    
+
     # 生成函式文件
     if functions:
         md_lines.append("## 函式 (Functions)")
@@ -130,11 +130,11 @@ def generate_markdown(file_path: str) -> str:
             else:
                 md_lines.append("*（無 docstring）*")
             md_lines.append("")
-    
+
     # 如果沒有任何內容
     if not classes and not functions and not module_doc:
         md_lines.append("*此檔案沒有可提取的 docstring。*")
-    
+
     return "\n".join(md_lines)
 
 
@@ -145,7 +145,7 @@ def main():
         print("")
         print("使用方式：`python doc_generator.py <file_path>`")
         sys.exit(1)
-    
+
     file_path = sys.argv[1]
     markdown = generate_markdown(file_path)
     print(markdown)

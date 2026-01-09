@@ -37,13 +37,13 @@ _ AI 正在分析您的廣告數據..._
 def render_report_insights(ri: Dict[str, Any]) -> str:
     """
     將 report_insights.json 轉為自然語句摘要
-    
+
     參數:
         ri: report_insights.json 的內容
-        
+
     回傳:
         Markdown 格式的可讀摘要
-        
+
     範例輸出:
         📊 本週洞察摘要
         - 總曝光量：1,234,567 次
@@ -53,12 +53,12 @@ def render_report_insights(ri: Dict[str, Any]) -> str:
         return _render_report_insights_v1(ri)
 
     lines = ["## 📊 本週洞察摘要\n"]
-    
+
     # 提取 summary（若存在）
     summary = ri.get("summary", "")
     if summary:
         lines.append(f"_{summary}_\n")
-    
+
     # 提取 key_insights
     key_insights = ri.get("key_insights", [])
     if key_insights:
@@ -69,7 +69,7 @@ def render_report_insights(ri: Dict[str, Any]) -> str:
             elif isinstance(insight, dict):
                 text = insight.get("text") or insight.get("insight") or str(insight)
                 lines.append(f"{i}. {text}")
-    
+
     # 提取 recommendations（若存在）
     recommendations = ri.get("recommendations", [])
     if recommendations:
@@ -80,7 +80,7 @@ def render_report_insights(ri: Dict[str, Any]) -> str:
             elif isinstance(rec, dict):
                 text = rec.get("text") or rec.get("action") or str(rec)
                 lines.append(f"- {text}")
-    
+
     # 提取 performance_highlights（若存在）
     highlights = ri.get("performance_highlights", {})
     if highlights:
@@ -89,11 +89,11 @@ def render_report_insights(ri: Dict[str, Any]) -> str:
             label = _translate_key(key)
             formatted_value = _format_value(value)
             lines.append(f"- **{label}**：{formatted_value}")
-    
+
     # 若幾乎沒有內容，提供 fallback
     if len(lines) <= 2:
         lines.append("_洞察內容正在生成中..._")
-    
+
     return "\n".join(lines)
 
 
@@ -201,11 +201,11 @@ def _safe_str(v: Any) -> str:
 def render_consultant_note(role: str, note: Dict[str, Any]) -> str:
     """
     將單一顧問的 JSON 轉為可讀分析
-    
+
     參數:
         role: "A" | "B" | "C"
         note: 該顧問的 JSON 輸出
-        
+
     回傳:
         Markdown 格式的顧問分析摘要
     """
@@ -214,15 +214,15 @@ def render_consultant_note(role: str, note: Dict[str, Any]) -> str:
         "B": {"name": "視覺顧問", "icon": "🎨", "focus": "素材與文案優化"},
         "C": {"name": "策略顧問", "icon": "🧠", "focus": "整體策略與風險控管"},
     }
-    
+
     info = role_info.get(role, {"name": f"顧問 {role}", "icon": "🤖", "focus": "分析"})
-    
+
     # 檢查錯誤
     if "error" in note:
         return f"{info['icon']} **{info['name']}**\n\n⚠️ 分析失敗：{note['error']}"
-    
+
     lines = [f"## {info['icon']} {info['name']}\n", f"_專注：{info['focus']}_\n"]
-    
+
     # 根據不同顧問提取不同欄位
     if role == "A":
         lines.extend(_render_consultant_a(note))
@@ -233,19 +233,19 @@ def render_consultant_note(role: str, note: Dict[str, Any]) -> str:
     else:
         # 通用處理
         lines.extend(_render_generic_note(note))
-    
+
     return "\n".join(lines)
 
 
 def _render_consultant_a(note: Dict[str, Any]) -> list:
     """渲染成效顧問 A 的輸出"""
     lines = []
-    
+
     # performance_summary
     perf_summary = note.get("performance_summary") or note.get("summary", "")
     if perf_summary:
         lines.append(f"### 績效總結\n{perf_summary}\n")
-    
+
     # key_observations
     observations = note.get("key_observations") or note.get("observations", [])
     if observations:
@@ -253,7 +253,7 @@ def _render_consultant_a(note: Dict[str, Any]) -> list:
         for obs in observations[:4]:
             text = obs if isinstance(obs, str) else obs.get("text", str(obs))
             lines.append(f"- {text}")
-    
+
     # scaling_suggestions
     suggestions = note.get("scaling_suggestions") or note.get("suggestions", [])
     if suggestions:
@@ -261,7 +261,7 @@ def _render_consultant_a(note: Dict[str, Any]) -> list:
         for sug in suggestions[:3]:
             text = sug if isinstance(sug, str) else sug.get("text", str(sug))
             lines.append(f"- {text}")
-    
+
     # budget_recommendations
     budget = note.get("budget_recommendations") or note.get("budget", [])
     if budget:
@@ -269,19 +269,19 @@ def _render_consultant_a(note: Dict[str, Any]) -> list:
         for b in budget[:3]:
             text = b if isinstance(b, str) else b.get("text", str(b))
             lines.append(f"- {text}")
-    
+
     return lines
 
 
 def _render_consultant_b(note: Dict[str, Any]) -> list:
     """渲染視覺顧問 B 的輸出"""
     lines = []
-    
+
     # creative_review
     creative = note.get("creative_review") or note.get("visual_summary", "")
     if creative:
         lines.append(f"### 素材評析\n{creative}\n")
-    
+
     # top_performers
     top = note.get("top_performers") or note.get("best_creatives", [])
     if top:
@@ -289,7 +289,7 @@ def _render_consultant_b(note: Dict[str, Any]) -> list:
         for t in top[:3]:
             text = t if isinstance(t, str) else t.get("name", str(t))
             lines.append(f"- {text}")
-    
+
     # copy_suggestions
     copy = note.get("copy_suggestions") or note.get("copywriting", [])
     if copy:
@@ -297,7 +297,7 @@ def _render_consultant_b(note: Dict[str, Any]) -> list:
         for c in copy[:3]:
             text = c if isinstance(c, str) else c.get("text", str(c))
             lines.append(f"- {text}")
-    
+
     # visual_recommendations
     visual = note.get("visual_recommendations") or note.get("design_tips", [])
     if visual:
@@ -305,19 +305,19 @@ def _render_consultant_b(note: Dict[str, Any]) -> list:
         for v in visual[:3]:
             text = v if isinstance(v, str) else v.get("text", str(v))
             lines.append(f"- {text}")
-    
+
     return lines
 
 
 def _render_consultant_c(note: Dict[str, Any]) -> list:
     """渲染策略顧問 C 的輸出"""
     lines = []
-    
+
     # strategy_overview
     strategy = note.get("strategy_overview") or note.get("strategic_summary", "")
     if strategy:
         lines.append(f"### 策略總覽\n{strategy}\n")
-    
+
     # market_insights
     market = note.get("market_insights") or note.get("market_analysis", [])
     if market:
@@ -325,7 +325,7 @@ def _render_consultant_c(note: Dict[str, Any]) -> list:
         for m in market[:3]:
             text = m if isinstance(m, str) else m.get("text", str(m))
             lines.append(f"- {text}")
-    
+
     # action_items
     actions = note.get("action_items") or note.get("next_steps", [])
     if actions:
@@ -333,7 +333,7 @@ def _render_consultant_c(note: Dict[str, Any]) -> list:
         for a in actions[:4]:
             text = a if isinstance(a, str) else a.get("text", str(a))
             lines.append(f"- {text}")
-    
+
     # risks
     risks = note.get("risks") or note.get("risk_factors", [])
     if risks:
@@ -341,14 +341,14 @@ def _render_consultant_c(note: Dict[str, Any]) -> list:
         for r in risks[:3]:
             text = r if isinstance(r, str) else r.get("text", str(r))
             lines.append(f"- {text}")
-    
+
     return lines
 
 
 def _render_generic_note(note: Dict[str, Any]) -> list:
     """通用顧問輸出渲染（fallback）"""
     lines = []
-    
+
     # 嘗試提取常見欄位
     for key in ["summary", "analysis", "recommendations", "suggestions"]:
         value = note.get(key)
@@ -361,10 +361,10 @@ def _render_generic_note(note: Dict[str, Any]) -> list:
                 for item in value[:5]:
                     text = item if isinstance(item, str) else str(item)
                     lines.append(f"- {text}")
-    
+
     if not lines:
         lines.append("_分析內容正在整理中..._")
-    
+
     return lines
 
 
@@ -396,10 +396,10 @@ def _format_value(value: Any) -> str:
     """格式化數值為可讀字串"""
     if value is None:
         return "N/A"
-    
+
     if isinstance(value, bool):
         return "是" if value else "否"
-    
+
     if isinstance(value, float):
         if value >= 1000000:
             return f"{value/1000000:.2f}M"
@@ -407,7 +407,7 @@ def _format_value(value: Any) -> str:
             return f"{value/1000:.1f}K"
         else:
             return f"{value:.2f}"
-    
+
     if isinstance(value, int):
         if value >= 1000000:
             return f"{value/1000000:.2f}M"
@@ -415,5 +415,5 @@ def _format_value(value: Any) -> str:
             return f"{value:,}"
         else:
             return str(value)
-    
+
     return str(value)

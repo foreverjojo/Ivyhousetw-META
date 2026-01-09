@@ -137,6 +137,14 @@ history/
 *.log
 doc/logs/
 
+# ---- workflow governance ----
+# Task locks
+.agent/active_task.lock
+# Handoff files
+.agent/handoff_to_*.md
+# Backup directory
+backups/
+
 # ---- secrets (NEVER commit) ----
 secrets/
 *.pem

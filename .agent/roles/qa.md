@@ -92,4 +92,3 @@ codex exec -c model="gpt-4o" "審查..."
 ⚠️ **禁止**：跳過 help 直接憑經驗臆測參數名稱
 
 詳細流程請參閱 [`.agent/skills/explore_cli_tool.md`](file:///.agent/skills/explore_cli_tool.md)
-

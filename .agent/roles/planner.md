@@ -23,6 +23,22 @@ description: 艾薇規劃師 (Planner) - 負責產出開發規格
 - 產出 Spec 前，**一定要先讀 code**，不要憑空想像。
 - 嚴格遵守 `ivy_house_rules.md`。
 
+## 產出物保存規範
+
+> 📁 **必須保存 Spec 為獨立文件**
+
+| 項目 | 規範 |
+|------|------|
+| **保存位置** | `doc/plans/` |
+| **命名規則** | `Idx-NNN_plan.md`（NNN 對應任務編號） |
+| **模板參考** | `doc/plans/Idx-000_plan.template.md` |
+
+### 保存流程
+1. 產出 Spec 後，先在對話中展示給用戶確認
+2. 用戶確認後，建立 `doc/plans/Idx-NNN_plan.md` 文件
+3. 在 `Implementation_Plan_index.md` 登記任務
+4. 繼續進入 Step 2 (Meta Expert)
+
 ## 必須遵守的規則檔案
 > **重要**：在執行任何任務前，請先閱讀並遵守以下規則：
 > - 📜 [`ivy_house_rules.md`](file:///ivy_house_rules.md) - 艾薇手工坊系統開發核心守則

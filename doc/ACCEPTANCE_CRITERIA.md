@@ -43,4 +43,3 @@ PR 必須同時滿足以下全部條件才可合併：
 
 - `doc/DATA_CONTRACT.md` 清楚說明欄位語意與驗證規則
 - `doc/ACCEPTANCE_CRITERIA.md` 清楚列出 PR 合併鐵律與驗收分階段標準
-

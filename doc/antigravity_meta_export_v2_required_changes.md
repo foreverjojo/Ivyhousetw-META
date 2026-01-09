@@ -167,4 +167,3 @@
 
 - 匯出加入 `Ad ID` / `Ad set ID` / `Campaign ID`
 - 若要「只匯出兩份檔」又要日/週共用：維持目前格式即可（daily rows + account total row），但工程端必須做聚合與 drop total row
-

@@ -1,0 +1,328 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ivyhousetw.com/schemas/execution_log.schema.json",
+  "title": "Agent Execution Log Schema",
+  "description": "會話級別的 Agent 執行日誌結構，用於自動化會話分析與治理審計",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "session_id",
+    "started_at",
+    "executor",
+    "tasks_executed"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema 版本號，用於向後相容性檢查"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+      "description": "會話唯一識別碼（UUID v4 格式）"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "會話開始時間（ISO 8601 格式）"
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "會話結束時間（ISO 8601 格式）"
+    },
+    "duration_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "會話持續時間（秒）"
+    },
+    "executor": {
+      "type": "object",
+      "required": ["tool", "model"],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["Copilot Chat", "Codex", "Continue", "Claude", "Cursor", "Manual"],
+          "description": "執行工具名稱"
+        },
+        "model": {
+          "type": "string",
+          "description": "使用的 AI 模型（如 gpt-5.2, claude-opus-4.5）"
+        },
+        "agent_role": {
+          "type": "string",
+          "enum": ["Planner", "Engineer", "QA", "Meta Expert", "Moderator"],
+          "description": "Agent 角色"
+        }
+      },
+      "description": "執行者資訊"
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "專案名稱"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Git 分支名稱"
+        },
+        "working_directory": {
+          "type": "string",
+          "description": "工作目錄路徑"
+        },
+        "triggered_by": {
+          "type": "string",
+          "enum": ["user_command", "scheduled", "ci_cd", "webhook"],
+          "description": "觸發來源"
+        }
+      },
+      "description": "會話上下文資訊"
+    },
+    "tasks_executed": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/task_record"
+      },
+      "minItems": 0,
+      "description": "本會話執行的任務清單"
+    },
+    "tool_calls": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tool_call_record"
+      },
+      "description": "工具調用記錄（用於追蹤 MCP/技能調用）"
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision_record"
+      },
+      "description": "重要決策點記錄"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/error_record"
+      },
+      "description": "錯誤與警告記錄"
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "total_tasks": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "執行的任務總數"
+        },
+        "tasks_passed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "通過的任務數"
+        },
+        "tasks_failed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "失敗的任務數"
+        },
+        "files_created": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "建立的檔案數"
+        },
+        "files_modified": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "修改的檔案數"
+        },
+        "files_deleted": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "刪除的檔案數"
+        },
+        "total_tool_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "工具調用總次數"
+        },
+        "tokens_consumed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "消耗的 token 數量（如適用）"
+        }
+      },
+      "description": "會話統計指標"
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "會話摘要（自動生成或人工填寫）"
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "建議的後續行動"
+    }
+  },
+  "$defs": {
+    "task_record": {
+      "type": "object",
+      "required": ["index", "status"],
+      "properties": {
+        "index": {
+          "type": "string",
+          "pattern": "^Idx-\\d{3}$",
+          "description": "任務索引"
+        },
+        "title": {
+          "type": "string",
+          "description": "任務標題"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "FAILED", "SKIPPED"],
+          "description": "任務狀態"
+        },
+        "qa_result": {
+          "type": "string",
+          "enum": ["PASS", "PASS WITH RISK", "FAIL", "PENDING"],
+          "description": "QA 結果"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "任務開始時間"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "任務完成時間"
+        },
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": { "type": "string" },
+              "action": {
+                "type": "string",
+                "enum": ["NEW", "MODIFY", "DELETE"]
+              }
+            }
+          },
+          "description": "變更的檔案"
+        },
+        "log_file": {
+          "type": "string",
+          "description": "對應的 Log 檔案路徑"
+        }
+      },
+      "description": "單一任務執行記錄"
+    },
+    "tool_call_record": {
+      "type": "object",
+      "required": ["tool_name", "timestamp"],
+      "properties": {
+        "tool_name": {
+          "type": "string",
+          "description": "工具名稱（如 read_file, multi_edit, mcp_github_explorer）"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "調用時間"
+        },
+        "parameters": {
+          "type": "object",
+          "description": "調用參數（敏感資訊應遮蔽）"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "是否成功"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "執行時間（毫秒）"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "錯誤訊息（如失敗）"
+        }
+      },
+      "description": "工具調用記錄"
+    },
+    "decision_record": {
+      "type": "object",
+      "required": ["timestamp", "decision"],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "決策時間"
+        },
+        "context": {
+          "type": "string",
+          "description": "決策背景"
+        },
+        "decision": {
+          "type": "string",
+          "description": "做出的決策"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "決策理由"
+        },
+        "alternatives_considered": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "考慮過的替代方案"
+        },
+        "impact": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "影響程度"
+        }
+      },
+      "description": "決策記錄"
+    },
+    "error_record": {
+      "type": "object",
+      "required": ["timestamp", "level", "message"],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "發生時間"
+        },
+        "level": {
+          "type": "string",
+          "enum": ["WARNING", "ERROR", "CRITICAL"],
+          "description": "嚴重程度"
+        },
+        "message": {
+          "type": "string",
+          "description": "錯誤訊息"
+        },
+        "source": {
+          "type": "string",
+          "description": "錯誤來源（檔案/工具/任務）"
+        },
+        "resolved": {
+          "type": "boolean",
+          "description": "是否已解決"
+        },
+        "resolution": {
+          "type": "string",
+          "description": "解決方式"
+        }
+      },
+      "description": "錯誤與警告記錄"
+    }
+  }
+}

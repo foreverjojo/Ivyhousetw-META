@@ -15,7 +15,7 @@ import requests
 
 def test_gdrive_connection(json_path: str):
     print(f"🔍 正在測試金鑰：{json_path}")
-    
+
     if not os.path.exists(json_path):
         print(f"❌ 找不到金鑰檔案：{json_path}")
         return
@@ -23,7 +23,7 @@ def test_gdrive_connection(json_path: str):
     # 1. 載入認證
     scopes = ['https://www.googleapis.com/auth/drive.readonly']
     creds = service_account.Credentials.from_service_account_file(json_path, scopes=scopes)
-    
+
     # 2. 取得 Access Token
     print("🔑 正在取得 Access Token...")
     creds.refresh(Request())
@@ -34,9 +34,9 @@ def test_gdrive_connection(json_path: str):
     print("📡 正在呼叫 Google Drive API (files.list)...")
     url = "https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name)"
     headers = {"Authorization": f"Bearer {token}"}
-    
+
     resp = requests.get(url, headers=headers)
-    
+
     if resp.status_code == 200:
         data = resp.json()
         print("🟢 連線成功！以下是最近的 5 個檔案：")

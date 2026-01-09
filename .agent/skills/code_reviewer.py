@@ -70,13 +70,13 @@ def check_chinese_comments(lines: List[str]) -> List[Dict[str, Any]]:
     issues = []
     has_chinese = False
     check_range = min(len(lines), MIN_CHINESE_LINES)
-    
+
     chinese_pattern = re.compile(r'[\u4e00-\u9fff]')
     for line in lines[:check_range]:
         if chinese_pattern.search(line):
             has_chinese = True
             break
-    
+
     if not has_chinese:
         issues.append({
             "type": "missing_chinese_comment",
@@ -89,7 +89,7 @@ def check_chinese_comments(lines: List[str]) -> List[Dict[str, Any]]:
 def review_file(file_path: str) -> Dict[str, Any]:
     """執行完整的代碼審查"""
     path = Path(file_path)
-    
+
     # 檢查檔案是否存在
     if not path.exists():
         return {
@@ -98,7 +98,7 @@ def review_file(file_path: str) -> Dict[str, Any]:
             "message": f"檔案不存在：{file_path}",
             "issues": []
         }
-    
+
     # 讀取檔案內容
     try:
         content = path.read_text(encoding="utf-8")
@@ -110,17 +110,17 @@ def review_file(file_path: str) -> Dict[str, Any]:
             "message": f"讀取檔案失敗：{str(e)}",
             "issues": []
         }
-    
+
     # 收集所有問題
     all_issues = []
     all_issues.extend(check_api_key_leak(content, lines))
     all_issues.extend(check_file_length(lines))
     all_issues.extend(check_chinese_comments(lines))
-    
+
     # 判定結果
     has_critical = any(i["type"] == "api_key_leak" for i in all_issues)
     status = "fail" if has_critical else ("warning" if all_issues else "pass")
-    
+
     return {
         "status": status,
         "file": file_path,
@@ -142,11 +142,11 @@ def main():
             "message": "使用方式：python code_reviewer.py <file_path>"
         }, ensure_ascii=False, indent=2))
         sys.exit(1)
-    
+
     file_path = sys.argv[1]
     result = review_file(file_path)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    
+
     # 根據狀態設定退出碼
     if result["status"] == "fail":
         sys.exit(1)

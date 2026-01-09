@@ -83,7 +83,7 @@ codex exec --model "gpt-4" --context-file "file.py" "prompt"
 > ⚠️ **注意**: 每個工具的參數格式可能不同。例如：
 > - Codex CLI 使用 `-c key=value` 格式
 > - 其他工具可能使用 `--key value` 或 `--key=value`
-> 
+>
 > **務必**依照該工具 `--help` 顯示的格式使用參數。
 
 ---

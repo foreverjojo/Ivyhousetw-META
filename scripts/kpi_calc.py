@@ -39,15 +39,15 @@ def calc_meta_kpis(adset_df: pd.DataFrame, ads_df: pd.DataFrame) -> Dict[str, An
     # 使用 alias key 取得欄位值
     spend = _sum_col(adset_df, "spend")
     impressions = _sum_col(adset_df, "impressions")
-    
+
     # 真值（Website Direct）
     website_purchases = _sum_col(adset_df, "purchases_website")
     website_value = _sum_col(adset_df, "purchases_value_website")
-    
+
     # Platform (for drift watch)
     platform_purchases = _sum_col(adset_df, "purchases_platform")
     platform_value = _sum_col(adset_df, "purchases_value_platform")
-    
+
     # Funnel (events)
     atc = _sum_col(adset_df, "atc")
     ic = _sum_col(adset_df, "ic")
@@ -113,7 +113,7 @@ def calc_meta_kpis(adset_df: pd.DataFrame, ads_df: pd.DataFrame) -> Dict[str, An
         },
         # 使用 alias 判斷 rankings 欄位是否存在（支援英文/中文）
         "ads_has_rankings": all(
-            _resolve_col_name(ads_df, _get_alias(k)) in ads_df.columns 
+            _resolve_col_name(ads_df, _get_alias(k)) in ads_df.columns
             for k in ["quality_ranking", "engagement_ranking", "conversion_ranking"]
         ),
     }
@@ -139,7 +139,7 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
         link_clicks_col = _resolve_col_name(d, _get_alias("link_clicks"))
         lpv_col = _resolve_col_name(d, _get_alias("lpv"))
         frequency_col = _resolve_col_name(d, _get_alias("frequency"))
-        
+
         d["__spend"] = d[spend_col].apply(_to_num) if spend_col in d.columns else 0
         d["__impressions"] = d[impressions_col].apply(_to_num) if impressions_col in d.columns else 0
         d["__link_clicks"] = d[link_clicks_col].apply(_to_num) if link_clicks_col in d.columns else 0
@@ -151,14 +151,14 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
         purchases_truth_col = _resolve_col_name(d, _get_alias("purchases_website"))
         value_platform_col = _resolve_col_name(d, _get_alias("purchases_value_platform"))
         purchases_platform_col = _resolve_col_name(d, _get_alias("purchases_platform"))
-        
+
         if value_truth_col in d.columns:
             d["__value_truth"] = d[value_truth_col].apply(_to_num)
         elif value_platform_col in d.columns:
             d["__value_truth"] = d[value_platform_col].apply(_to_num)
         else:
             d["__value_truth"] = 0
-        
+
         if purchases_truth_col in d.columns:
             d["__purchases_truth"] = d[purchases_truth_col].apply(_to_num)
         elif purchases_platform_col in d.columns:
@@ -317,7 +317,7 @@ def build_report_summary(
     # ✅ 移除總計/摘要列（必須）- 使用 alias 支援雙語
     adset_name_candidates = _get_alias("adset_name")
     ads_name_candidates = _get_alias("ad_name")
-    
+
     adset_df, dropped_adset = _drop_total_rows(adset_df, adset_name_candidates)
     ads_df, dropped_ads = _drop_total_rows(ads_df, ads_name_candidates)
 
@@ -325,7 +325,7 @@ def build_report_summary(
     adset_daily_df = adset_df.copy() if _is_daily_data(adset_df) else None
     ads_daily_df = ads_df.copy() if _is_daily_data(ads_df) else None
     is_daily = adset_daily_df is not None
-    
+
     # ✅ P1：若為日資料，聚合為週彙總供 KPI 計算
     aggregation_methods = {}
     if is_daily:
@@ -377,6 +377,5 @@ def build_report_summary(
             "note": "optimization_goal, billing_event, buying_type 由使用者在 UI 輸入，存於 inputs.json",
         }
     }
-    
-    return result
 
+    return result

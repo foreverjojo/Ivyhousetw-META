@@ -15,7 +15,7 @@ def test_roas_calculation():
     revenue = 10000.0
     spend = 2000.0
     expected_roas = 5.0
-    
+
     # 基本公式驗證
     calculated_roas = revenue / spend if spend > 0 else 0
     assert calculated_roas == expected_roas, f"ROAS 計算錯誤：預期 {expected_roas}，實際 {calculated_roas}"
@@ -26,7 +26,7 @@ def test_roas_zero_spend():
     revenue = 5000.0
     spend = 0.0
     expected_roas = 0.0  # 零花費定義為 ROAS = 0
-    
+
     calculated_roas = revenue / spend if spend > 0 else 0
     assert calculated_roas == expected_roas
 
@@ -36,7 +36,7 @@ def test_ctr_calculation():
     clicks = 500
     impressions = 10000
     expected_ctr = 5.0  # 5%
-    
+
     calculated_ctr = (clicks / impressions * 100) if impressions > 0 else 0
     assert abs(calculated_ctr - expected_ctr) < 0.01  # 允許浮點數誤差
 
@@ -46,7 +46,7 @@ def test_cpc_calculation():
     spend = 1000.0
     clicks = 200
     expected_cpc = 5.0
-    
+
     calculated_cpc = spend / clicks if clicks > 0 else 0
     assert abs(calculated_cpc - expected_cpc) < 0.01
 

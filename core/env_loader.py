@@ -19,11 +19,11 @@ def load_environment_variables() -> None:
     """
     # 取得專案根目錄（相對於此檔案的父目錄）
     project_root = Path(__file__).parent.parent
-    
+
     # 1. 載入 .env 檔案
     ifp_env_path = project_root / "ifp.env"
     default_env_path = project_root / ".env"
-    
+
     if ifp_env_path.exists():
         load_dotenv(ifp_env_path, override=True)
         print(f"✅ 已載入環境變數：{ifp_env_path}")
@@ -32,7 +32,7 @@ def load_environment_variables() -> None:
         print(f"✅ 已載入環境變數：{default_env_path}")
     else:
         print("⚠️ 未找到 ifp.env 或 .env 檔案")
-    
+
     # 2. 從 Secret Manager 載入敏感資料（若啟用）
     try:
         from core.secret_manager import load_secrets_to_env
@@ -42,4 +42,3 @@ def load_environment_variables() -> None:
         pass
     except Exception as e:
         print(f"⚠️ Secret Manager 載入失敗：{e}")
-

@@ -27,8 +27,10 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
    - 需要修改/新增的檔案清單
    - 每個檔案的邏輯細節
    - 注意事項與風險提示
+4. **保存 Spec 為獨立文件**：`doc/plans/Idx-NNN_plan.md`
 
-**產出格式**：
+**產出格式**：參考模板 `doc/plans/Idx-000_plan.template.md`
+
 ```markdown
 ## 📄 開發規格書
 
@@ -46,6 +48,8 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
 ### 注意事項
 ...
 ```
+
+> 🛑 **必要停頓點**：Spec 產出後，必須等待用戶確認才能進入 Step 2。
 
 ---
 

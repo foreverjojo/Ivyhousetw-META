@@ -48,8 +48,8 @@ UI 在 Step C 前會自動執行 deterministic skill，並把結果注入到 LLM
 
 把這段貼在「給顧問/主持人的備註」或 `analysis_command`：
 
-> 執行「指標樹診斷法（Metric Tree）」：  
-> Level1 先判斷 ROAS 是否達標（>2.5）。  
-> 若不達標，Level2 把 ROAS 拆成 AOV/CPA，說明是 CPA 變高還是 AOV 變低。  
-> 若 CPA 變高，Level3 再把 CPA 拆成 CPM/(CTR×CVR)，指出是 CPM、CTR 或 CVR 哪一段最可能出問題。  
-> 同時用漏斗事件（Click→LPV→ATC→IC→Purchase）補充定位，並提出 3 個可執行任務（含 KPI/止損）。  
+> 執行「指標樹診斷法（Metric Tree）」：
+> Level1 先判斷 ROAS 是否達標（>2.5）。
+> 若不達標，Level2 把 ROAS 拆成 AOV/CPA，說明是 CPA 變高還是 AOV 變低。
+> 若 CPA 變高，Level3 再把 CPA 拆成 CPM/(CTR×CVR)，指出是 CPM、CTR 或 CVR 哪一段最可能出問題。
+> 同時用漏斗事件（Click→LPV→ATC→IC→Purchase）補充定位，並提出 3 個可執行任務（含 KPI/止損）。

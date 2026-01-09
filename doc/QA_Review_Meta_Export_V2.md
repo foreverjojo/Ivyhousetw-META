@@ -83,4 +83,3 @@
 **需要修正（未通過）**
 - 必修：P0-1（日期區間推導錯誤）與 P0-Security（私鑰存在 repo）。
 - 建議同修：P1-2 / P1-3（alias-aware 一致性），並將 `scripts/kpi_calc.py` 拆分模組以符合 `ivy_house_rules.md` 的行數與註解語言規範。
-

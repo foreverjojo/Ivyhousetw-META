@@ -48,7 +48,7 @@
        try:
            readable = render_report_insights(insights)
            realtime_container.markdown(readable)
-           
+
            # 新增：Token 用量顯示
            realtime_container.caption(
                f"📊 Token 用量：總計 {usage['total_tokens']:,} "

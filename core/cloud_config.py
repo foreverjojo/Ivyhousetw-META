@@ -76,4 +76,3 @@ def load_cloud_config(environ: Optional[dict[str, str]] = None) -> CloudConfig:
         google_application_credentials=sa_creds_path,
         http_timeout_s=timeout_s,
     )
-

@@ -262,4 +262,3 @@ def _aggregate_daily_to_weekly(df: pd.DataFrame, name_col: str) -> Tuple[pd.Data
         "reach": "max",
         "frequency": "impressions / max(reach)",
     }
-
