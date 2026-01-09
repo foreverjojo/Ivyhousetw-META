@@ -15,6 +15,29 @@ streamlit run app.py
 - 本專案維護下列 extension 清單：`.devcontainer/devcontainer.json`（Dev Container）、`.vscode/extensions.json`（工作區建議）、`.idx/dev.nix`（IDX / Firebase Studio）。
 - 在 Dev Container 中開啟工作區時，VS Code 會根據 `.devcontainer/devcontainer.json` 安裝 extensions；在 IDX / Firebase Studio 開啟時，會安裝 `.idx/dev.nix` 內列的 extensions，以確保本地與雲端 IDE 的一致性。
 
+### When to use local workflow
+- 適用於快速測試或效能敏感的任務，例如處理大量數據或執行性能測試。
+- 當容器啟動過慢或 Docker 無法正常運行時。
+- 如果本機環境已經配置完成，且不需要 Dev Container 的隔離性。
+
+### Quick steps: Run locally
+1. **建立虛擬環境**：
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+2. **安裝依賴**：
+   ```bash
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+3. **執行應用程式**：
+   ```bash
+   streamlit run app.py
+   ```
+
+> **注意**：確保本機已安裝 Python 3.11+ 和必要工具（如 pip）。
+
 ### ========================================
 ## Data Contracts（唯一真值 / 不可漂移）
 ### ========================================
