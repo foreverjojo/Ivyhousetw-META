@@ -2,7 +2,7 @@
 
 ## 🎯 當前狀態：Phase 4 Stage 2 完成，Meta V2 核心整合達成 (100%)
 
-**最後更新**：2026-01-10 17:00
+**最後更新**：2026-01-12 14:00
 
 ---
 
@@ -20,6 +20,7 @@
 | Idx-006 | 清償 TD-001：修復 skill_converter.py 語法錯誤 | P2 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v3 | `doc/logs/Idx-006_log.md` | 修正縮排錯誤，TD-001 已清償 |
 | Idx-007 | 補齊 Plan.md 產出規範 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v4 | `doc/logs/Idx-007_log.md` | 建立 plan template + 更新 workflow |
 | Idx-008 | 實現 Plan Summary + 完成後刪除 plan.md | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v5 | `doc/logs/Idx-008_log.md` | log template 加入 summary 區段 |
+| Idx-009 | Terminal 管理完整方案 | P0 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 2026-01-12-v1 | `doc/logs/Idx-009_log.md` | Terminal Manager + Codex CLI 整合 + Role Selection Gate |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
