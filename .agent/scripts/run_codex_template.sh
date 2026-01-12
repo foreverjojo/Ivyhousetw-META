@@ -10,11 +10,8 @@
 # 使用方式：
 #   ./run_codex_template.sh <plan_file>
 #
-# Codex CLI Execution Wrapper Script
-# This script wraps Codex CLI execution with Terminal Manager integration
-# and L2 Rollback support.
 
-set -e
+set -euo pipefail
 
 # Color output
 GREEN='\033[0;32m'
@@ -125,17 +122,13 @@ fi
 # Get terminal session
 TERMINAL_ID=$(python3 "$TERMINAL_MANAGER" get-terminal 2>&1 | tail -1)
 
-if [ $? -ne 0 ]; then
-    log_error "Failed to get terminal session"
-    exit 1
-fi
-
 log_info "Using Terminal: $TERMINAL_ID"
 
 # Backup current state for L2 rollback
 log_step "Creating backup point for L2 rollback..."
-BACKUP_BRANCH="backup-$(date +%Y%m%d-%H%M%S)"
-git stash push -m "Pre-execution backup for $PLAN_FILE" --include-untracked || true
+BACKUP_COMMIT=$(git rev-parse HEAD)
+git diff HEAD > ".agent/.pre_execution_backup.patch" || true
+git diff --cached >> ".agent/.pre_execution_backup.patch" || true
 
 # Extract plan index for logging
 PLAN_INDEX=$(basename "$PLAN_FILE" | sed 's/_plan.md//g')
@@ -165,7 +158,7 @@ echo "  2. If execution succeeds, proceed to QA (Step 4)"
 echo "  3. If execution fails, L2 Rollback will be triggered"
 echo ""
 echo "🔄 Rollback options:"
-echo "  L2 (Script): git stash pop  # Restore backup"
+echo "  L2 (Script): git apply .agent/.pre_execution_backup.patch  # Restore backup"
 echo "  L3 (Copilot): Ask Copilot for git reset suggestion"
 echo "  L4 (User): git reset --hard <commit>"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -174,22 +167,27 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # should be implemented based on Codex CLI exit code or error detection
 # This is a simplified version for demonstration
 
-# Wait for user confirmation or implement automatic monitoring
-read -p "Press Enter after Codex execution completes to continue..."
-
-# Check if execution succeeded (simplified check)
-echo ""
-read -p "Did Codex execution succeed? (y/n): " SUCCESS
+# Check Codex CLI exit code (non-interactive mode)
+if [ "${NON_INTERACTIVE:-0}" = "1" ]; then
+    log_info "Non-interactive mode: assuming success"
+    SUCCESS="y"
+else
+    echo ""
+    echo "⚠️  Interactive mode: please confirm execution result"
+    read -p "Did Codex execution succeed? (y/n): " SUCCESS
+fi
 
 if [[ "$SUCCESS" != "y" && "$SUCCESS" != "Y" ]]; then
     log_warn "Execution failed, triggering L2 Rollback..."
 
-    # L2 Rollback: Restore from stash
-    if git stash list | grep -q "Pre-execution backup"; then
-        git stash pop
+    # L2 Rollback: Restore from patch
+    if [ -f ".agent/.pre_execution_backup.patch" ]; then
+        git reset --hard "$BACKUP_COMMIT"
+        git apply ".agent/.pre_execution_backup.patch" 2>/dev/null || true
+        rm ".agent/.pre_execution_backup.patch"
         log_info "L2 Rollback completed - changes restored from backup"
     else
-        log_warn "No backup found in stash"
+        log_warn "No backup patch found"
     fi
 
     log_error "Task execution failed, rolled back to previous state"
@@ -197,8 +195,8 @@ if [[ "$SUCCESS" != "y" && "$SUCCESS" != "Y" ]]; then
 else
     log_info "Execution succeeded, proceeding to QA"
 
-    # Clear the backup stash
-    git stash drop 2>/dev/null || true
+    # Clear the backup patch
+    rm ".agent/.pre_execution_backup.patch" 2>/dev/null || true
 
     echo ""
     echo "✅ Ready for QA (Step 4)"

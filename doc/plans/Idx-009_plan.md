@@ -1,4 +1,4 @@
-# Plan: Idx-009
+# 計劃：Idx-009
 
 **Index**: Idx-009
 **Created**: 2026-01-12
@@ -329,8 +329,13 @@ fi
 
 ## 🔧 執行資訊
 
-**execution**: codex-cli
+**execution**: github-copilot
 **terminal**: 使用現有 Terminal（由 Terminal Manager 管理）
+
+**Cross-QA 規範**:
+- 執行工具: GitHub Copilot
+- QA 工具: Codex CLI
+- 符合 Cross-QA 規則: ✅
 
 ---
 

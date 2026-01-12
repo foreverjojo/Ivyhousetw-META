@@ -1,8 +1,8 @@
-# Terminal Management Guide
+# Terminal 管理指南
 
 ## 🎯 目的
 
-確保 Codex CLI 執行時，所有命令都發送到同一個 Terminal 會話，避免為每個任務創建新的 Terminal，提高執行效率與一致性。
+確保 Codex CLI 執行時,所有命令都發送到同一個 Terminal 會話,避免為每個任務創建新的 Terminal,提高執行效率與一致性。
 
 ---
 

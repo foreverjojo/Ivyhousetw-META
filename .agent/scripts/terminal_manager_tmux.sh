@@ -13,8 +13,6 @@
 #   ./terminal_manager_tmux.sh close <session_name>
 #   ./terminal_manager_tmux.sh info
 #
-# Terminal Manager for Codex CLI Execution (tmux version)
-# Ensures all Codex CLI commands are sent to the same tmux session.
 
 set -e
 
@@ -95,7 +93,8 @@ update_state() {
 # Send command to tmux session
 send_command() {
     local session=$1
-    local cmd=$2
+    shift
+    local cmd="$*"
 
     if [ -z "$cmd" ]; then
         log_error "No command provided"
