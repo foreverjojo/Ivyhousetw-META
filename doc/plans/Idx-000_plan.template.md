@@ -45,13 +45,37 @@
 
 ---
 
+## 🔧 執行資訊
+
+**execution**: [copilot|codex-cli]
+**terminal**: [使用現有 Terminal | 需要新 Terminal（請說明原因）]
+
+**選擇指引**:
+- **GitHub Copilot**: 1-3 個檔案、需要互動、邏輯重構
+- **Codex CLI**: 4+ 個檔案、批次處理、模板化新增
+
+---
+
+## 🔄 Rollback 策略
+
+**L1 (自我修正)**: Engineer 發現錯誤，立即修正
+**L2 (腳本回滾)**: 執行失敗時，自動執行 `git restore .` 或 `git stash pop`
+**L3 (Copilot 建議)**: QA 不通過時，Copilot 提供 `git reset` 建議
+**L4 (任務中止)**: User 執行 `git reset --hard` 或刪除 branch
+
+**預期 Rollback Level**: [L1|L2|L3|L4]
+
+---
+
 ## ✅ 用戶確認
 
 > 🛑 **必要停頓點**：Planner 產出 Spec 後，必須等待用戶確認才能進入 Step 2。
 
 - [ ] Spec 已確認，可進入 Step 2 (Meta Expert)
+- [ ] 執行工具已選擇：`[copilot|codex-cli]`
+- [ ] Terminal 管理策略已確認
 
 ---
 
-**Template Version**: 1.0.0
-**Last Updated**: 2026-01-10
+**Template Version**: 2.0.0
+**Last Updated**: 2026-01-12

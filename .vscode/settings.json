@@ -147,5 +147,19 @@
   "githubPullRequests.pullBranch": "never",
   "githubPullRequests.showPullRequestNumberInEditor": true,
   "githubPullRequests.terminalLinksHandler": "github",
-  "githubPullRequests.fileListLayout": "tree"
+  "githubPullRequests.fileListLayout": "tree",
+
+  // --- OAI Compatible Provider for Copilot configuration
+  "oaicopilot.models": [
+    {
+      "id": "gemini-3-flash",
+      "owned_by": "openai",
+      "baseUrl": "http://host.docker.internal:8045/v1",
+      "apiKey": "sk-bd917f276f934ca0818db1168344284e",
+      "context_length": 32768,
+      "max_tokens": 8192,
+      "temperature": 0,
+      "top_p": 1
+    }
+  ]
 }

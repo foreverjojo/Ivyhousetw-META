@@ -13,6 +13,25 @@ description: 艾薇品管員 (QA) - 負責代碼審查與資安檢查
 - [ ] **檔案規範**：是否有檔案用途說明的 Header？
 - [ ] **邏輯正確性**：是否符合 Planner 的 Spec 與 `ivy_house_rules.md`？
 - [ ] **代碼品質**：是否有過度複雜的函式？是否做了適當的錯誤處理 (Try-Except)？
+- [ ] **Cross-QA 規則**：QA 工具是否與 Executor 不同？
+
+### Cross-QA 規則檢核
+
+**原則**: Executor 與 QA 工具必須不同，確保獨立審查
+
+**允許的組合**:
+- ✅ Executor: GitHub Copilot → QA: Codex CLI
+- ✅ Executor: Codex CLI → QA: GitHub Copilot
+
+**禁止的組合**:
+- ❌ Executor: GitHub Copilot → QA: GitHub Copilot
+- ❌ Executor: Codex CLI → QA: Codex CLI
+
+**檢核步驟**:
+1. 查看 Plan 的 `execution` 欄位，確認 Executor
+2. 選擇不同的工具執行 QA
+3. 在 Log 中記錄 Executor 與 QA Tool
+4. 若違規（工具相同），在 Log 中標記 `QA Compliance: ⚠️ 違規` 並說明原因
 
 ### 外部技能審查 (適用於 GitHub Explorer 下載的技能)
 - [ ] **來源可信度**：外部技能是否來自知名或可信的 Repo？
@@ -92,3 +111,84 @@ codex exec -c model="gpt-4o" "審查..."
 ⚠️ **禁止**：跳過 help 直接憑經驗臆測參數名稱
 
 詳細流程請參閱 [`.agent/skills/explore_cli_tool.md`](file:///.agent/skills/explore_cli_tool.md)
+
+---
+
+## 🔄 L3 Rollback SOP
+
+**觸發條件**: QA 審查結果為 `FAIL`
+
+**執行步驟**:
+
+### 1. 標記 Plan 狀態
+在 `doc/implementation_plan_index.md` 中將 Plan 狀態標記為 `❌ FAIL`
+
+### 2. 分析 Git 歷史
+使用 GitHub Copilot 分析最近的 commits，找出需要回滾的變更：
+
+**Copilot Prompt 範例**:
+```
+請分析最近 5 個 commits，找出與 Idx-XXX 相關的變更，
+並建議回滾命令（使用 --soft 保留工作區變更）。
+
+顯示：
+1. 需要回滾的 commit hash
+2. 回滾命令
+3. 預期影響
+```
+
+### 3. 提供回滾建議
+根據問題嚴重程度，提供不同的回滾方案：
+
+| 問題嚴重度 | 建議方案 | 命令範例 |
+|-----------|---------|----------|
+| 輕微錯誤 | 保留變更，重新修正 | `git reset --soft HEAD~1` |
+| 中度錯誤 | 回滾到上一個穩定點 | `git reset --soft <commit>` |
+| 嚴重錯誤 | 建議完全重置 | `git reset --hard <commit>` (需 User 確認) |
+
+### 4. 等待 User 確認
+**重要**: L3 Rollback 命令必須由 **User 確認後執行**，QA 不能自動執行 git reset
+
+### 5. 記錄 Rollback
+在 Log 的 `Rollback Records` 區段記錄：
+
+```markdown
+| Level | Timestamp | Reason | Action | Result |
+|-------|-----------|--------|--------|--------|
+| L3 | 2026-01-12 15:30 | QA FAIL: 邏輯錯誤 | `git reset --soft HEAD~2` | ✅ 成功 |
+```
+
+### 6. 通知 Engineer
+回到 **Step 3 (Engineer)** 重新執行，並附上 QA 的具體修正建議
+
+### 範例流程
+
+**QA 審查發現問題**:
+```markdown
+## ✅ 品管審查報告
+
+### 發現的問題
+| 檔案 | 行號 | 問題描述 | 建議修正 |
+|------|------|----------|----------|
+| utils/calculator.py | 45 | ROAS 計算錯誤 | 應為 Revenue/Spend |
+
+### 結論
+🔴 需要修正 (觸發 L3 Rollback)
+```
+
+**執行 L3 Rollback**:
+```bash
+# 1. 分析 commits (由 Copilot 執行)
+git log --oneline -5
+
+# 2. Copilot 建議
+# "建議回滾到 commit abc123f (Idx-009 之前的穩定點)"
+# 命令: git reset --soft abc123f
+
+# 3. 等待 User 確認並執行
+git reset --soft abc123f
+
+# 4. 記錄到 Log
+```
+
+---

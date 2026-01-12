@@ -177,3 +177,6 @@ venv/
 uv.exe
 ifp.env
 .env
+
+# Agent Terminal Management
+.agent/.terminal_session.json

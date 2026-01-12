@@ -52,5 +52,8 @@
   "mounts": [
     "source=${localWorkspaceFolder},target=/workspaces/Ivyhousetw-META,type=bind,consistency=cached"
   ],
-  "postCreateCommand": "bash -lc 'set -euo pipefail; cd /workspaces/Ivyhousetw-META; if [ ! -d .venv ]; then python -m venv .venv; fi; . .venv/bin/activate; python -m pip install -U pip; if command -v uv >/dev/null 2>&1; then :; else python -m pip install -U uv; fi; if [ -f uv.lock ]; then uv sync --frozen; else uv pip install -r requirements.txt; fi'"
+  "postCreateCommand": "bash -lc 'set -euo pipefail; cd /workspaces/Ivyhousetw-META; if [ ! -d .venv ]; then python -m venv .venv; fi; . .venv/bin/activate; python -m pip install -U pip; if command -v uv >/dev/null 2>&1; then :; else python -m pip install -U uv; fi; if [ -f uv.lock ]; then uv sync --frozen; else uv pip install -r requirements.txt; fi'",
+  "runArgs": [
+    "--add-host=host.docker.internal:host-gateway"
+  ]
 }
