@@ -69,6 +69,43 @@ fi
 
 log_step "Codex CLI execution detected, managing Terminal session..."
 
+# Check Codex CLI login status
+log_step "檢查 Codex CLI 登入狀態..."
+
+# Try to check if codex is logged in by running a simple command
+if ! codex --version &>/dev/null; then
+    log_warn "Codex CLI 未安裝或無法執行"
+    exit 1
+fi
+
+# Check if user is logged in (this will fail if not logged in)
+# We use 'codex whoami' or similar command to verify
+if ! codex config get user.email &>/dev/null 2>&1; then
+    log_warn "Codex CLI 未登入，正在啟動登入流程..."
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🔐 請執行以下命令進行 Codex CLI 登入："
+    echo ""
+    echo "   codex"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Attempt automatic login
+    log_step "正在啟動 Codex CLI 登入..."
+    codex
+
+    # Verify login succeeded
+    if ! codex config get user.email &>/dev/null 2>&1; then
+        log_error "Codex CLI 登入失敗，請手動執行 'codex' 命令完成登入"
+        exit 1
+    fi
+
+    log_info "✅ Codex CLI 登入成功"
+fi
+
+log_info "✅ Codex CLI 已登入，繼續執行..."
+
 # Get or create terminal session
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TERMINAL_MANAGER="$SCRIPT_DIR/terminal_manager.py"
