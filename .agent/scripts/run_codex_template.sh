@@ -1,11 +1,18 @@
 #!/bin/bash
-# Codex CLI Execution Wrapper Script
+# -*- coding: utf-8 -*-
 #
+# Codex CLI 執行包裝腳本
+#
+# 用途：
+#   整合 Terminal Manager 與 L2 Rollback 機制的 Codex CLI 執行包裝器。
+#   在執行前檢查登入狀態，確保命令發送到持久化的 Terminal 會話中。
+#
+# 使用方式：
+#   ./run_codex_template.sh <plan_file>
+#
+# Codex CLI Execution Wrapper Script
 # This script wraps Codex CLI execution with Terminal Manager integration
 # and L2 Rollback support.
-#
-# Usage:
-#   ./run_codex_template.sh <plan_file>
 
 set -e
 

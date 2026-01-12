@@ -1,14 +1,20 @@
 #!/bin/bash
-# Terminal Manager for Codex CLI Execution (tmux version)
+# -*- coding: utf-8 -*-
 #
-# Ensures all Codex CLI commands are sent to the same tmux session,
-# avoiding the creation of new terminals for each task execution.
+# Terminal 會話管理器 - tmux 版本
 #
-# Usage:
+# 用途：
+#   使用 tmux 確保所有 Codex CLI 命令都發送到同一個 tmux 會話中，
+#   避免為每個任務創建新的 Terminal，提供持久化的執行環境。
+#
+# 使用方式：
 #   ./terminal_manager_tmux.sh get-or-create
 #   ./terminal_manager_tmux.sh send-command <session_name> <command>
 #   ./terminal_manager_tmux.sh close <session_name>
 #   ./terminal_manager_tmux.sh info
+#
+# Terminal Manager for Codex CLI Execution (tmux version)
+# Ensures all Codex CLI commands are sent to the same tmux session.
 
 set -e
 

@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
+Terminal 會話管理器 - 用於 Codex CLI 執行
+
+用途：
+    確保所有 Codex CLI 命令都發送到同一個 Terminal 會話中，
+    避免為每個任務創建新的 Terminal，提高執行效率與一致性。
+
+使用方式：
+    python terminal_manager.py get-terminal
+    python terminal_manager.py send-command <terminal_id> <command>
+    python terminal_manager.py close-terminal <terminal_id>
+
 Terminal Manager for Codex CLI Execution
 
 Ensures all Codex CLI commands are sent to the same terminal session,
 avoiding the creation of new terminals for each task execution.
-
-Usage:
-    python terminal_manager.py get-terminal
-    python terminal_manager.py send-command <terminal_id> <command>
-    python terminal_manager.py close-terminal <terminal_id>
 """
 
 import json
