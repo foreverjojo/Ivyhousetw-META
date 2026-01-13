@@ -80,6 +80,10 @@ EOF
 # Update last_used timestamp
 update_state() {
     if [ -f "$STATE_FILE" ]; then
+        if ! command -v jq &> /dev/null; then
+            log_warn "jq 未安裝，將略過狀態檔更新（last_used/command_count）"
+            return 0
+        fi
         local timestamp=$(date -Iseconds)
         local count=$(jq -r '.command_count // 0' "$STATE_FILE")
         count=$((count + 1))

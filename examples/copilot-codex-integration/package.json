@@ -1,0 +1,46 @@
+{
+  "name": "copilot-codex-integration-example",
+  "displayName": "Copilot-Codex Integration Example",
+  "description": "Demo extension: Copilot -> Codex command send and Codex -> caller reply via command.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "main": "extension.js",
+  "activationEvents": [
+    "onCommand:example.sendToCodex",
+    "onCommand:codex.runQA",
+    "onCommand:example.receiveQAResult",
+    "onCommand:example.forwardToCommand",
+    "onCommand:example.runCodexOnce",
+    "onCommand:example.runCodexCLI"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "example.sendToCodex",
+        "title": "Example: Send QA to Codex"
+      },
+      {
+        "command": "codex.runQA",
+        "title": "Codex: Run QA"
+      },
+      {
+        "command": "example.receiveQAResult",
+        "title": "Example: Receive QA Result"
+      },
+      {
+        "command": "example.forwardToCommand",
+        "title": "Example: Forward To Command"
+      },
+      {
+        "command": "example.runCodexOnce",
+        "title": "Example: Run Codex Once (one-shot QA)"
+      },
+      {
+        "command": "example.runCodexCLI",
+        "title": "Example: Run external Codex CLI and return output"
+      }
+    ]
+  }
+}

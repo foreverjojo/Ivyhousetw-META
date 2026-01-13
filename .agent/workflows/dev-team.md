@@ -86,33 +86,28 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
 
 **任務**: 選擇適當的執行工具並更新 Plan
 
-**選項**:
-1. **GitHub Copilot**: 互動式開發，需要即時反饋，小規模修改
-2. **Codex CLI**: 批次執行，明確的檔案操作，大規模變更
+**決策選項**:
+1. **GitHub Copilot**: 互動式開發，需要即時反饋
+2. **Codex CLI**: 批次執行，明確的檔案操作
 
 **決策因素**:
-- **任務複雜度**: 簡單修改 → Copilot；複雜多檔案 → Codex CLI
-- **即時反饋需求**: 需要互動 → Copilot；可批次處理 → Codex CLI
-- **檔案數量**: 1-3 個檔案 → Copilot；4+ 個檔案 → Codex CLI
-- **操作類型**: 邏輯重構 → Copilot；模板化新增 → Codex CLI
+- 任務複雜度
+- 是否需要即時反饋
+- 檔案數量與操作類型
 
-**輸出**: 在 `plan.md` 中填入以下欄位
+**輸出格式**（寫入 Plan 檔）：
 
 ```markdown
-## 🔧 執行資訊
-
-**execution**: [copilot|codex-cli]
-**terminal**: [使用現有 Terminal | 需要新 Terminal（請說明原因）]
+<!-- EXECUTION_BLOCK_START -->
+execution: [copilot|codex-cli]
+<!-- EXECUTION_BLOCK_END -->
 ```
 
-**Terminal 規則**:
-- ✅ Codex CLI 執行時，所有命令必須發送到同一個 Terminal（由 Terminal Manager 自動管理）
-- ✅ 除非 Plan 明確要求（例如：同時運行 server 和 client），否則不得創建新 Terminal
-- ✅ 使用 `.agent/scripts/terminal_manager.py` 管理 Terminal 會話
-- ❌ 禁止為每個 Plan 創建新 Terminal
-- ❌ 禁止手動指定 Terminal ID（應使用 Terminal Manager）
-
-**參考文檔**: `.agent/TERMINAL_MANAGEMENT.md`
+**VS Code 原生模式**:
+- Codex CLI 執行時，使用 VS Code 原生終端（會話自然延續，無需 tmux）
+- 若需要「對話框 → 終端」注入互動指令（例如 `/status`、分段 Enter），使用 SendText Bridge 透過 `terminal.sendText` 注入到固定 terminal（`Codex CLI`）
+- 建議用腳本：`.agent/scripts/sendtext.sh`（`text` / `enter`）
+- 失敗時自動觸發 L2 Rollback（乾淨 worktree 前提；審計檔保留於 `.agent/`）
 
 ---
 
@@ -139,23 +134,17 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
 
 #### 模式 B: Codex CLI 執行
 - **適用於**: 大規模檔案新增（4+ 個檔案）、模板化重複性工作、批次處理
-- **執行方式**: 使用 `.agent/scripts/run_codex_template.sh` 包裝腳本
+- **執行方式**: 使用 `.agent/scripts/run_codex_template.sh` 包裝腳本（`codex exec` + exit code + JSONL 審計）
 - **執行命令**:
   ```bash
   .agent/scripts/run_codex_template.sh doc/plans/Idx-XXX_plan.md
   ```
-- **Terminal 管理**:
-  - ✅ 腳本會自動調用 Terminal Manager
-  - ✅ 所有命令發送到同一個 Terminal
-  - ✅ 執行失敗時自動觸發 L2 Rollback
+- **執行記錄**:
+  - ✅ 每次執行追加到 `.agent/execution_log.jsonl`
+  - ✅ 失敗時自動觸發 L2 Rollback（僅限乾淨 worktree）
 - **產出格式**:
   ```markdown
   ## 🔧 實作報告 (Codex CLI)
-
-  ### Terminal 資訊
-  - Terminal ID: codex-session
-  - Execution Start: YYYY-MM-DD HH:MM
-  - Execution End: YYYY-MM-DD HH:MM
 
   ### 已修改/新增的檔案
   [由 Codex 輸出]

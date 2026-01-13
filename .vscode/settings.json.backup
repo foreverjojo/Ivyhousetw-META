@@ -60,10 +60,6 @@
   "terminal.integrated.defaultProfile.osx": "zsh",
   "terminal.integrated.defaultProfile.linux": "bash",
 
-  // Prevent Python extension from auto-injecting `source .../activate` into terminals
-  // (this interferes with Codex CLI interactive input)
-  "python.terminal.activateEnvironment": false,
-
   // =====================================================================
   // ====== A Group: Quality / Formatting (SAFEST: warn only, no auto-fix) ======
   // =====================================================================
@@ -165,10 +161,5 @@
       "temperature": 0,
       "top_p": 1
     }
-  ],
-
-  // ====== GitHub Copilot: Enable terminal command sending ======
-  "github.copilot.advanced": {
-    "debug.enableTerminalCommands": true
-  }
+  ]
 }

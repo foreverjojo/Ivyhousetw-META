@@ -1,0 +1,29 @@
+{
+  "name": "sendtext-bridge",
+  "displayName": "SendText Bridge (Dev Container)",
+  "description": "Expose a localhost HTTP endpoint to call VS Code terminal.sendText from inside a Dev Container.",
+  "version": "0.0.2",
+  "publisher": "ivyhousetw",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "sendtextBridge.showInfo",
+        "title": "SendText Bridge: Show Connection Info"
+      },
+      {
+        "command": "sendtextBridge.restart",
+        "title": "SendText Bridge: Restart Server"
+      }
+    ]
+  }
+}

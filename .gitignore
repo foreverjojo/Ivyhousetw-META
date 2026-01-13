@@ -180,3 +180,7 @@ ifp.env
 
 # Agent Terminal Management
 .agent/.terminal_session.json
+
+# Agent execution audit & rollback artifacts
+.agent/execution_log.jsonl
+.agent/.pre_execution_backup.patch

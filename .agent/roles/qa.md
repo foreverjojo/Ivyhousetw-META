@@ -31,7 +31,9 @@ description: 艾薇品管員 (QA) - 負責代碼審查與資安檢查
 1. 查看 Plan 的 `execution` 欄位，確認 Executor
 2. 選擇不同的工具執行 QA
 3. 在 Log 中記錄 Executor 與 QA Tool
-4. 若違規（工具相同），在 Log 中標記 `QA Compliance: ⚠️ 違規` 並說明原因
+4. 若工具相同：
+   - 有合理例外（例如工具暫不可用，且由不同人員執行）：標記 `QA Compliance: ⚠️ WAIVER: 說明原因`
+   - 無合理例外：標記 `QA Compliance: ❌ FAIL`
 
 ### 外部技能審查 (適用於 GitHub Explorer 下載的技能)
 - [ ] **來源可信度**：外部技能是否來自知名或可信的 Repo？

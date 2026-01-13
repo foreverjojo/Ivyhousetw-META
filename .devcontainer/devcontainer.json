@@ -9,7 +9,7 @@
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",
         "python.defaultInterpreterPath": "/workspaces/Ivyhousetw-META/.venv/bin/python",
-        "python.terminal.activateEnvironment": true
+        "python.terminal.activateEnvironment": false
       },
       "extensions": [
         "alefragnani.project-manager",

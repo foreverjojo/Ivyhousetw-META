@@ -1,207 +1,152 @@
-#!/bin/bash
-# -*- coding: utf-8 -*-
-#
-# Codex CLI 執行包裝腳本
+#!/usr/bin/env bash
+# run_codex_template.sh v2 - 簡化版（VS Code 原生終端；無 tmux）
 #
 # 用途：
-#   整合 Terminal Manager 與 L2 Rollback 機制的 Codex CLI 執行包裝器。
-#   在執行前檢查登入狀態，確保命令發送到持久化的 Terminal 會話中。
+#   - 從 Plan 的 EXECUTION_BLOCK 解析 execution 欄位
+#   - 若為 codex-cli，使用 `codex exec` 執行（stdin 為 plan 內容）
+#   - 以 exit code 判斷成功/失敗，落盤 JSONL 到 `.agent/execution_log.jsonl`
+#   - 失敗時自動觸發 L2 Rollback（僅限乾淨 worktree）
 #
 # 使用方式：
-#   ./run_codex_template.sh <plan_file>
-#
+#   .agent/scripts/run_codex_template.sh doc/plans/Idx-NNN_plan.md
 
 set -euo pipefail
 
-# Color output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+PLAN_FILE="${1:-}"
+LOG_FILE=".agent/execution_log.jsonl"
+BACKUP_PATCH=".agent/.pre_execution_backup.patch"
+mkdir -p .agent
 
-log_info() {
-    echo -e "${GREEN}✓${NC} $1"
+# 生成唯一 run_id
+RUN_ID="$(date +%s%N 2>/dev/null || echo "$(date +%s)000000000")"
+START_TIME="$(date -Iseconds 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%S+00:00")"
+
+# 預設值
+EXECUTION_DECLARED=""
+EXECUTION_EFFECTIVE=""
+EXIT_CODE_VAL=""
+STATUS=""
+REASON=""
+
+json_escape() {
+  local s="${1:-}"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  printf '%s' "$s"
 }
 
-log_warn() {
-    echo -e "${YELLOW}⚠️${NC}  $1"
+json_str_or_null() {
+  if [[ -n "${1:-}" ]]; then
+    printf '"%s"' "$(json_escape "$1")"
+  else
+    printf 'null'
+  fi
 }
 
-log_error() {
-    echo -e "${RED}❌${NC} $1" >&2
+json_num_or_null() {
+  [[ -n "${1:-}" && "${1:-}" =~ ^[0-9]+$ ]] && printf '%s' "$1" || printf 'null'
 }
 
-log_step() {
-    echo -e "${BLUE}▶${NC} $1"
+log_jsonl() {
+  local end_time
+  end_time="$(date -Iseconds 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%S+00:00")"
+
+  printf '{"schema_version":2,"plan":%s,"execution_declared":%s,"execution_effective":%s,"status":"%s","exit_code":%s,"reason":%s,"run_id":"%s","start":"%s","end":"%s"}\n' \
+    "$(json_str_or_null "$PLAN_FILE")" \
+    "$(json_str_or_null "$EXECUTION_DECLARED")" \
+    "$(json_str_or_null "$EXECUTION_EFFECTIVE")" \
+    "$STATUS" \
+    "$(json_num_or_null "$EXIT_CODE_VAL")" \
+    "$(json_str_or_null "$REASON")" \
+    "$RUN_ID" \
+    "$START_TIME" \
+    "$end_time" >>"$LOG_FILE"
 }
 
-# Check if plan file is provided
-if [ -z "$1" ]; then
-    log_error "Usage: $0 <plan_file>"
-    exit 1
+fail_and_exit() {
+  STATUS="FAILED"
+  REASON="$1"
+  log_jsonl
+  echo "❌ 執行失敗: $REASON" >&2
+  exit 1
+}
+
+skip_and_exit() {
+  STATUS="SKIPPED"
+  REASON="$1"
+  log_jsonl
+  echo "⏭️  跳過執行: $REASON"
+  exit 0
+}
+
+# 1. 參數驗證
+if [[ -z "$PLAN_FILE" ]]; then
+  PLAN_FILE="(missing)"
+  fail_and_exit "missing_plan_arg"
+fi
+[[ ! -f "$PLAN_FILE" ]] && fail_and_exit "plan_file_not_found"
+[[ ! -r "$PLAN_FILE" ]] && fail_and_exit "plan_file_unreadable"
+
+# 2. 依賴檢查
+command -v git >/dev/null 2>&1 || fail_and_exit "git_missing"
+command -v codex >/dev/null 2>&1 || fail_and_exit "codex_cli_missing"
+
+# 3. 解析 execution 欄位（從 EXECUTION_BLOCK 標記中）
+EXECUTION_DECLARED="$(awk '
+  /<!-- EXECUTION_BLOCK_START -->/ {in=1; next}
+  /<!-- EXECUTION_BLOCK_END -->/ {in=0}
+  in && /^execution:/ {sub(/^execution:[[:space:]]*/, ""); print; exit}
+' "$PLAN_FILE" | xargs)"
+
+[[ -z "$EXECUTION_DECLARED" ]] && skip_and_exit "missing_execution_field"
+[[ "$EXECUTION_DECLARED" != "codex-cli" && "$EXECUTION_DECLARED" != "copilot" ]] && skip_and_exit "invalid_execution_field"
+[[ "$EXECUTION_DECLARED" != "codex-cli" ]] && skip_and_exit "execution_tool_not_codex_cli"
+
+# 4. L2 Rollback 前置條件：乾淨 worktree
+if [[ -n "$(git status --porcelain 2>/dev/null || true)" ]]; then
+  skip_and_exit "dirty_worktree"
 fi
 
-PLAN_FILE="$1"
+# 記錄執行前狀態（以防 codex 造成 commit 變更）
+PRE_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"
+git diff >"$BACKUP_PATCH" 2>/dev/null || true
 
-if [ ! -f "$PLAN_FILE" ]; then
-    log_error "Plan file not found: $PLAN_FILE"
-    exit 1
+# 5. 執行 Codex CLI
+echo "🚀 執行 Codex CLI: $PLAN_FILE"
+
+CODEX_PROMPT="請以 stdin 內容作為本次 plan 指令執行；不要自行改寫 plan。"
+set +e
+cat "$PLAN_FILE" | codex exec "$CODEX_PROMPT"
+EXIT_CODE_VAL=$?
+set -e
+
+# 6. 檢查執行結果
+EXECUTION_EFFECTIVE="codex-cli"
+
+if [[ "$EXIT_CODE_VAL" -ne 0 ]]; then
+  echo "❌ Codex CLI 執行失敗 (exit code: $EXIT_CODE_VAL)"
+  REASON="codex_nonzero"
+
+  # L2 Rollback
+  echo "🔄 觸發 L2 Rollback..."
+  POST_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"
+
+  if [[ -n "$PRE_HEAD" && -n "$POST_HEAD" && "$POST_HEAD" != "$PRE_HEAD" ]]; then
+    git reset --hard "$PRE_HEAD" 2>/dev/null || true
+  fi
+
+  git restore --worktree --staged -- . 2>/dev/null || true
+  git ls-files --others --exclude-standard -z 2>/dev/null | \
+    grep -zv '^\.agent/' | \
+    xargs -0 rm -rf -- 2>/dev/null || true
+
+  STATUS="FAILED"
+  log_jsonl
+  exit 1
 fi
 
-log_step "Reading plan file: $PLAN_FILE"
-
-# Extract execution tool from plan
-EXECUTION_TOOL=$(grep -E "^\*\*execution\*\*:" "$PLAN_FILE" | sed 's/\*\*execution\*\*://g' | sed 's/\[//g' | sed 's/\]//g' | tr -d ' ' || echo "")
-
-if [ -z "$EXECUTION_TOOL" ]; then
-    log_warn "No execution tool specified in plan, defaulting to 'copilot'"
-    EXECUTION_TOOL="copilot"
-fi
-
-log_info "Execution tool: $EXECUTION_TOOL"
-
-# If not Codex CLI, exit early
-if [[ "$EXECUTION_TOOL" != "codex-cli" ]]; then
-    log_info "Non Codex CLI execution, skipping Terminal management"
-    echo ""
-    echo "📋 Next steps:"
-    echo "  1. Execute the plan using GitHub Copilot"
-    echo "  2. Run QA checks after completion"
-    exit 0
-fi
-
-log_step "Codex CLI execution detected, managing Terminal session..."
-
-# Check Codex CLI login status
-log_step "檢查 Codex CLI 登入狀態..."
-
-# Try to check if codex is logged in by running a simple command
-if ! codex --version &>/dev/null; then
-    log_warn "Codex CLI 未安裝或無法執行"
-    exit 1
-fi
-
-# Check if user is logged in (this will fail if not logged in)
-# We use 'codex whoami' or similar command to verify
-if ! codex config get user.email &>/dev/null 2>&1; then
-    log_warn "Codex CLI 未登入，正在啟動登入流程..."
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🔐 請執行以下命令進行 Codex CLI 登入："
-    echo ""
-    echo "   codex"
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-
-    # Attempt automatic login
-    log_step "正在啟動 Codex CLI 登入..."
-    codex
-
-    # Verify login succeeded
-    if ! codex config get user.email &>/dev/null 2>&1; then
-        log_error "Codex CLI 登入失敗，請手動執行 'codex' 命令完成登入"
-        exit 1
-    fi
-
-    log_info "✅ Codex CLI 登入成功"
-fi
-
-log_info "✅ Codex CLI 已登入，繼續執行..."
-
-# Get or create terminal session
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TERMINAL_MANAGER="$SCRIPT_DIR/terminal_manager.py"
-
-if [ ! -f "$TERMINAL_MANAGER" ]; then
-    log_error "Terminal Manager not found: $TERMINAL_MANAGER"
-    exit 1
-fi
-
-# Get terminal session
-TERMINAL_ID=$(python3 "$TERMINAL_MANAGER" get-terminal 2>&1 | tail -1)
-
-log_info "Using Terminal: $TERMINAL_ID"
-
-# Backup current state for L2 rollback
-log_step "Creating backup point for L2 rollback..."
-BACKUP_COMMIT=$(git rev-parse HEAD)
-git diff HEAD > ".agent/.pre_execution_backup.patch" || true
-git diff --cached >> ".agent/.pre_execution_backup.patch" || true
-
-# Extract plan index for logging
-PLAN_INDEX=$(basename "$PLAN_FILE" | sed 's/_plan.md//g')
-
-log_step "Sending Codex CLI command to Terminal..."
-
-# Build Codex CLI command
-CODEX_COMMAND="codex --plan $PLAN_FILE"
-
-# Send command to terminal
-python3 "$TERMINAL_MANAGER" send-command "$TERMINAL_ID" "$CODEX_COMMAND"
-
-if [ $? -ne 0 ]; then
-    log_error "Failed to send command to terminal"
-    exit 1
-fi
-
-log_info "Command sent successfully"
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📌 Codex CLI is now executing in Terminal: $TERMINAL_ID"
-echo ""
-echo "📋 Next steps:"
-echo "  1. Monitor execution in the Terminal"
-echo "  2. If execution succeeds, proceed to QA (Step 4)"
-echo "  3. If execution fails, L2 Rollback will be triggered"
-echo ""
-echo "🔄 Rollback options:"
-echo "  L2 (Script): git apply .agent/.pre_execution_backup.patch  # Restore backup"
-echo "  L3 (Copilot): Ask Copilot for git reset suggestion"
-echo "  L4 (User): git reset --hard <commit>"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Note: Actual execution monitoring and L2 rollback trigger
-# should be implemented based on Codex CLI exit code or error detection
-# This is a simplified version for demonstration
-
-# Check Codex CLI exit code (non-interactive mode)
-if [ "${NON_INTERACTIVE:-0}" = "1" ]; then
-    log_info "Non-interactive mode: assuming success"
-    SUCCESS="y"
-else
-    echo ""
-    echo "⚠️  Interactive mode: please confirm execution result"
-    read -p "Did Codex execution succeed? (y/n): " SUCCESS
-fi
-
-if [[ "$SUCCESS" != "y" && "$SUCCESS" != "Y" ]]; then
-    log_warn "Execution failed, triggering L2 Rollback..."
-
-    # L2 Rollback: Restore from patch
-    if [ -f ".agent/.pre_execution_backup.patch" ]; then
-        git reset --hard "$BACKUP_COMMIT"
-        git apply ".agent/.pre_execution_backup.patch" 2>/dev/null || true
-        rm ".agent/.pre_execution_backup.patch"
-        log_info "L2 Rollback completed - changes restored from backup"
-    else
-        log_warn "No backup patch found"
-    fi
-
-    log_error "Task execution failed, rolled back to previous state"
-    exit 1
-else
-    log_info "Execution succeeded, proceeding to QA"
-
-    # Clear the backup patch
-    rm ".agent/.pre_execution_backup.patch" 2>/dev/null || true
-
-    echo ""
-    echo "✅ Ready for QA (Step 4)"
-    echo "   Remember: QA tool must be different from Executor (Cross-QA rule)"
-    echo "   Executor: Codex CLI → QA: GitHub Copilot"
-fi
-
-exit 0
+# 7. 執行成功
+echo "✅ 執行成功"
+STATUS="SUCCESS"
+log_jsonl

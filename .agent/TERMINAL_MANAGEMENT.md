@@ -79,6 +79,10 @@ python3 .agent/scripts/terminal_manager.py close-terminal codex-session
 
 ### Option 2: Bash Terminal Manager (tmux)
 
+#### 安裝需求（可選）
+
+- `jq`：僅用於更新狀態檔中的 `last_used` / `command_count`；未安裝也不影響 `send-command` 的核心功能。
+
 #### 基本用法
 
 **獲取或創建 Terminal**:
@@ -173,6 +177,21 @@ QA 工具必須與 Executor 不同（Cross-QA 規則）：
 ---
 
 ## 🚨 故障排除
+
+### 問題 0: 需要送大量 context（或含特殊字元）到 Codex 互動模式
+
+`tmux send-keys` 在內容很長、含引號/換行時，有時會因為 quoting 或終端行為而不穩定。
+建議用 tmux 的 buffer/paste 機制，或使用本專案的輔助腳本：
+
+```bash
+.agent/scripts/codex_tmux_send.sh codex-session --text "請輸出第二輪 QA 報告（PASS/FAIL）。"
+```
+
+也可以把 prompt 寫成檔案：
+
+```bash
+.agent/scripts/codex_tmux_send.sh codex-session --file /tmp/prompt.txt
+```
 
 ### 問題 1: Terminal 會話不存在
 
