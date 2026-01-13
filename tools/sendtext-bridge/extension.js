@@ -20,6 +20,8 @@ function activate(context) {
     port: getConfiguredPort(),
     token: '',
     terminalName: getConfiguredTerminalName(),
+    listeners: new Map(), // listener_id -> { patterns, callback }
+    nextListenerId: 1,
   };
 
   function workspaceRoot() {
@@ -64,7 +66,8 @@ function activate(context) {
       endpoints: {
         health: 'GET /health',
         send: 'POST /send { text, execute?: boolean }',
-        enter: 'POST /enter'
+        enter: 'POST /enter',
+        wait: 'POST /wait { timeout?: number, checkInterval?: number }'
       }
     };
     fs.writeFileSync(infoPath, JSON.stringify(body, null, 2) + '\n', 'utf8');
@@ -101,7 +104,38 @@ function activate(context) {
   function getOrCreateTerminal() {
     const existing = vscode.window.terminals.find((t) => t.name === state.terminalName);
     if (existing) return existing;
-    return vscode.window.createTerminal({ name: state.terminalName });
+    const newTerm = vscode.window.createTerminal({ name: state.terminalName });
+    setupTerminalListener(newTerm);
+    return newTerm;
+  }
+
+  function setupTerminalListener(terminal) {
+    // 監聽 terminal 輸出（透過 onDidWriteTerminalShellIntegration 需要 shell integration）
+    // 使用 onDidChangeTerminalState 替代方案
+    const disposable = vscode.window.onDidChangeTerminalState((e) => {
+      if (e.terminal === terminal) {
+        checkTerminalOutput();
+      }
+    });
+    context.subscriptions.push(disposable);
+  }
+
+  function checkTerminalOutput() {
+    // 檢查是否有 listener 需要通知
+    // 由於 VS Code API 無法直接讀取 terminal 輸出，我們改用輪詢 git status
+    state.listeners.forEach((listener) => {
+      listener.callback();
+    });
+  }
+
+  function addOutputListener(patterns, callback) {
+    const id = state.nextListenerId++;
+    state.listeners.set(id, { patterns, callback });
+    return id;
+  }
+
+  function removeOutputListener(id) {
+    state.listeners.delete(id);
   }
 
   async function startServer() {
@@ -154,6 +188,52 @@ function activate(context) {
           term.show(true);
           term.sendText('', true);
           return json(res, 200, { ok: true });
+        }
+
+        if (req.url === '/wait' && req.method === 'POST') {
+          const raw = await readBody(req);
+          let payload;
+          try {
+            payload = raw ? JSON.parse(raw) : {};
+          } catch {
+            return json(res, 400, { ok: false, error: 'invalid json' });
+          }
+
+          const timeout = typeof payload.timeout === 'number' ? payload.timeout : 300000; // 預設 5 分鐘
+          const checkInterval = typeof payload.checkInterval === 'number' ? payload.checkInterval : 2000; // 預設 2 秒
+
+          const startTime = Date.now();
+          let completed = false;
+
+          // 輪詢 git status 檢查變更
+          const checkCompletion = async () => {
+            const root = workspaceRoot();
+            if (!root) return false;
+
+            try {
+              const { exec } = require('child_process');
+              const { promisify } = require('util');
+              const execAsync = promisify(exec);
+
+              const { stdout } = await execAsync('git status --porcelain', { cwd: root });
+              return stdout.trim().length > 0; // 有變更即表示完成
+            } catch {
+              return false;
+            }
+          };
+
+          while (!completed && (Date.now() - startTime) < timeout) {
+            completed = await checkCompletion();
+            if (!completed) {
+              await new Promise((resolve) => setTimeout(resolve, checkInterval));
+            }
+          }
+
+          if (completed) {
+            return json(res, 200, { ok: true, completed: true, elapsed: Date.now() - startTime });
+          } else {
+            return json(res, 408, { ok: false, completed: false, error: 'timeout', elapsed: Date.now() - startTime });
+          }
         }
 
         return json(res, 404, { ok: false, error: 'not found' });

@@ -134,11 +134,31 @@ execution: [copilot|codex-cli]
 
 #### 模式 B: Codex CLI 執行
 - **適用於**: 大規模檔案新增（4+ 個檔案）、模板化重複性工作、批次處理
-- **執行方式**: 使用 `.agent/scripts/run_codex_template.sh` 包裝腳本（`codex exec` + exit code + JSONL 審計）
-- **執行命令**:
+- **執行方式**:
+  - **批次模式**: 使用 `.agent/scripts/run_codex_template.sh`（`codex exec` + exit code + JSONL 審計）
+  - **自動化模式**: 使用 `.agent/scripts/auto_execute_plan.sh`（發送 Plan → 自動監測完成 → 提示執行 QA）
+
+**執行命令**:
+
   ```bash
+  # 方式 1: 批次執行（同步，立即回傳結果）
   .agent/scripts/run_codex_template.sh doc/plans/Idx-XXX_plan.md
+
+  # 方式 2: 自動化執行（發送 → 監測 → QA 提示）
+  .agent/scripts/auto_execute_plan.sh doc/plans/Idx-XXX_plan.md
   ```
+
+**自動化模式工作流程**:
+  1. 📤 **發送 Plan** 到 Codex CLI terminal
+  2. ⏳ **自動監測** Codex CLI 執行狀態（透過 `/wait` 端點輪詢 `git status`）
+  3. ✅ **偵測完成** 後自動提示執行 QA（Cross-QA: Copilot）
+
+**技術實作**:
+  - 使用 SendText Bridge 的 `/wait` 端點
+  - 每 2 秒檢查一次 `git status --porcelain`
+  - 最多等待 5 分鐘（可調整）
+  - 有變更即表示 Codex CLI 完成
+
 - **執行記錄**:
   - ✅ 每次執行追加到 `.agent/execution_log.jsonl`
   - ✅ 失敗時自動觸發 L2 Rollback（僅限乾淨 worktree）
@@ -168,6 +188,11 @@ execution: [copilot|codex-cli]
 
 ### Step 4️⃣ 艾薇品管員 (QA)
 **角色定義**：參考 `.agent/roles/qa.md`
+
+**觸發時機**:
+- **模式 A (Copilot)**: 實作完成後立即執行
+- **模式 B (Codex CLI 自動化)**: 由 `auto_execute_plan.sh` 偵測完成後自動提示
+- **模式 B (Codex CLI 批次)**: 手動確認完成後執行
 
 **任務**：
 1. 審查工程師的程式碼。
@@ -215,8 +240,22 @@ execution: [copilot|codex-cli]
 
 ## 🏁 完成
 
-當 QA 審查通過後，整個流程結束。
+當 QA 審查通過後：
+1. **建立執行記錄**: 將 `doc/plans/Idx-XXX_plan.md` 轉為 `doc/logs/Idx-XXX_log.md`
+2. **刪除 Plan 檔案**: 刪除 `doc/plans/Idx-XXX_plan.md`
+3. **提交變更**: `git commit` 所有變更
+
 如果 QA 發現問題，請回到 **Step 3 (Engineer)** 修正後再次審查。
+
+---
+
+## 📊 執行模式比較
+
+| 模式 | 適用情境 | 啟動方式 | 監測 | QA 觸發 |
+|------|---------|---------|------|---------|
+| Copilot 直接執行 | 小規模修改（1-3 檔） | IDE 內實作 | 手動 | 立即 |
+| Codex CLI 批次 | 大規模批次處理 | `run_codex_template.sh` | 手動 | 手動確認後 |
+| Codex CLI 自動化 | 大規模 + 需自動監測 | `auto_execute_plan.sh` | **自動** | **自動提示** |
 
 ---
 

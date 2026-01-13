@@ -9,6 +9,8 @@
 
 這個方法可以解決：在 Dev Container 內，單純跑 shell 指令無法像本機那樣直接呼叫 VS Code Extension API 的限制。
 
+**註**：內部連結請參考專案 `.agent/scripts/sendtext.sh` 檔案。
+
 ---
 
 ## 你想達成的效果（最常用）
@@ -86,9 +88,7 @@ curl -sS -X POST http://127.0.0.1:38765/enter \
 
 ### B) 用專案腳本（推薦）
 
-本 repo 已提供封裝腳本：
-
-- [.agent/scripts/sendtext.sh](.agent/scripts/sendtext.sh)
+本 repo 已提供封裝腳本位於 `.agent/scripts/sendtext.sh`
 
 範例：
 
@@ -122,8 +122,8 @@ curl -sS -X POST http://127.0.0.1:38765/enter \
 
 本 repo 已將下列設定關閉（需要 Reload 才會生效）：
 
-- [.vscode/settings.json](.vscode/settings.json)：`python.terminal.activateEnvironment: false`
-- [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json)：`python.terminal.activateEnvironment: false`
+- `.vscode/settings.json`：`python.terminal.activateEnvironment: false`
+- `.devcontainer/devcontainer.json`：`python.terminal.activateEnvironment: false`
 
 ---
 
