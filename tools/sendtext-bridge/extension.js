@@ -3,11 +3,13 @@ const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 const DEFAULT_PORT = 38765;
 const DEFAULT_TERMINAL_NAME = 'Codex CLI';
 const TOKEN_FILE_REL = path.join('.agent', 'state', 'sendtext_bridge_token');
 const INFO_FILE_REL = path.join('.agent', 'state', 'sendtext_bridge_info.json');
+const MAX_BUFFER_LINES = 1000;
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -21,6 +23,9 @@ function activate(context) {
     token: '',
     terminalName: getConfiguredTerminalName(),
   };
+
+  // Terminal output buffer (v0.1.0)
+  const outputBuffer = [];
 
   function workspaceRoot() {
     const folders = vscode.workspace.workspaceFolders;
@@ -64,11 +69,51 @@ function activate(context) {
       endpoints: {
         health: 'GET /health',
         send: 'POST /send { text, execute?: boolean }',
-        enter: 'POST /enter'
+        enter: 'POST /enter',
+        capture: 'GET /capture?lines=N',
+        wait: 'POST /wait { timeout?, checkInterval? }'
       }
     };
     fs.writeFileSync(infoPath, JSON.stringify(body, null, 2) + '\n', 'utf8');
   }
+
+  // Strip ANSI escape codes (v0.1.0)
+  function stripAnsi(str) {
+    return str.replace(/\x1b\[[0-9;]*m/g, '');
+  }
+
+  // Check git status for changes (v0.1.0)
+  function checkGitStatus() {
+    return new Promise((resolve) => {
+      const cwd = workspaceRoot();
+      if (!cwd) return resolve(false);
+
+      exec('git status --porcelain', { cwd }, (err, stdout) => {
+        if (err) return resolve(false);
+        resolve(stdout.trim().length > 0);
+      });
+    });
+  }
+
+  // Sleep helper (v0.1.0)
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Terminal output listener (v0.1.0)
+  context.subscriptions.push(
+    vscode.window.onDidWriteTerminalData(event => {
+      if (event.terminal.name === state.terminalName) {
+        const lines = event.data.split(/\r?\n/).map(line => stripAnsi(line));
+        outputBuffer.push(...lines);
+
+        // Keep buffer size limited (circular buffer)
+        if (outputBuffer.length > MAX_BUFFER_LINES) {
+          outputBuffer.splice(0, outputBuffer.length - MAX_BUFFER_LINES);
+        }
+      }
+    })
+  );
 
   function authOk(req) {
     const header = req.headers['authorization'];
@@ -154,6 +199,60 @@ function activate(context) {
           term.show(true);
           term.sendText('', true);
           return json(res, 200, { ok: true });
+        }
+
+        // NEW: /capture endpoint (v0.1.0)
+        if (req.url.startsWith('/capture') && req.method === 'GET') {
+          const url = new URL(req.url, `http://localhost:${state.port}`);
+          const lines = parseInt(url.searchParams.get('lines') || '100', 10);
+
+          const captured = outputBuffer.slice(-Math.min(lines, outputBuffer.length));
+
+          return json(res, 200, {
+            ok: true,
+            lines: captured,
+            totalLines: captured.length,
+            bufferSize: outputBuffer.length
+          });
+        }
+
+        // NEW: /wait endpoint (v0.1.0)
+        if (req.url === '/wait' && req.method === 'POST') {
+          const raw = await readBody(req);
+          let payload;
+          try {
+            payload = raw ? JSON.parse(raw) : {};
+          } catch {
+            return json(res, 400, { ok: false, error: 'invalid json' });
+          }
+
+          const timeout = payload.timeout || 300000; // default 5 min
+          const checkInterval = payload.checkInterval || 2000; // default 2s
+          const startTime = Date.now();
+
+          // Polling loop
+          while (Date.now() - startTime < timeout) {
+            const hasChanges = await checkGitStatus();
+
+            if (hasChanges) {
+              return json(res, 200, {
+                ok: true,
+                completed: true,
+                elapsed: Date.now() - startTime,
+                detectedChanges: true
+              });
+            }
+
+            await sleep(checkInterval);
+          }
+
+          // Timeout
+          return json(res, 200, {
+            ok: true,
+            completed: false,
+            elapsed: Date.now() - startTime,
+            reason: 'timeout'
+          });
         }
 
         return json(res, 404, { ok: false, error: 'not found' });

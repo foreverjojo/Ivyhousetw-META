@@ -1,8 +1,8 @@
 {
   "name": "sendtext-bridge",
   "displayName": "SendText Bridge (Dev Container)",
-  "description": "Expose a localhost HTTP endpoint to call VS Code terminal.sendText from inside a Dev Container.",
-  "version": "0.0.2",
+  "description": "Expose a localhost HTTP endpoint to call VS Code terminal.sendText from inside a Dev Container. Now supports terminal output capture and automated completion detection.",
+  "version": "0.1.0",
   "publisher": "ivyhousetw",
   "engines": {
     "vscode": "^1.80.0"
@@ -12,7 +12,10 @@
   ],
   "main": "./extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "*"
+  ],
+  "extensionKind": [
+    "workspace"
   ],
   "contributes": {
     "commands": [

@@ -127,6 +127,140 @@ curl -sS -X POST http://127.0.0.1:38765/enter \
 
 ---
 
+## 🆕 v0.1.0 新功能：Terminal Output Capture
+
+### `/capture` 端點 - 獲取 terminal 輸出
+
+**用途**：獲取 "Codex CLI" terminal 最近 N 行輸出
+
+**範例**：
+
+```bash
+TOKEN=$(cat .agent/state/sendtext_bridge_token)
+
+# 獲取最近 100 行輸出
+curl -sS "http://127.0.0.1:38765/capture?lines=100" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+**Response**：
+```json
+{
+  "ok": true,
+  "lines": ["line1", "line2", "..."],
+  "totalLines": 100,
+  "bufferSize": 856
+}
+```
+
+**參數**：
+- `lines` (optional): 要獲取的行數，預設 100，最多 1000（buffer 大小）
+
+**注意事項**：
+- Buffer 為循環緩衝區，最多保留 1000 行
+- ANSI 色碼會被自動清除
+- 僅捕獲名為 "Codex CLI" 的 terminal
+
+---
+
+### `/wait` 端點 - 智能等待完成偵測
+
+**用途**：輪詢等待 git status 變更（表示 Codex CLI 完成執行）
+
+**範例**：
+
+```bash
+TOKEN=$(cat .agent/state/sendtext_bridge_token)
+
+# 等待 git 變更（最多 5 分鐘，每 2 秒檢查一次）
+curl -sS -X POST "http://127.0.0.1:38765/wait" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"timeout":300000,"checkInterval":2000}' | jq .
+```
+
+**Request Body**：
+```json
+{
+  "timeout": 300000,        // optional, 預設 5 分鐘（毫秒）
+  "checkInterval": 2000     // optional, 預設 2 秒（毫秒）
+}
+```
+
+**Response（成功）**：
+```json
+{
+  "ok": true,
+  "completed": true,
+  "elapsed": 45230,
+  "detectedChanges": true
+}
+```
+
+**Response（逾時）**：
+```json
+{
+  "ok": true,
+  "completed": false,
+  "elapsed": 300000,
+  "reason": "timeout"
+}
+```
+
+**使用場景**：
+- 自動化腳本（如 `auto_execute_plan.sh`）等待 Codex CLI 完成
+- CI/CD pipeline 整合
+- 批次執行監控
+
+**偵測原理**：
+- 透過 `git status --porcelain` 檢查 working tree 變更
+- 有任何檔案變更即視為完成
+- 適用於 Codex CLI 修改檔案的場景
+
+---
+
+## 📊 完整 API 總覽
+
+| 端點 | 方法 | 用途 | 版本 |
+|------|------|------|------|
+| `/health` | GET | 健康檢查 | v0.0.1 |
+| `/send` | POST | 發送文字到 terminal | v0.0.1 |
+| `/enter` | POST | 發送 Enter 鍵 | v0.0.1 |
+| `/capture` | GET | 獲取 terminal 輸出 | v0.1.0 🆕 |
+| `/wait` | POST | 等待執行完成 | v0.1.0 🆕 |
+
+---
+
+## 🔄 升級指南（v0.0.3 → v0.1.0）
+
+1. 重新打包：
+```bash
+cd tools/sendtext-bridge
+npx --yes @vscode/vsce package --allow-missing-repository --no-dependencies
+```
+
+2. 重新安裝：
+```bash
+code --install-extension tools/sendtext-bridge/sendtext-bridge-0.1.0.vsix --force
+```
+
+3. 重新載入 VS Code：
+   - 執行 `Developer: Reload Window`
+
+4. 驗證新功能：
+```bash
+# 測試 /capture
+curl -sS "http://127.0.0.1:38765/capture?lines=10" \
+  -H "Authorization: Bearer $(cat .agent/state/sendtext_bridge_token)"
+
+# 測試 /wait
+curl -sS -X POST "http://127.0.0.1:38765/wait" \
+  -H "Authorization: Bearer $(cat .agent/state/sendtext_bridge_token)" \
+  -d '{"timeout":5000,"checkInterval":1000}'
+```
+
+---
+
 ## 設定（Environment Variables）
 
 - `SENDTEXT_BRIDGE_PORT`：預設 `38765`

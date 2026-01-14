@@ -154,10 +154,12 @@ execution: [copilot|codex-cli]
   3. ✅ **偵測完成** 後自動提示執行 QA（Cross-QA: Copilot）
 
 **技術實作**:
-  - 使用 SendText Bridge 的 `/wait` 端點
-  - 每 2 秒檢查一次 `git status --porcelain`
+  - 使用 SendText Bridge v0.1.0 的 `/wait` 端點
+  - `/wait` 透過 `git status --porcelain` 輪詢偵測檔案變更
+  - 每 2 秒檢查一次（可調整）
   - 最多等待 5 分鐘（可調整）
   - 有變更即表示 Codex CLI 完成
+  - 可選：使用 `/capture` 端點獲取 terminal 輸出進行除錯
 
 - **執行記錄**:
   - ✅ 每次執行追加到 `.agent/execution_log.jsonl`
