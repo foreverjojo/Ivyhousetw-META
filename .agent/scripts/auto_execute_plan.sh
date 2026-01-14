@@ -28,10 +28,12 @@ echo "📤 發送 Plan 到 Codex CLI..."
 echo "⏳ 等待 Codex CLI 執行完成（最多 5 分鐘）..."
 
 PORT="${SENDTEXT_BRIDGE_PORT:-38765}"
-TOKEN=$(cat .agent/state/sendtext_bridge_token 2>/dev/null || echo "")
+
+# Try new standalone server token first, fallback to VS Code extension token
+TOKEN=$(cat .agent/state/terminal_bridge_token 2>/dev/null || cat .agent/state/sendtext_bridge_token 2>/dev/null || echo "")
 
 if [[ -z "$TOKEN" ]]; then
-  echo "❌ Token 檔案不存在" >&2
+  echo "❌ Token 檔案不存在（請先啟動 terminal_bridge_server.py 或 VS Code extension）" >&2
   exit 1
 fi
 
