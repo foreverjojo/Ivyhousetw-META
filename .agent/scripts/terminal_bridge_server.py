@@ -46,6 +46,60 @@ class TerminalBridgeHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
     
+    def send_to_terminal(self, text: str, execute: bool = False) -> Dict[str, Any]:
+        """Send text to Codex CLI terminal via tmux"""
+        try:
+            # Get terminal name from server config
+            terminal_name = getattr(self.server, 'terminal_name', 'codex-session:0')
+            
+            # Send text to tmux session
+            if execute:
+                # Send text with Enter key
+                result = subprocess.run(
+                    ['tmux', 'send-keys', '-t', terminal_name, text, 'Enter'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+            else:
+                # Send text without Enter (literal mode)
+                result = subprocess.run(
+                    ['tmux', 'send-keys', '-t', terminal_name, '-l', text],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+            
+            if result.returncode == 0:
+                return {'ok': True, 'sent': text, 'executed': execute}
+            else:
+                return {'ok': False, 'error': f'tmux error: {result.stderr}'}
+        except subprocess.TimeoutExpired:
+            return {'ok': False, 'error': 'tmux command timeout'}
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+    
+    def send_enter_to_terminal(self) -> Dict[str, Any]:
+        """Send Enter key to Codex CLI terminal via tmux"""
+        try:
+            terminal_name = getattr(self.server, 'terminal_name', 'codex-session:0')
+            
+            result = subprocess.run(
+                ['tmux', 'send-keys', '-t', terminal_name, 'Enter'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                return {'ok': True}
+            else:
+                return {'ok': False, 'error': f'tmux error: {result.stderr}'}
+        except subprocess.TimeoutExpired:
+            return {'ok': False, 'error': 'tmux command timeout'}
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+    
     def get_git_status(self) -> Dict[str, Any]:
         """Get current git status (staged + unstaged changes)"""
         try:
@@ -156,6 +210,51 @@ class TerminalBridgeHandler(http.server.BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         
+        # Send endpoint - send text to terminal
+        if path == '/send':
+            if not self.authenticate():
+                self.send_json_response(401, {'ok': False, 'error': 'Unauthorized'})
+                return
+            
+            # Read request body
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            
+            try:
+                params = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                self.send_json_response(400, {'ok': False, 'error': 'Invalid JSON'})
+                return
+            
+            text = params.get('text', '')
+            execute = params.get('execute', False)
+            
+            if not text:
+                self.send_json_response(400, {'ok': False, 'error': 'Missing text parameter'})
+                return
+            
+            result = self.send_to_terminal(text, execute)
+            
+            if result.get('ok', False):
+                self.send_json_response(200, result)
+            else:
+                self.send_json_response(500, result)
+            return
+        
+        # Enter endpoint - send Enter key to terminal
+        if path == '/enter':
+            if not self.authenticate():
+                self.send_json_response(401, {'ok': False, 'error': 'Unauthorized'})
+                return
+            
+            result = self.send_enter_to_terminal()
+            
+            if result.get('ok', False):
+                self.send_json_response(200, result)
+            else:
+                self.send_json_response(500, result)
+            return
+        
         # Wait endpoint
         if path == '/wait':
             if not self.authenticate():
@@ -199,10 +298,11 @@ class TerminalBridgeHandler(http.server.BaseHTTPRequestHandler):
 class TerminalBridgeServer(http.server.HTTPServer):
     """Custom HTTP server with workspace and token support"""
     
-    def __init__(self, server_address, handler_class, workspace_root: str, token: str):
+    def __init__(self, server_address, handler_class, workspace_root: str, token: str, terminal_name: str = 'codex-session:0'):
         super().__init__(server_address, handler_class)
         self.workspace_root = workspace_root
         self.token = token
+        self.terminal_name = terminal_name
 
 
 def load_or_generate_token(state_dir: Path) -> str:
@@ -230,7 +330,7 @@ def load_or_generate_token(state_dir: Path) -> str:
     return token
 
 
-def write_info_file(state_dir: Path, port: int, token: str):
+def write_info_file(state_dir: Path, port: int, token: str, terminal_name: str):
     """Write server info to JSON file for client scripts"""
     info_file = state_dir / 'terminal_bridge_info.json'
     
@@ -239,10 +339,13 @@ def write_info_file(state_dir: Path, port: int, token: str):
         'host': '127.0.0.1',
         'endpoints': {
             '/health': 'GET - Health check',
+            '/send': 'POST - Send text to terminal',
+            '/enter': 'POST - Send Enter key to terminal',
             '/capture': 'GET - Get git status changes',
             '/wait': 'POST - Wait for git status to stabilize'
         },
         'token_file': str(state_dir / 'terminal_bridge_token'),
+        'terminal_name': terminal_name,
         'version': '0.1.0-standalone'
     }
     
@@ -255,6 +358,7 @@ def main():
     # Configuration
     port = int(os.getenv('TERMINAL_BRIDGE_PORT', '38765'))
     host = '127.0.0.1'
+    terminal_name = os.getenv('TERMINAL_NAME', 'codex-session:0')
     
     # Determine workspace root
     workspace_root = os.getenv('WORKSPACE_ROOT', os.getcwd())
@@ -272,20 +376,23 @@ def main():
     token = load_or_generate_token(state_dir)
     
     # Write info file
-    write_info_file(state_dir, port, token)
+    write_info_file(state_dir, port, token, terminal_name)
     
     # Create and start server
-    server = TerminalBridgeServer((host, port), TerminalBridgeHandler, workspace_root, token)
+    server = TerminalBridgeServer((host, port), TerminalBridgeHandler, workspace_root, token, terminal_name)
     
     print(f"")
     print(f"🚀 Terminal Bridge Server started")
     print(f"   Host: {host}")
     print(f"   Port: {port}")
     print(f"   Workspace: {workspace_root}")
+    print(f"   Terminal: {terminal_name}")
     print(f"   Token file: {state_dir / 'terminal_bridge_token'}")
     print(f"")
     print(f"📡 Available endpoints:")
     print(f"   GET  /health  - Health check")
+    print(f"   POST /send    - Send text to terminal")
+    print(f"   POST /enter   - Send Enter key to terminal")
     print(f"   GET  /capture - Get git status changes")
     print(f"   POST /wait    - Wait for git status to stabilize")
     print(f"")

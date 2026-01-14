@@ -2,7 +2,15 @@
 set -euo pipefail
 
 PORT="${SENDTEXT_BRIDGE_PORT:-38765}"
-TOKEN_FILE="${SENDTEXT_BRIDGE_TOKEN_FILE:-.agent/state/sendtext_bridge_token}"
+# Try new standalone server token first, fallback to VS Code extension token
+TOKEN_FILE="${SENDTEXT_BRIDGE_TOKEN_FILE:-}"
+if [ -z "$TOKEN_FILE" ]; then
+  if [ -f ".agent/state/terminal_bridge_token" ]; then
+    TOKEN_FILE=".agent/state/terminal_bridge_token"
+  else
+    TOKEN_FILE=".agent/state/sendtext_bridge_token"
+  fi
+fi
 
 usage() {
   cat >&2 <<'EOF'

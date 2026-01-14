@@ -12,6 +12,7 @@ This Python-based HTTP server replaces the VS Code extension functionality when 
 
 ## Features
 
+- **Send Commands to Terminal**: `/send` and `/enter` endpoints control Codex CLI via tmux
 - **Git Status Monitoring**: Detect when Codex CLI completes work by tracking git changes
 - **Automated Completion Detection**: `/wait` endpoint blocks until git status stabilizes
 - **Capture Changes**: `/capture` endpoint returns current git status
@@ -38,6 +39,8 @@ Output:
 
 📡 Available endpoints:
    GET  /health  - Health check
+   POST /send    - Send text to terminal
+   POST /enter   - Send Enter key to terminal
    GET  /capture - Get git status changes
    POST /wait    - Wait for git status to stabilize
 
@@ -91,6 +94,77 @@ Health check endpoint (no authentication required).
   "status": "running",
   "version": "0.1.0"
 }
+```
+
+---
+
+#### `POST /send`
+Send text to Codex CLI terminal (via tmux).
+
+**Headers**:
+- `Authorization: Bearer <token>`
+- `Content-Type: application/json`
+
+**Request Body**:
+```json
+{
+  "text": "/status",
+  "execute": false  // If true, sends Enter key after text
+}
+```
+
+**Response**:
+```json
+{
+  "ok": true,
+  "sent": "/status",
+  "executed": false
+}
+```
+
+**Example**:
+```bash
+TOKEN=$(cat .agent/state/terminal_bridge_token)
+
+# Send text without executing
+curl -X POST http://127.0.0.1:38765/send \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"/status","execute":false}' | jq .
+
+# Send text and execute (press Enter)
+curl -X POST http://127.0.0.1:38765/send \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"/status","execute":true}' | jq .
+```
+
+**How It Works**:
+- Uses `tmux send-keys` to send text to terminal
+- Default terminal: `codex-session:0` (configurable via `TERMINAL_NAME` env var)
+- If `execute: false`, sends text in literal mode (no special key interpretation)
+- If `execute: true`, sends text followed by Enter key
+
+---
+
+#### `POST /enter`
+Send Enter key to Codex CLI terminal.
+
+**Headers**:
+- `Authorization: Bearer <token>`
+
+**Response**:
+```json
+{
+  "ok": true
+}
+```
+
+**Example**:
+```bash
+TOKEN=$(cat .agent/state/terminal_bridge_token)
+curl -X POST http://127.0.0.1:38765/enter \
+  -H "Authorization: Bearer ${TOKEN}" | jq .
 ```
 
 ---
@@ -210,10 +284,12 @@ curl -X POST http://127.0.0.1:38765/wait \
 |----------|---------|-------------|
 | `TERMINAL_BRIDGE_PORT` | `38765` | HTTP server port |
 | `WORKSPACE_ROOT` | `$(pwd)` | Git repository root |
+| `TERMINAL_NAME` | `codex-session:0` | Tmux session/window for terminal commands |
 
 **Example**:
 ```bash
 export TERMINAL_BRIDGE_PORT=9000
+export TERMINAL_NAME="my-session:1"
 .agent/scripts/start_terminal_bridge.sh
 ```
 
@@ -223,11 +299,15 @@ export TERMINAL_BRIDGE_PORT=9000
 
 | Feature | VS Code Extension | Standalone Server |
 |---------|------------------|-------------------|
+| Send commands to terminal | ✅ | ✅ (via tmux) |
 | Terminal output capture | ✅ Real terminal output | ⚠️ Git status only |
 | Git status monitoring | ✅ | ✅ |
+| `/send` endpoint | ✅ | ✅ |
+| `/enter` endpoint | ✅ | ✅ |
 | `/wait` endpoint | ✅ | ✅ |
 | `/capture` endpoint | ✅ | ✅ (limited) |
 | Requires VS Code | ✅ | ❌ |
+| Requires tmux | ❌ | ✅ |
 | Activation issues | ⚠️ Known issues | ✅ Always works |
 | Setup complexity | Medium | Low |
 
