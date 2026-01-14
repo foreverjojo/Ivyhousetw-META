@@ -184,3 +184,10 @@ ifp.env
 # Agent execution audit & rollback artifacts
 .agent/execution_log.jsonl
 .agent/.pre_execution_backup.patch
+
+# Terminal Bridge Server runtime files
+.agent/state/terminal_bridge.pid
+.agent/state/terminal_bridge_info.json
+.agent/state/terminal_bridge_token
+.agent/state/sendtext_bridge_info.json
+.agent/state/sendtext_bridge_token
