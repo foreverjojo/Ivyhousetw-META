@@ -105,8 +105,7 @@ execution: [copilot|codex-cli]
 
 **VS Code 原生模式**:
 - Codex CLI 執行時，使用 VS Code 原生終端（會話自然延續，無需 tmux）
-- 若需要「對話框 → 終端」注入互動指令（例如 `/status`、分段 Enter），使用 SendText Bridge 透過 `terminal.sendText` 注入到固定 terminal（`Codex CLI`）
-- 建議用腳本：`.agent/scripts/sendtext.sh`（`text` / `enter`）
+- 若需要「自動化監控完成」：可選用 Terminal Bridge Server（`.agent/scripts/start_terminal_bridge.sh` + `/wait`）
 - 失敗時自動觸發 L2 Rollback（乾淨 worktree 前提；審計檔保留於 `.agent/`）
 
 ---
@@ -136,30 +135,18 @@ execution: [copilot|codex-cli]
 - **適用於**: 大規模檔案新增（4+ 個檔案）、模板化重複性工作、批次處理
 - **執行方式**:
   - **批次模式**: 使用 `.agent/scripts/run_codex_template.sh`（`codex exec` + exit code + JSONL 審計）
-  - **自動化模式**: 使用 `.agent/scripts/auto_execute_plan.sh`（發送 Plan → 自動監測完成 → 提示執行 QA）
+  - **監控（可選）**: 若需要「偵測完成」，使用 Terminal Bridge Server 的 `/wait` 監看 git status 是否穩定
 
 **執行命令**:
 
   ```bash
   # 方式 1: 批次執行（同步，立即回傳結果）
   .agent/scripts/run_codex_template.sh doc/plans/Idx-XXX_plan.md
-
-  # 方式 2: 自動化執行（發送 → 監測 → QA 提示）
-  .agent/scripts/auto_execute_plan.sh doc/plans/Idx-XXX_plan.md
   ```
 
-**自動化模式工作流程**:
-  1. 📤 **發送 Plan** 到 Codex CLI terminal
-  2. ⏳ **自動監測** Codex CLI 執行狀態（透過 `/wait` 端點輪詢 `git status`）
-  3. ✅ **偵測完成** 後自動提示執行 QA（Cross-QA: Copilot）
-
-**技術實作**:
-  - 使用 SendText Bridge v0.1.0 的 `/wait` 端點
-  - `/wait` 透過 `git status --porcelain` 輪詢偵測檔案變更
-  - 每 2 秒檢查一次（可調整）
-  - 最多等待 5 分鐘（可調整）
-  - 有變更即表示 Codex CLI 完成
-  - 可選：使用 `/capture` 端點獲取 terminal 輸出進行除錯
+**監控結果處理**（適用於外部工具執行；可選）:
+- 建議以「人工確認」為主：由執行者回報完成並提供 `git diff --stat`。
+- 若使用 Terminal Bridge Server 的 `/wait`：以回傳 JSON 的 `completed` / `elapsed` / `detectedChanges` 作為參考。
 
 - **執行記錄**:
   - ✅ 每次執行追加到 `.agent/execution_log.jsonl`
@@ -193,9 +180,22 @@ execution: [copilot|codex-cli]
 
 **觸發時機**:
 - **模式 A (Copilot)**: 實作完成後立即執行
-- **模式 B (Codex CLI 自動化)**: 由 `auto_execute_plan.sh` 偵測完成後自動提示
 - **模式 B (Codex CLI 批次)**: 手動確認完成後執行
+**Cross-QA 工具檢測**（在審查前執行）:
+1. 若 Plan 有 EXECUTION_BLOCK，讀取 `executor_tool` 欄位
+2. 比對用戶選擇的 `qa_tool` 是否相同:
+   - 若相同 → 檢查例外情況:
+     - 小修正（≤20 行程式碼變更）
+     - 緊急修復（P0 級別）
+     - 文件修正（僅 .md/.txt 變更）
+   - 若不符合例外 → **拒絕執行 QA**，要求重新選擇
+   - 若符合例外 → 詢問用戶確認並記錄到 plan
+3. 若 Plan 無 EXECUTION_BLOCK → 跳過檢測（向後相容）
 
+**記錄格式**:
+- 違規: `QA Compliance: ⚠️ 違規（同工具）- 理由：[用戶說明]`
+- 例外: `QA Compliance: ⚠️ 例外（小修正）- 變更：[X 行]`
+- 豁免: `QA Compliance: ✅ 豁免（文件修正）- 檔案：[列表]`
 **任務**：
 1. 審查工程師的程式碼。
 2. **確認 Cross-QA 規則**：QA 工具必須與 Executor 不同
@@ -257,7 +257,6 @@ execution: [copilot|codex-cli]
 |------|---------|---------|------|---------|
 | Copilot 直接執行 | 小規模修改（1-3 檔） | IDE 內實作 | 手動 | 立即 |
 | Codex CLI 批次 | 大規模批次處理 | `run_codex_template.sh` | 手動 | 手動確認後 |
-| Codex CLI 自動化 | 大規模 + 需自動監測 | `auto_execute_plan.sh` | **自動** | **自動提示** |
 
 ---
 

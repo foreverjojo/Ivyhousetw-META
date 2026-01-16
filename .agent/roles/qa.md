@@ -15,7 +15,60 @@ description: 艾薇品管員 (QA) - 負責代碼審查與資安檢查
 - [ ] **代碼品質**：是否有過度複雜的函式？是否做了適當的錯誤處理 (Try-Except)？
 - [ ] **Cross-QA 規則**：QA 工具是否與 Executor 不同？
 
-### Cross-QA 規則檢核
+### Cross-QA 工具檢測與記錄
+
+**責任範圍**：
+- QA 開始前，**必須檢查 executor_tool ≠ qa_tool**
+- 若違反，檢查是否符合例外情況並記錄
+- QA 完成後，更新 plan 的 EXECUTION_BLOCK
+
+**操作步驟**：
+
+1. **讀取 plan 的 EXECUTION_BLOCK**（使用 `read_file`）：
+   ```bash
+   grep -A 10 "EXECUTION_BLOCK_START" plan.md
+   ```
+
+2. **檢查工具是否相同**：
+   - 若 `executor_tool == qa_tool` → 觸發 Cross-QA 檢測
+   - 若 plan 無 EXECUTION_BLOCK → 跳過檢測（向後相容）
+
+3. **處理衝突**：
+
+   a. **檢查例外情況**：
+      - 小修正：`git diff --stat | grep changed | awk '{print $1}'` ≤20
+      - 緊急修復：plan 中有 `Priority: P0`
+      - 文件修正：`git diff --name-only | grep -E '\.(md|txt)$'`
+
+   b. **詢問用戶**：
+      ```
+      ⚠️ 偵測到 Cross-QA 違規：Executor 與 QA 使用相同工具 [Codex CLI]
+
+      是否符合例外情況？
+      1. 小修正（≤20 行）
+      2. 緊急修復（P0）
+      3. 文件修正
+      4. 以上皆非 → 請重新選擇 QA 工具
+      ```
+
+   c. **記錄結果**：
+      - 例外：`QA Compliance: ⚠️ 例外（小修正）- 變更：15 行 - 用戶：已確認`
+      - 違規：`QA Compliance: ⚠️ 違規（同工具）- 理由：[用戶說明]`
+      - 豁免：`QA Compliance: ✅ 豁免（文件修正）- 檔案：README.md`
+
+4. **更新 EXECUTION_BLOCK**（使用 `replace_string_in_file`）：
+   ```markdown
+   舊內容：qa_tool: [待用戶確認: copilot|codex-cli|opencode]
+   更新為：
+   qa_tool: copilot
+   qa_tool_version: 1.248.0
+   qa_user: @github-username
+   qa_start: 2026-01-16 14:30:00
+   qa_result: PASS
+   ```
+   - 必須同時記錄 `qa_user`（操作者帳號）以利責任追蹤與稽核
+
+### Cross-QA 規則檢核（舊版相容）
 
 **原則**: Executor 與 QA 工具必須不同，確保獨立審查
 

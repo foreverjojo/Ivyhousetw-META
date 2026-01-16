@@ -189,5 +189,3 @@ ifp.env
 .agent/state/terminal_bridge.pid
 .agent/state/terminal_bridge_info.json
 .agent/state/terminal_bridge_token
-.agent/state/sendtext_bridge_info.json
-.agent/state/sendtext_bridge_token

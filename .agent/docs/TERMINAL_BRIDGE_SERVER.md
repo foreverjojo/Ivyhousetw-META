@@ -4,7 +4,7 @@ Standalone HTTP server for monitoring terminal operations and git status changes
 
 ## Overview
 
-This Python-based HTTP server replaces the VS Code extension functionality when extension activation fails. It provides the same `/wait` and `/capture` endpoints used by `auto_execute_plan.sh`.
+This Python-based HTTP server provides terminal automation helpers (tmux control) and git-status based completion detection for Codex CLI workflows.
 
 **Status**: ✅ Production Ready (v0.1.0-standalone)
 
@@ -47,16 +47,17 @@ Output:
 🔑 Token file: .agent/state/terminal_bridge_token
 ```
 
-### 2. Use with Auto-Execute Plan
+### 2. Monitor Completion (Optional)
+
+Run your Codex CLI work as usual (manually or via `.agent/scripts/run_codex_template.sh`). If you want an external “completion signal”, call `/wait` to watch git status changes until they stabilize.
 
 ```bash
-.agent/scripts/auto_execute_plan.sh doc/plans/Idx-010_plan.md
+TOKEN=$(cat .agent/state/terminal_bridge_token)
+curl -sS -X POST http://127.0.0.1:38765/wait \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"timeout":300000,"checkInterval":2000}'
 ```
-
-The script will automatically:
-1. Send plan to Codex CLI
-2. Call `/wait` endpoint to monitor for completion
-3. Prompt for QA when work is done
 
 ### 3. Stop the Server
 
@@ -266,7 +267,6 @@ curl -X POST http://127.0.0.1:38765/wait \
 │   ├── start_terminal_bridge.sh       # Start server daemon
 │   ├── stop_terminal_bridge.sh        # Stop server daemon
 │   ├── test_terminal_bridge.sh        # Integration tests
-│   └── auto_execute_plan.sh           # Uses /wait endpoint
 └── state/
     ├── terminal_bridge_token          # Authentication token
     ├── terminal_bridge_info.json      # Server configuration
@@ -420,25 +420,6 @@ t=4s     New snapshot: 7 files changed (stable for 2s)
 
 ---
 
-## Migration from VS Code Extension
-
-If you were using `sendtext-bridge` VS Code extension:
-
-1. **Stop using extension** (it may not activate properly)
-2. **Start standalone server**:
-   ```bash
-   .agent/scripts/start_terminal_bridge.sh
-   ```
-3. **Update scripts**: Already done! `auto_execute_plan.sh` checks both token files
-4. **Test workflow**:
-   ```bash
-   .agent/scripts/test_terminal_bridge.sh
-   ```
-
-**No code changes required** - the standalone server uses the same API contract.
-
----
-
 ## Future Enhancements
 
 - [ ] Real terminal output capture via tmux integration
@@ -457,6 +438,6 @@ Part of Ivyhousetw META project - Internal use only.
 
 ## Support
 
-**Issues**: Create an issue in the project repository  
-**Logs**: `.agent/state/terminal_bridge.log`  
+**Issues**: Create an issue in the project repository
+**Logs**: `.agent/state/terminal_bridge.log`
 **Status**: Check with `curl http://127.0.0.1:38765/health`

@@ -4,6 +4,67 @@
 
 ---
 
+## 🤝 多工具協作模式
+
+### 基本原則
+1. **工具選擇分離**：Executor 與 QA 必須使用不同工具（Cross-QA 原則）
+2. **監控同步**：若需要自動監控外部工具狀態，使用 Terminal Bridge Server（或改用人工確認）
+3. **記錄可追蹤**：所有工具選擇與執行結果記錄於 plan 的 EXECUTION_BLOCK
+
+### 協作流程範例：Copilot 監控 Codex CLI
+
+**場景**：Plan 執行階段選擇 Codex CLI，Copilot 需監控其執行狀態
+
+1. **啟動 Codex CLI 執行**
+   ```bash
+   # 用戶在 "Codex CLI" terminal 中執行
+   codex apply plan.md
+   ```
+
+2. **Copilot 啟動監控（可選）**
+   - 若需要「偵測完成」：啟動 Terminal Bridge Server，並使用 `/wait` 監看 git 狀態是否穩定。
+   ```bash
+   .agent/scripts/start_terminal_bridge.sh
+
+   TOKEN=$(cat .agent/state/terminal_bridge_token)
+   curl -sS -X POST http://127.0.0.1:38765/wait \
+     -H "Authorization: Bearer ${TOKEN}" \
+     -H "Content-Type: application/json" \
+     -d '{"timeout":300000,"checkInterval":2000}'
+   ```
+
+3. **監控回報結果**
+   - `completed: true`：git status 已穩定（可視為執行階段結束的訊號）
+   - `completed: false`：timeout（超過 `timeout` 未達穩定）
+   - HTTP 401/5xx：認證或伺服器錯誤
+
+4. **Copilot 處理結果**
+   - 更新 plan 的 `executor_end` 時間戳
+   - 通知用戶選擇 QA 工具
+
+### Cross-QA 工具選擇範例
+
+| 情境 | Executor | QA Tool | 理由 |
+|------|----------|---------|------|
+| 大規模重構 | Codex CLI | Copilot | Copilot 提供語意層級審查 |
+| 互動式開發 | Copilot | OpenCode | OpenCode 驗證執行結果 |
+| 批次測試 | OpenCode | Codex CLI | Codex CLI 可批次檢查語法 |
+
+### Cross-QA 例外情況處理
+
+**允許同工具 QA 的情境**：
+- 小修正：≤20 行程式碼變更
+- 緊急修復：P0 級別 bug
+- 文件修正：僅修改 .md/.txt
+
+**記錄格式**：
+```markdown
+<!-- 例外情況記錄於 plan 的 EXECUTION_BLOCK -->
+QA Compliance: ⚠️ 例外（小修正）- 變更：15 行 - 用戶：已確認
+```
+
+---
+
 ## 🔧 Codex CLI
 
 ### 基本資訊

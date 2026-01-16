@@ -65,7 +65,7 @@ cp "$SOURCE/workflows/dev-team.md" "$TARGET/.agent/workflows/"
 echo -e "${GREEN}  ✅ Workflow 檔案複製完成${NC}"
 
 # Step 3: 複製 Roles 檔案
-echo -e "${BLUE}[3/8] 複製 Roles 檔案...${NC}"
+echo -e "${BLUE}[3/6] 複製 Roles 檔案...${NC}"
 cp "$SOURCE/roles/planner.md" "$TARGET/.agent/roles/"
 cp "$SOURCE/roles/engineer.md" "$TARGET/.agent/roles/"
 cp "$SOURCE/roles/qa.md" "$TARGET/.agent/roles/"
@@ -110,7 +110,7 @@ EOF
 echo -e "${GREEN}  ✅ Roles 檔案複製完成${NC}"
 
 # Step 4: 複製 Skills 檔案
-echo -e "${BLUE}[4/8] 複製 Skills 檔案...${NC}"
+echo -e "${BLUE}[4/6] 複製 Skills 檔案...${NC}"
 if [ -f "$SOURCE/skills/code_reviewer.py" ]; then
     cp "$SOURCE/skills/code_reviewer.py" "$TARGET/.agent/skills/"
 fi
@@ -132,7 +132,7 @@ echo '{"whitelist": [], "last_updated": "'$(date -Iseconds)'"}' > "$TARGET/.agen
 echo -e "${GREEN}  ✅ Skills 檔案複製完成${NC}"
 
 # Step 5: 複製 Templates 並建立初始檔案
-echo -e "${BLUE}[5/8] 建立模板與初始檔案...${NC}"
+echo -e "${BLUE}[5/6] 建立模板與初始檔案...${NC}"
 if [ -f "$SOURCE/templates/handoff_template.md" ]; then
     cp "$SOURCE/templates/handoff_template.md" "$TARGET/.agent/templates/"
 fi
@@ -212,124 +212,32 @@ cat > "$TARGET/doc/plans/Idx-000_plan.template.md" << 'EOF'
 EOF
 echo -e "${GREEN}  ✅ 模板與初始檔案建立完成${NC}"
 
-# Step 6: 複製 SendText Bridge 擴充與腳本
-echo -e "${BLUE}[6/8] 複製 SendText Bridge 擴充...${NC}"
+# Step 6: 複製執行腳本（不含 VS Code 擴充）
+echo -e "${BLUE}[6/6] 複製執行腳本...${NC}"
 
-# 複製擴充目錄
-if [ -d "$SOURCE/../tools/sendtext-bridge" ]; then
-    cp -r "$SOURCE/../tools/sendtext-bridge" "$TARGET/tools/"
-    echo -e "${GREEN}  ✅ SendText Bridge 擴充複製完成${NC}"
-else
-    echo -e "${YELLOW}  ⚠️  SendText Bridge 擴充不存在，跳過${NC}"
-fi
+copy_script() {
+    local src="$1"
+    local dst="$2"
+    if [ -f "$src" ]; then
+        cp "$src" "$dst"
+        chmod +x "$dst/$(basename "$src")" 2>/dev/null || true
+    fi
+}
 
-# 複製執行腳本
-if [ -f "$SOURCE/scripts/sendtext.sh" ]; then
-    cp "$SOURCE/scripts/sendtext.sh" "$TARGET/.agent/scripts/"
-    chmod +x "$TARGET/.agent/scripts/sendtext.sh"
-fi
+copy_script "$SOURCE/scripts/run_codex_template.sh" "$TARGET/.agent/scripts/"
+copy_script "$SOURCE/scripts/start_terminal_bridge.sh" "$TARGET/.agent/scripts/"
+copy_script "$SOURCE/scripts/stop_terminal_bridge.sh" "$TARGET/.agent/scripts/"
+copy_script "$SOURCE/scripts/test_terminal_bridge.sh" "$TARGET/.agent/scripts/"
 
-if [ -f "$SOURCE/scripts/run_codex_template.sh" ]; then
-    cp "$SOURCE/scripts/run_codex_template.sh" "$TARGET/.agent/scripts/"
-    chmod +x "$TARGET/.agent/scripts/run_codex_template.sh"
-fi
-
-if [ -f "$SOURCE/scripts/auto_execute_plan.sh" ]; then
-    cp "$SOURCE/scripts/auto_execute_plan.sh" "$TARGET/.agent/scripts/"
-    chmod +x "$TARGET/.agent/scripts/auto_execute_plan.sh"
+if [ -f "$SOURCE/scripts/terminal_bridge_server.py" ]; then
+    cp "$SOURCE/scripts/terminal_bridge_server.py" "$TARGET/.agent/scripts/"
+    chmod +x "$TARGET/.agent/scripts/terminal_bridge_server.py" 2>/dev/null || true
 fi
 
 echo -e "${GREEN}  ✅ 執行腳本複製完成${NC}"
 
-# Step 7: 建立 SendText Bridge 安裝說明
-cat > "$TARGET/tools/SENDTEXT_BRIDGE_SETUP.md" << 'BRIDGE_EOF'
-# SendText Bridge 安裝說明
-
-## 前置條件
-
-- Dev Container 環境
-- VS Code 1.95+
-
-## 安裝步驟
-
-1. 進入 Dev Container
-
-2. 安裝擴充：
-   ```bash
-   code --install-extension tools/sendtext-bridge/sendtext-bridge-0.0.3.vsix --force
-   ```
-
-3. 重新載入 VS Code：
-   ```
-   Developer: Reload Window
-   ```
-
-4. 確認安裝：
-   ```bash
-   curl -sS http://127.0.0.1:38765/health
-   # 應回傳: {"ok":true}
-   ```
-
-5. 測試：
-   ```bash
-   .agent/scripts/sendtext.sh text "echo Hello" --execute
-   ```
-
-## 使用方式
-
-### 發送文字並執行
-```bash
-.agent/scripts/sendtext.sh text "codex" --execute
-```
-
-### 先送文字不按 Enter
-```bash
-.agent/scripts/sendtext.sh text "/status"
-```
-
-### 單獨送 Enter
-```bash
-.agent/scripts/sendtext.sh enter
-```
-
-### 自動化執行 Plan
-```bash
-.agent/scripts/auto_execute_plan.sh doc/plans/Idx-XXX_plan.md
-```
-
-## 端點說明
-
-- `GET /health` - 健康檢查
-- `POST /send` - 發送文字（可選是否執行）
-- `POST /enter` - 單獨送 Enter
-- `POST /wait` - 等待 Codex CLI 完成（輪詢 git status）
-
-## 故障排除
-
-### 擴充未啟動
-
-```bash
-# 檢查擴充列表
-code --list-extensions | grep sendtext
-
-# 重新安裝
-code --uninstall-extension ivyhousetw.sendtext-bridge
-code --install-extension tools/sendtext-bridge/sendtext-bridge-0.0.3.vsix --force
-```
-
-### Token 檔案不存在
-
-擴充首次啟動會自動建立：
-- `.agent/state/sendtext_bridge_token`
-- `.agent/state/sendtext_bridge_info.json`
-
-若未建立，請重新載入 VS Code。
-BRIDGE_EOF
-
-echo -e "${GREEN}  ✅ SendText Bridge 安裝說明建立完成${NC}"
-
-# Step 8: 建立專案規則檔模板
-echo -e "${BLUE}[8/8] 建立專案規則檔...${NC}"
+# Step 7: 建立專案規則檔模板
+echo -e "${BLUE}[7/7] 建立專案規則檔...${NC}"
 cat > "$TARGET/project_rules.md" << EOF
 # $PROJECT_NAME - 系統開發核心守則
 
@@ -390,20 +298,19 @@ echo ""
 echo -e "${YELLOW}📝 後續步驟：${NC}"
 echo "  1. 編輯 $TARGET/project_rules.md 填入專案資訊"
 echo "  2. 編輯 $TARGET/.agent/roles/domain_expert.md 客製化領域專家"
-echo "  3. 安裝 SendText Bridge：參考 $TARGET/tools/SENDTEXT_BRIDGE_SETUP.md"
-echo "  4. 在 VS Code 開啟專案，測試輸入 /dev-team"
+echo "  3. 在 VS Code 開啟專案，測試輸入 /dev-team"
+echo "  4. （可選）啟動 Terminal Bridge Server：.agent/scripts/start_terminal_bridge.sh"
 echo ""
 echo -e "${BLUE}📁 已建立的結構：${NC}"
 echo "  $TARGET/"
 echo "  ├── .agent/"
 echo "  │   ├── workflows/ (AGENT_ENTRY.md, dev-team.md)"
 echo "  │   ├── roles/ (planner, engineer, qa, domain_expert)"
-echo "  │   ├── scripts/ (sendtext.sh, run_codex_template.sh, auto_execute_plan.sh)"
-echo "  │   ├── state/ (預留給 sendtext bridge)"
+echo "  │   ├── scripts/ (run_codex_template.sh, start_terminal_bridge.sh, stop_terminal_bridge.sh, test_terminal_bridge.sh, terminal_bridge_server.py)"
+echo "  │   ├── state/ (runtime state; tokens/pid/log)"
 echo "  │   └── templates/"
 echo "  ├── tools/"
-echo "  │   ├── sendtext-bridge/ (VS Code 擴充)"
-echo "  │   └── SENDTEXT_BRIDGE_SETUP.mdode_reviewer, doc_generator, test_runner)"
+echo "  │   └── (reserved)"
 echo "  │   └── templates/"
 echo "  ├── doc/"
 echo "  │   ├── plans/ (Idx-000_plan.template.md)"

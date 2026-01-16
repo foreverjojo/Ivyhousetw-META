@@ -48,8 +48,49 @@
 ## 🔧 執行資訊
 
 <!-- EXECUTION_BLOCK_START -->
-execution: [copilot|codex-cli]
+executor_tool: [待用戶確認: copilot|codex-cli|opencode]
+executor_tool_version: [version number]
+executor_user: [github-account or email]
+executor_start: [執行開始時間]
+executor_end: [執行結束時間]
+session_id: [terminal session ID if available]
+qa_tool: [待用戶確認: copilot|codex-cli|opencode]
+qa_tool_version: [version number]
+qa_user: [github-account or email]
+qa_start: [QA 開始時間]
+qa_result: [PASS|PASS_WITH_RISK|FAIL]
 <!-- EXECUTION_BLOCK_END -->
+
+### 執行模式建議
+
+| 工具 | 適用場景 | 優勢 | 限制 | 需要監控 |
+|------|---------|------|------|----------|
+| **Copilot** | 互動式開發、複雜邏輯重構、需即時反饋 | 內建監控、即時回應、上下文理解強 | 執行速度較慢 | ❌ 否 |
+| **Codex CLI** | 批次檔案操作、模板化工作、大規模重構 | 執行速度快、支援批次操作 | 需要外部監控、無即時反饋 | ✅ 是 |
+| **OpenCode** | 需要 captured output、複雜指令執行 | 強大的 terminal 整合、output 監控 | 需要學習曲線、設定較複雜 | ✅ 是 |
+
+### QA 模式建議
+
+| Executor Tool | 建議 QA Tool | 理由 |
+|---------------|--------------|------|
+| Copilot | Codex CLI / OpenCode | 自動化 QA 可驗證 Copilot 產出的語法正確性 |
+| Codex CLI | Copilot / OpenCode | Copilot 可提供語意檢查，OpenCode 可驗證執行結果 |
+| OpenCode | Copilot / Codex CLI | Copilot 可提供程式碼審查，Codex CLI 可批次驗證 |
+
+**Cross-QA 例外情況**：
+
+| 例外類型 | 條件 | 審批流程 | 記錄格式 |
+|---------|------|---------|----------|
+| **小修正** | ≤20 行程式碼變更 | 1. Copilot 詢問用戶確認<br/>2. 用戶明確回覆「允許」<br/>3. 記錄變更行數 | `QA Compliance: ⚠️ 例外（小修正）- 變更：[X 行] - 用戶：已確認` |
+| **緊急修復** | P0 級別 bug<br/>影響生產環境 | 1. 確認優先級為 P0<br/>2. 用戶說明緊急原因<br/>3. 記錄 issue/ticket 編號 | `QA Compliance: ⚠️ 例外（緊急修復）- Issue: [#NNN] - 理由：[說明]` |
+| **文件修正** | 無程式碼變更<br/>僅修改 .md/.txt | 自動豁免<br/>無需用戶確認 | `QA Compliance: ✅ 豁免（文件修正）- 檔案：[列表]` |
+
+**違規處理流程**：
+1. QA 工具檢測到 `executor_tool == qa_tool`
+2. 檢查是否符合例外條件（小修正/緊急修復/文件修正）
+3. 若不符合例外，**拒絕執行** QA 並要求用戶重新選擇工具
+4. 若符合例外，詢問用戶確認並記錄到 plan 的 EXECUTION_BLOCK
+5. 所有例外情況必須在最終 Log 檔中說明
 
 ---
 

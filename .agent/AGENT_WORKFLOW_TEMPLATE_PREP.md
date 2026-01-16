@@ -22,21 +22,17 @@ agent-workflow-template/
 │   │   ├── explore_cli_tool.md
 │   │   └── skill_whitelist.json (empty template)
 │   ├── scripts/
-│   │   ├── sendtext.sh ⭐
 │   │   ├── run_codex_template.sh ⭐
-│   │   ├── auto_execute_plan.sh ⭐
+│   │   ├── start_terminal_bridge.sh ⭐
+│   │   ├── stop_terminal_bridge.sh ⭐
+│   │   ├── test_terminal_bridge.sh ⭐
+│   │   └── terminal_bridge_server.py ⭐
 │   │   └── setup_workflow.sh
-│   ├── state/ (empty, for sendtext bridge)
+│   ├── state/ (runtime state; tokens/pid/log)
 │   └── templates/
 │       └── handoff_template.md
 ├── tools/
-│   ├── sendtext-bridge/ ⭐
-│   │   ├── extension.js
-│   │   ├── package.json
-│   │   ├── README.md
-│   │   ├── LICENSE
-│   │   └── sendtext-bridge-0.0.3.vsix
-│   └── SENDTEXT_BRIDGE_SETUP.md
+│   └── (reserved)
 ├── doc/
 │   ├── plans/
 │   │   └── Idx-000_plan.template.md
@@ -52,17 +48,17 @@ agent-workflow-template/
 
 ### 2. 新增的核心功能 ⭐
 
-#### SendText Bridge 擴充
-- **目的**：在 Dev Container 環境下使用 `terminal.sendText` API
+#### Terminal Bridge Server
+- **目的**：在 Dev Container/遠端環境中提供可重現的「終端機控制 + 完成偵測」能力
 - **功能**：
-  - 發送文字到終端（可控制是否執行）
-  - 等待 Codex CLI 完成（自動監測）
-  - 固定目標 terminal（避免被搶走）
+   - 以 tmux 對 Codex CLI 終端送出文字/Enter
+   - 以 `git status` 穩定性作為完成偵測（`/wait`）
+   - Bearer token 驗證
 
 #### 自動化執行腳本
-- `sendtext.sh`：CLI wrapper 呼叫 SendText Bridge
 - `run_codex_template.sh`：批次執行 Codex CLI（JSONL 審計）
-- `auto_execute_plan.sh`：發送 Plan → 監測完成 → QA 提示
+- `start_terminal_bridge.sh` / `stop_terminal_bridge.sh`：終端橋接伺服器 daemon 管理
+- `test_terminal_bridge.sh`：整合測試（驗證 `/health`、`/capture`、`/wait`、auth）
 
 ### 3. 文件需求
 
@@ -77,7 +73,7 @@ agent-workflow-template/
 - ✅ 多代理角色定義（Planner / Engineer / QA / Expert）
 - ✅ 自動化執行流程（Codex CLI 整合）
 - ✅ Cross-QA 規則
-- ✅ SendText Bridge（Dev Container 支援）
+- ✅ Terminal Bridge Server（可選；自動監控/終端控制）
 - ✅ JSONL 審計記錄
 - ✅ L2 自動回滾
 
@@ -91,7 +87,7 @@ agent-workflow-template/
    ```bash
    ./.agent/scripts/setup_workflow.sh .
    ```
-4. 安裝 SendText Bridge（若使用 Dev Container）
+4. （可選）啟動 Terminal Bridge Server（若需要自動監控/終端控制）
 
 ### 方式 2：手動複製
 
@@ -118,22 +114,22 @@ cd agent-workflow-template
 ### 3. Codex CLI 自動化
 
 ```bash
-# 自動化執行（監測完成 → QA 提示）
-.agent/scripts/auto_execute_plan.sh doc/plans/Idx-XXX_plan.md
+# 批次執行（同步，立即回傳結果）
+.agent/scripts/run_codex_template.sh doc/plans/Idx-XXX_plan.md
 ```
 
 ## 文件
 
 - [Dev Team Workflow](.agent/workflows/dev-team.md)
 - [Agent Entry](.agent/workflows/AGENT_ENTRY.md)
-- [SendText Bridge Setup](tools/SENDTEXT_BRIDGE_SETUP.md)
+- [Terminal Bridge Server](.agent/docs/TERMINAL_BRIDGE_SERVER.md)
 
 ## 需求
 
 - VS Code 1.95+
 - GitHub Copilot (建議)
 - Codex CLI 0.80+ (選用)
-- Dev Container (若使用 SendText Bridge)
+- Dev Container (選用)
 ```
 
 #### CONTRIBUTING.md
@@ -153,14 +149,14 @@ cd agent-workflow-template
 # 測試 setup script
 ./test_setup.sh
 
-# 測試 SendText Bridge
-./test_sendtext_bridge.sh
+# 測試 Terminal Bridge Server
+./.agent/scripts/test_terminal_bridge.sh
 ```
 
 ## 版本發佈
 
 1. 更新 CHANGELOG.md
-2. 更新版本號（若 SendText Bridge 有變）
+2. 更新版本號
 3. 建立 Git tag
 ```
 
@@ -179,7 +175,7 @@ cd agent-workflow-template
 ### 5. 授權
 
 - 建議使用 MIT License
-- SendText Bridge 擴充需獨立 LICENSE
+- 如有拆出獨立工具/套件，請提供獨立 LICENSE
 
 ---
 
@@ -205,7 +201,7 @@ cd agent-workflow-template
 
 1. [ ] 使用 Template 建立測試專案
 2. [ ] 執行完整流程（Plan → Execute → QA）
-3. [ ] 確認 SendText Bridge 正常運作
+3. [ ] 確認 Terminal Bridge Server 正常運作（若專案需要）
 4. [ ] 收集反饋改進
 
 ---
@@ -219,14 +215,14 @@ Multi-agent development workflow template with GitHub Copilot & Codex CLI integr
 
 **Full Description:**
 ```
-A production-ready template for multi-agent collaborative development workflows. 
-Features automated execution, Cross-QA rules, and SendText Bridge for Dev Container environments.
+A production-ready template for multi-agent collaborative development workflows.
+Features automated execution and Cross-QA rules for collaborative workflows.
 
 ✅ Planner / Engineer / QA / Expert roles
 ✅ Codex CLI automation with monitoring
 ✅ JSONL audit logging
 ✅ L2 auto-rollback
-✅ VS Code Extension (SendText Bridge)
+✅ Optional Terminal Bridge Server (tmux + HTTP)
 ```
 
 ---

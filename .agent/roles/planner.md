@@ -39,6 +39,45 @@ description: 艾薇規劃師 (Planner) - 負責產出開發規格
 3. 在 `Implementation_Plan_index.md` 登記任務
 4. 繼續進入 Step 2 (Meta Expert)
 
+## 執行工具選擇與記錄（Step 2.5 後執行）
+
+**責任範圍**：
+- 用戶選擇 Executor Tool 後，**必須更新 plan 的 EXECUTION_BLOCK**
+- 若選擇 Codex CLI / OpenCode，提示用戶可用 Terminal Bridge Server（可選）或人工方式確認完成
+
+**操作步驟**：
+
+1. **更新 EXECUTION_BLOCK**（使用 `replace_string_in_file`）：
+   ```markdown
+   舊內容：executor_tool: [待用戶確認: copilot|codex-cli|opencode]
+   更新為：
+   executor_tool: copilot
+   executor_tool_version: 1.248.0
+   executor_user: @github-username
+   executor_start: 2026-01-16 14:00:00
+   ```
+   - 必須同時記錄 `executor_user`（操作者帳號）以利責任追蹤
+
+2. **提供完成確認指示**（當 `executor_tool` = codex-cli/opencode）：
+   - **人工確認（最簡單）**：請用戶在執行工具中回報「已完成」並貼上摘要（例如 `git diff --stat`）。
+   - **自動監控（可選）**：啟動 Terminal Bridge Server 後使用 `/wait` 監看 git status 是否穩定。
+   ```bash
+   .agent/scripts/start_terminal_bridge.sh
+
+   TOKEN=$(cat .agent/state/terminal_bridge_token)
+   curl -sS -X POST http://127.0.0.1:38765/wait \
+     -H "Authorization: Bearer ${TOKEN}" \
+     -H "Content-Type: application/json" \
+     -d '{"timeout":300000,"checkInterval":2000}'
+   ```
+
+3. **引用工具選擇指引**：
+   - 參考：`doc/plans/Idx-000_plan.template.md` 的「執行模式建議」表格
+   - 依據任務類型推薦合適工具：
+     - 互動式開發（1-3 檔案） → Copilot
+     - 批次操作（4+ 檔案） → Codex CLI
+     - Terminal 整合 / 需 output 監控 → OpenCode
+
 ## 必須遵守的規則檔案
 > **重要**：在執行任何任務前，請先閱讀並遵守以下規則：
 > - 📜 [`ivy_house_rules.md`](file:///ivy_house_rules.md) - 艾薇手工坊系統開發核心守則

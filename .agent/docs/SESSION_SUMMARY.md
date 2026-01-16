@@ -1,15 +1,15 @@
 # Session Summary: Terminal Bridge Server Implementation
 
-**Date**: 2026-01-14  
-**Status**: ✅ Complete  
+**Date**: 2026-01-14
+**Status**: ✅ Complete
 **Solution**: Standalone Python HTTP server replacing VS Code extension
 
 ---
 
 ## Problem Statement
 
-The SendText Bridge v0.1.0 VS Code extension failed to activate despite:
-- Correct installation (`ivyhousetw.sendtext-bridge@0.1.0`)
+The previous VS Code extension approach failed to activate in the Dev Container environment despite:
+- Correct installation
 - Valid code syntax
 - Proper configuration (`activationEvents: "*"`, `extensionKind: ["workspace"]`)
 - Multiple reinstallation attempts
@@ -53,10 +53,7 @@ Created a **standalone Python HTTP server** that provides the same functionality
 
 ### Files Modified
 
-1. **`.agent/scripts/auto_execute_plan.sh`**
-   - Updated to check for `terminal_bridge_token` first
-   - Fallback to `sendtext_bridge_token` for compatibility
-   - Better error messages
+No existing automation scripts are required; the server is used directly (curl) or via small wrappers as needed.
 
 ---
 
@@ -125,16 +122,9 @@ All integration tests passing:
 .agent/scripts/start_terminal_bridge.sh
 ```
 
-### Run Automated Plan Execution
-```bash
-.agent/scripts/auto_execute_plan.sh doc/plans/Idx-010_plan.md
-```
+### Monitor Completion (Optional)
 
-**Workflow**:
-1. Sends plan to Codex CLI via `sendtext.sh`
-2. Calls `/wait` endpoint (5 min timeout, 2s interval)
-3. Blocks until git status stabilizes
-4. Returns control for QA step
+Run Codex CLI work as usual, then call `/wait` to watch git status changes until they stabilize.
 
 ### Manual API Calls
 ```bash
@@ -149,21 +139,6 @@ curl -X POST http://127.0.0.1:38765/wait \
   -H "Content-Type: application/json" \
   -d '{"timeout":60000,"checkInterval":2000}' | jq .
 ```
-
----
-
-## Advantages Over VS Code Extension
-
-| Feature | VS Code Extension | Standalone Server |
-|---------|------------------|-------------------|
-| **Activation** | ❌ Fails in Dev Container | ✅ Always works |
-| **Reliability** | ⚠️ Inconsistent | ✅ 100% reliable |
-| **Setup** | Medium (requires extension install) | Simple (just run script) |
-| **Debugging** | Difficult (Extension Host logs) | Easy (stdout logs) |
-| **Dependencies** | VS Code specific | Python 3 only |
-| **Terminal Capture** | ✅ Real terminal output | ⚠️ Git status only |
-| **Git Monitoring** | ✅ | ✅ |
-| **Performance** | Fast (in-memory) | Fast (subprocess calls) |
 
 ---
 
@@ -188,34 +163,7 @@ curl -X POST http://127.0.0.1:38765/wait \
 - [ ] Configurable stability duration
 - [ ] Multiple workspace monitoring
 - [ ] Performance metrics logging
-- [ ] Fix VS Code extension activation issue (investigate Extension Host)
-
----
-
-## Migration Path
-
-### For Existing Workflows
-
-No changes required! The `auto_execute_plan.sh` script automatically:
-1. Checks for `terminal_bridge_token` (standalone server)
-2. Falls back to `sendtext_bridge_token` (VS Code extension)
-3. Uses whichever is available
-
-### To Switch to Standalone Server
-
-```bash
-# Stop VS Code extension (if running)
-# No action needed - it's not running anyway
-
-# Start standalone server
-.agent/scripts/start_terminal_bridge.sh
-
-# Verify
-curl http://127.0.0.1:38765/health
-
-# Run existing scripts - they just work!
-.agent/scripts/auto_execute_plan.sh doc/plans/test_plan.md
-```
+- [ ] Optional: tmux-based output capture (if needed)
 
 ---
 
@@ -226,16 +174,10 @@ curl http://127.0.0.1:38765/health
 - ✅ `.agent/scripts/start_terminal_bridge.sh`
 - ✅ `.agent/scripts/stop_terminal_bridge.sh`
 - ✅ `.agent/scripts/test_terminal_bridge.sh`
-- ✅ `.agent/scripts/auto_execute_plan.sh` (updated)
-
-### Working but Not Activated
-- ⚠️ `tools/sendtext-bridge/extension.js` (v0.1.0 - syntax valid, not activating)
-- ⚠️ `tools/sendtext-bridge/package.json` (v0.1.0 - configuration valid)
 
 ### Documentation
 - ✅ `.agent/docs/TERMINAL_BRIDGE_SERVER.md` (complete API reference)
 - ✅ `.agent/docs/SESSION_SUMMARY.md` (this file)
-- ⚠️ `tools/sendtext-bridge/README.md` (refers to v0.1.0 features not working)
 
 ---
 
@@ -251,7 +193,6 @@ curl http://127.0.0.1:38765/health
 2. **Test Workflow** with a simple plan
    ```bash
    .agent/scripts/test_terminal_bridge.sh  # Verify server works
-   .agent/scripts/auto_execute_plan.sh doc/plans/test.md  # Test full workflow
    ```
 
 3. **Add to Startup** (optional) - auto-start server when Dev Container starts
@@ -261,16 +202,8 @@ curl http://127.0.0.1:38765/health
 
 ### Long-term Actions
 
-1. **Investigate VS Code Extension Issue**
-   - Collect Extension Host logs from VS Code UI
-   - Check Dev Container extension compatibility
-   - Test on local VS Code (non-container) environment
-   - May require VS Code version downgrade or extension manifest changes
-
-2. **Consider Deprecating VS Code Extension**
-   - Standalone server is simpler and more reliable
-   - Only missing feature is real terminal output capture
-   - Can implement tmux-based capture if needed
+1. **Optional: Improve completion detection**
+   - Add smarter signals (e.g., explicit marker output) if git-only monitoring is insufficient
 
 ---
 
@@ -278,9 +211,9 @@ curl http://127.0.0.1:38765/health
 
 **Problem Solved**: The dev-team workflow now has a reliable automation foundation using the standalone Terminal Bridge Server.
 
-**Status**: 
+**Status**:
 - ✅ All endpoints working
-- ✅ Integration tests passing  
+- ✅ Integration tests passing
 - ✅ Documentation complete
 - ✅ Backward compatible with existing scripts
 
@@ -291,6 +224,6 @@ curl http://127.0.0.1:38765/health
 
 ---
 
-**Server Running**: `ps aux | grep terminal_bridge_server`  
-**Check Health**: `curl http://127.0.0.1:38765/health`  
+**Server Running**: `ps aux | grep terminal_bridge_server`
+**Check Health**: `curl http://127.0.0.1:38765/health`
 **View Logs**: `tail -f .agent/state/terminal_bridge.log`

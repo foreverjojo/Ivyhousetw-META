@@ -1,7 +1,7 @@
 # Terminal Bridge Server - Session Handoff Document
 
-**Date**: 2026-01-14  
-**Session Status**: ✅ Complete  
+**Date**: 2026-01-14
+**Session Status**: ✅ Complete
 **Production Status**: ✅ Ready
 
 ---
@@ -11,7 +11,7 @@
 Successfully implemented a **standalone Terminal Bridge Server** that provides complete HTTP API control over Codex CLI terminal automation. The server is currently running in production and ready for use in the dev-team workflow.
 
 ### Problem Solved
-- VS Code SendText Bridge extension failed to activate in Dev Container environment
+- VS Code extension approach failed to activate in Dev Container environment
 - No reliable way to send commands to Codex CLI programmatically
 - No automated detection of Codex CLI task completion
 
@@ -49,10 +49,6 @@ Successfully implemented a **standalone Terminal Bridge Server** that provides c
 - `start_terminal_bridge.sh` - Start server as daemon
 - `stop_terminal_bridge.sh` - Stop server gracefully
 - `test_terminal_bridge.sh` - Integration test suite (4 tests, 100% passing)
-
-**Scripts Updated:**
-- `sendtext.sh` - Token compatibility (checks both terminal_bridge and sendtext_bridge)
-- `auto_execute_plan.sh` - Uses terminal_bridge_token first
 
 **Documentation:**
 - `TERMINAL_BRIDGE_SERVER.md` - Complete API reference (462 lines)
@@ -100,10 +96,6 @@ curl http://127.0.0.1:38765/health
 
 **2. Send command to Codex CLI**
 ```bash
-# Using sendtext.sh wrapper
-.agent/scripts/sendtext.sh text '/status' --execute
-
-# Direct API call
 TOKEN=$(cat .agent/state/terminal_bridge_token)
 curl -X POST http://127.0.0.1:38765/send \
   -H "Authorization: Bearer ${TOKEN}" \
@@ -111,9 +103,13 @@ curl -X POST http://127.0.0.1:38765/send \
   -d '{"text":"/status","execute":true}'
 ```
 
-**3. Automated plan execution**
+**3. Monitor completion (optional)**
 ```bash
-.agent/scripts/auto_execute_plan.sh doc/plans/your_plan.md
+TOKEN=$(cat .agent/state/terminal_bridge_token)
+curl -sS -X POST http://127.0.0.1:38765/wait \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"timeout":300000,"checkInterval":2000}'
 ```
 
 ### Server Management
@@ -243,7 +239,6 @@ Files: 9 changed, 1225 insertions(+), 85 deletions(-)
 - Added terminal_bridge_server.py (304 lines)
 - Added start/stop/test scripts
 - Added complete documentation
-- Updated auto_execute_plan.sh
 ```
 
 ### Commit 2: `f23c3c4` - Terminal Control Endpoints
@@ -253,7 +248,6 @@ feat: add /send and /enter endpoints to Terminal Bridge Server
 Files: 3 changed, 200 insertions(+), 5 deletions(-)
 - Added send_to_terminal() and send_enter_to_terminal() methods
 - Implemented POST /send and POST /enter endpoints
-- Updated sendtext.sh for token compatibility
 - Enhanced documentation
 ```
 
@@ -263,15 +257,6 @@ chore: cleanup temporary files and update .gitignore
 
 Files: 1 changed, 7 insertions(+)
 - Added runtime files to .gitignore
-```
-
-### Commit 4: `a01a776` - Archive Old Extension
-```
-chore: archive VS Code extension attempts and cleanup old files
-
-Files: 10 changed, 244 insertions(+), 1037 deletions(-)
-- Archived non-functional VS Code extension v0.1.0
-- Removed old state files and backups
 ```
 
 ---
@@ -309,8 +294,7 @@ Score: 4/4 (100%)
 ### Integration
 - [x] Tmux session connected
 - [x] Codex CLI responsive
-- [x] sendtext.sh updated
-- [x] auto_execute_plan.sh compatible
+- [x] (Removed) No VS Code extension maintained in this repo.
 - [x] Token files secure (0600)
 
 ### Documentation
@@ -412,8 +396,8 @@ rm .agent/state/terminal_bridge_token
 
 ### Immediate Actions (Ready Now)
 1. ✅ Server is running - **no action needed**
-2. ✅ Test with: `.agent/scripts/sendtext.sh text '/status' --execute`
-3. ⏭️ **Use with actual plan**: `.agent/scripts/auto_execute_plan.sh <plan_file>`
+2. ✅ Test with: `curl http://127.0.0.1:38765/health`
+3. ⏭️ Use `/send` and `/wait` endpoints as needed
 
 ### Future Enhancements (Optional)
 - Real terminal output capture (tmux pipe-pane or script command)
@@ -422,13 +406,6 @@ rm .agent/state/terminal_bridge_token
 - Smart completion detection (pattern matching in output)
 - Performance metrics and monitoring dashboard
 - Output buffering and pagination
-
-### VS Code Extension (Low Priority)
-- Investigate activation issue (requires VS Code UI diagnostics from user)
-- Test on local VS Code (non-container environment)
-- Consider deprecating if standalone server proves sufficient
-
----
 
 ## Files Reference
 
@@ -440,8 +417,7 @@ rm .agent/state/terminal_bridge_token
 │   ├── start_terminal_bridge.sh       # Start daemon (74 lines)
 │   ├── stop_terminal_bridge.sh        # Stop daemon (42 lines)
 │   ├── test_terminal_bridge.sh        # Tests (120 lines)
-│   ├── sendtext.sh                    # Updated for compatibility
-│   └── auto_execute_plan.sh           # Updated for terminal_bridge
+│   └── (no additional wrappers)
 ├── state/
 │   ├── terminal_bridge_token          # Auth token (runtime)
 │   ├── terminal_bridge_info.json      # Server metadata (runtime)
@@ -451,16 +427,6 @@ rm .agent/state/terminal_bridge_token
     ├── TERMINAL_BRIDGE_SERVER.md      # API reference (462 lines)
     ├── SESSION_SUMMARY.md             # Implementation details (296 lines)
     └── HANDOFF_TERMINAL_BRIDGE.md     # This document
-```
-
-### Archived Files (Non-Functional)
-```
-tools/sendtext-bridge/
-├── extension.js                       # VS Code extension (archived)
-├── package.json                       # Extension manifest (archived)
-├── README.md                          # Extension docs (archived)
-├── sendtext-bridge-0.0.3.vsix         # Last working version (basic)
-└── sendtext-bridge-0.1.0.vsix         # Non-functional (activation issues)
 ```
 
 ---
@@ -498,7 +464,7 @@ tools/sendtext-bridge/
 4. [x] **Daemon Mode** - Runs in background with proper management
 5. [x] **Testing** - 100% test coverage, all passing
 6. [x] **Documentation** - Complete API reference and guides
-7. [x] **Integration** - Works with existing scripts (sendtext.sh, auto_execute_plan.sh)
+7. [x] **Integration** - Usable via curl and included management scripts
 8. [x] **Production Ready** - Running, tested, documented, committed
 
 ---
@@ -528,17 +494,17 @@ tools/sendtext-bridge/
 
 The Terminal Bridge Server is **fully operational** and **production-ready**. All objectives have been achieved:
 
-✅ **Problem Solved** - VS Code extension activation issues bypassed  
-✅ **Solution Delivered** - Complete HTTP API for terminal automation  
-✅ **Tested** - 100% test coverage, manual verification complete  
-✅ **Documented** - Comprehensive guides and API reference  
-✅ **Committed** - Clean git history, all changes tracked  
-✅ **Production** - Server running, ready for dev-team workflow  
+✅ **Problem Solved** - VS Code extension activation issues bypassed
+✅ **Solution Delivered** - Complete HTTP API for terminal automation
+✅ **Tested** - 100% test coverage, manual verification complete
+✅ **Documented** - Comprehensive guides and API reference
+✅ **Committed** - Clean git history, all changes tracked
+✅ **Production** - Server running, ready for dev-team workflow
 
 **Status**: Ready for immediate use in automated plan execution workflows.
 
 ---
 
-**Last Updated**: 2026-01-14 02:10 UTC  
-**Session Duration**: ~2 hours  
+**Last Updated**: 2026-01-14 02:10 UTC
+**Session Duration**: ~2 hours
 **Final Status**: ✅ Complete and Operational
