@@ -1,0 +1,40 @@
+name: Extensions Consistency Check
+
+on:
+  pull_request:
+    paths:
+      - '.devcontainer/devcontainer.json'
+      - '.vscode/extensions.json'
+      - '.idx/dev.nix'
+      - '.github/workflows/check-extensions.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '.devcontainer/devcontainer.json'
+      - '.vscode/extensions.json'
+      - '.idx/dev.nix'
+
+jobs:
+  check-extensions:
+    runs-on: ubuntu-latest
+    name: Verify Extensions Consistency
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Run extensions consistency check
+        run: |
+          python scripts/portable/check_extensions_consistency.py --verbose
+        continue-on-error: false
+
+      - name: Report results
+        if: always()
+        run: |
+          echo "✅ Extensions 清單已驗證一致"

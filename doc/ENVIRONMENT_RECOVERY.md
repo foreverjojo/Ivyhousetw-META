@@ -114,9 +114,57 @@ WITH_DOCKER=1 WITH_VSCODE=1 curl -fsSL https://raw.githubusercontent.com/forever
    - `esbenp.prettier-vscode`
    - （完整清單見 `.vscode/extensions.json`）
 
+### 3.2 驗證 Extensions 一致性
+本 repo 提供自動化工具確保三處 extensions 清單（devcontainer / .vscode / idx）保持同步：
+
+```bash
+# 檢查一致性
+python scripts/portable/check_extensions_consistency.py --verbose
+
+# 若有不一致，自動修復
+python scripts/portable/check_extensions_consistency.py --fix
+```
+
 ---
 
-## 4. 驗證環境
+## 4. 設定 API 金鑰 & 環境變數
+
+### 4.1 VS Code OAI Copilot 配置
+若要啟用 VS Code 中 OAI Compatible Provider 的 Copilot 功能，需設定環境變數：
+
+**方式 1：Windows 系統環境變數（推薦）**
+```powershell
+setx OAI_API_KEY "sk-your-api-key-here"
+setx OAI_BASE_URL "http://host.docker.internal:8045/v1"
+```
+重啟 VS Code 後即可生效。
+
+**方式 2：本機開發用 .env 檔（不進版控）**
+```bash
+# 複製範本
+cp ifp.env.example ifp.env
+
+# 編輯 ifp.env，填入金鑰
+OAI_API_KEY=sk-your-api-key-here
+OAI_BASE_URL=http://host.docker.internal:8045/v1
+```
+
+**方式 3：Dev Container 啟動時注入（推薦用於容器）**
+在 `.devcontainer/devcontainer.json` 的 `remoteEnv` 加入：
+```json
+"remoteEnv": {
+  "OAI_API_KEY": "${localEnv:OAI_API_KEY}",
+  "OAI_BASE_URL": "${localEnv:OAI_BASE_URL}"
+}
+```
+
+### 4.2 其他敏感資訊
+- 不要將 API key / token 放入 repo（`.gitignore` 會阻擋 `.env` 與 `secrets/` 目錄）
+- 敏感資訊優先使用：系統環境變數 → `.env`（本機） → GCP Secret Manager（雲端）
+
+---
+
+## 5. 驗證環境
 1. 確保 Docker 容器能正常啟動，並執行以下指令檢查：
    ```bash
    docker ps
@@ -125,11 +173,37 @@ WITH_DOCKER=1 WITH_VSCODE=1 curl -fsSL https://raw.githubusercontent.com/forever
    ```bash
    pip list
    ```
-3. 啟動應用程式，並確認無錯誤：
+3. 驗證 extensions 清單一致：
+   ```bash
+   python scripts/portable/check_extensions_consistency.py
+   ```
+4. 啟動應用程式，並確認無錯誤：
    ```bash
    streamlit run app.py
    ```
 
 ---
 
-完成以上步驟後，你的開發環境應該已完全恢復！
+## 常見問題排查
+
+### Q: Dev Container 啟動失敗（Docker/WSL 相關）
+**A:**
+- Windows：確認 Docker Desktop 已啟用 WSL2 backend
+- macOS：確認 Docker Desktop 正常運行
+- Linux：確認 Docker daemon 已啟動（`sudo systemctl start docker`）
+
+### Q: `code` CLI 無法找到（Windows）
+**A:** 在 VS Code 安裝完畢後：
+1. 重啟 PowerShell / Terminal
+2. 執行 `code --version` 確認 CLI 可用
+3. 若仍失敗，重新執行 `bootstrap_windows.ps1`
+
+### Q: 環境變數設定後 Copilot 仍無反應
+**A:**
+1. 確認 `OAI_API_KEY` 已設定：`echo $env:OAI_API_KEY`（Windows）或 `echo $OAI_API_KEY`（macOS/Linux）
+2. 重啟 VS Code
+3. 若使用 Dev Container，重建容器（`Dev Containers: Rebuild Container`）
+
+---
+
+完成以上步驟後，你的開發環境應該已完全恢復，且能在另一台電腦上一鍵重現！

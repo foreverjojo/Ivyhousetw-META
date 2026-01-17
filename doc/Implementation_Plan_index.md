@@ -24,6 +24,7 @@
 | Idx-010 | Agent Architecture Enhancement - Research/Reviewer/UI-UX Gates | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.3 | `doc/logs/Idx-010_log.md` | 三個條件式 Gate + 機械化判定規則 |
 | Idx-011 | Skills System Enhancement - 9 builtin skills + graceful degradation | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-011_log.md` | 9 個 builtin skills 完成 + manifest_updater + plan_validator |
 | Idx-012 | JSON Schema Validation & VSCode System Config | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-012_log.md` | 7 個 JSON schemas + graceful degradation + VSCode system files |
+| Idx-013 | One-Click Restore Hardening - Env vars + Extensions Sync | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/plans/Idx-013_one_click_restore_hardening.md` | 移除硬編碼 token + extensions 三方一致性檢查 + CI workflow |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
