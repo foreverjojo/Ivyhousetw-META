@@ -1,8 +1,6 @@
 {
-  "name": "Ivyhousetw-META (py3.11 + node24.12.0)",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
+  "name": "Ivyhousetw-META (GHCR pinned devcontainer image)",
+  "image": "ghcr.io/foreverjojo/ivyhousetw-meta-devcontainer:devcontainer-main",
   "features": {},
   "containerEnv": {
     "UV_VERSION": "0.5.24"
@@ -65,3 +63,4 @@
     "--add-host=host.docker.internal:host-gateway"
   ]
 }
+

@@ -10,6 +10,29 @@
 - 位置：`scripts/portable/`
 - 內容：安裝 VS Code / Docker / Git / Python（視作業系統與可用套件管理工具而定）+ 下載本 repo + 安裝本 repo 建議的 VS Code extensions
 
+### 0.x 一致性等級（你能期待「一模一樣」到什麼程度）
+
+- **Level A（幾乎 100%）**：Dev Container 內 toolchain + Python 依賴（以 `uv.lock` + `uv sync --frozen` 為準）
+- **Level B（目標一致）**：workspace 設定（`.vscode/*`）+ extensions 清單一致（devcontainer / .vscode / idx 三方同步）
+- **Level C（不保證）**：VS Code 全域 Profile / Keybindings / Snippets / Marketplace extension 版本差異
+  - 這部分請用 **VS Code Settings Sync** 自行處理
+
+> 結論：若你使用 Dev Container + Settings Sync，你會得到「實務上非常接近一模一樣」的環境。
+
+### 0.y Full-fidelity（容器層完全一致：GHCR pinned image）
+
+若你希望「容器內環境」也能達到接近完全一致，建議使用 GHCR 預建的 Dev Container image（由 CI 發佈）。
+
+- CI 會產出 tag：`ghcr.io/foreverjojo/ivyhousetw-meta-devcontainer:devcontainer-<git_sha>`
+- portable 腳本會在 clone 後自動執行：
+  - `python scripts/portable/pin_devcontainer_image.py`
+  - 使 `.devcontainer/devcontainer.json` 切換為 image 模式並 pin 到當前 commit
+
+若你在新機器 pull image 時遇到權限問題：
+```bash
+docker login ghcr.io
+```
+
 ### 0.1 Windows（PowerShell / 需系統管理員）
 
 建議先打開以下網址確認腳本內容，再執行：
@@ -19,6 +42,8 @@
 ```powershell
 iwr -useb https://raw.githubusercontent.com/foreverjojo/Ivyhousetw-META/main/scripts/portable/bootstrap_windows.ps1 | iex
 ```
+
+> ⚠️ Windows 提醒：Docker Desktop/Dev Containers 通常需要「Virtualization + WSL2」。腳本會做 preflight 提示，但可能仍需要你手動啟用功能與 reboot。
 
 ### 0.2 macOS（Terminal）
 
@@ -83,6 +108,11 @@ WITH_DOCKER=1 WITH_VSCODE=1 curl -fsSL https://raw.githubusercontent.com/forever
 2. 按下 `F1`，搜尋並選擇 **Dev Containers: Reopen in Container**。
 3. 等待容器啟動並自動安裝依賴。
 
+> ✅ 建議先跑一次 repo 內的可機械化檢查（不修改系統）：
+```bash
+python scripts/portable/verify_restore_state.py
+```
+
 ### 2.3 本機執行（可選）
 若不使用 Dev Container，可手動配置本機環境：
 1. 建立虛擬環境：
@@ -134,7 +164,7 @@ python scripts/portable/check_extensions_consistency.py --fix
 
 **方式 1：Windows 系統環境變數（推薦）**
 ```powershell
-setx OAI_API_KEY "sk-your-api-key-here"
+setx OAI_API_KEY "<your_api_key>"
 setx OAI_BASE_URL "http://host.docker.internal:8045/v1"
 ```
 重啟 VS Code 後即可生效。
@@ -145,16 +175,17 @@ setx OAI_BASE_URL "http://host.docker.internal:8045/v1"
 cp ifp.env.example ifp.env
 
 # 編輯 ifp.env，填入金鑰
-OAI_API_KEY=sk-your-api-key-here
+OAI_API_KEY=<your_api_key>
 OAI_BASE_URL=http://host.docker.internal:8045/v1
 ```
 
 **方式 3：Dev Container 啟動時注入（推薦用於容器）**
-在 `.devcontainer/devcontainer.json` 的 `remoteEnv` 加入：
+本 repo 已在 `.devcontainer/devcontainer.json` 設定 `remoteEnv`（從本機環境變數注入到容器）：
 ```json
 "remoteEnv": {
   "OAI_API_KEY": "${localEnv:OAI_API_KEY}",
-  "OAI_BASE_URL": "${localEnv:OAI_BASE_URL}"
+  "OAI_BASE_URL": "${localEnv:OAI_BASE_URL}",
+  "OPENROUTER_API_KEY": "${localEnv:OPENROUTER_API_KEY}"
 }
 ```
 

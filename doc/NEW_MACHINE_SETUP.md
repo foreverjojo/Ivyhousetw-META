@@ -22,6 +22,12 @@
 4. 容器建立完後會自動執行依賴安裝（`.devcontainer/devcontainer.json` 的 `postCreateCommand`）
 
 > 如果你看到依賴安裝失敗，請先確認 `uv.lock` 是否存在且已進版控；否則會走 `requirements.txt` 路徑。
+>
+> ✅ 建議在新電腦先跑一次可機械化檢查（不修改系統）：
+> - `python scripts/portable/verify_restore_state.py`
+
+> 若你要追求容器層「完全一致」：portable 腳本會自動執行 `pin_devcontainer_image.py`，或你也可手動執行：
+> - `python scripts/portable/pin_devcontainer_image.py`
 
 ## 3) 啟動本機開發（容器內）
 
@@ -41,6 +47,8 @@
 
 1. 在新電腦複製 `ifp.env.example` → `ifp.env`，填入非敏感的設定（API Key 請走 Secret Manager 或 OS 環境變數）。
 2. `GOOGLE_APPLICATION_CREDENTIALS` 指向 `secrets/your-service-account-key.json`（檔案用安全方式移轉，不要丟到 Git）。
+
+> 容器內環境變數注入：本 repo 已在 `.devcontainer/devcontainer.json` 設定 `remoteEnv`（從本機 `localEnv` 注入）。
 
 ## 5) 建議：避免把本機環境資料夾當成「可重現」
 

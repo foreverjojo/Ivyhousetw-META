@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+ARG BASE_IMAGE=python:3.11.11-slim-bookworm
+FROM ${BASE_IMAGE}
 
 # ---- System deps (git/curl + common libs for tooling & Playwright) ----
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -11,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # ---- Python tooling ----
-RUN python -m pip install --no-cache-dir uv
+ARG UV_VERSION=0.5.24
+RUN python -m pip install --no-cache-dir "uv==${UV_VERSION}"
 
 # ---- Create vscode user (matches Dev Containers convention) ----
 ARG USERNAME=vscode

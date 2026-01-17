@@ -31,8 +31,12 @@ apt_install_docker_optional() {
   require_sudo
   echo "Installing Docker (docker.io) via apt..."
   sudo apt-get install -y docker.io
+  echo "[INFO] Starting Docker daemon..."
+  sudo systemctl enable --now docker || true
   echo "[INFO] You may need to add your user to the docker group:"
   echo "       sudo usermod -aG docker $USER && newgrp docker"
+  echo "[INFO] Quick check: docker version (may require re-login if group changed)"
+  docker version >/dev/null 2>&1 || true
 }
 
 install_vscode_optional() {
@@ -82,6 +86,11 @@ apt_install_base
 apt_install_docker_optional
 install_vscode_optional
 clone_or_update_repo
+
+if [[ -f "$repo_path/scripts/portable/pin_devcontainer_image.py" ]]; then
+  echo "Pinning Dev Container image (GHCR)..."
+  python3 "$repo_path/scripts/portable/pin_devcontainer_image.py" || true
+fi
 install_extensions
 
 echo "Done. Next steps:"

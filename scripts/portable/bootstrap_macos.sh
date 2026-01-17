@@ -70,6 +70,8 @@ install_tools() {
 
   if [[ "$SKIP_DOCKER" != "1" ]]; then
     brew install --cask docker
+    echo "[INFO] Docker Desktop installed. Please open Docker once to complete setup:"
+    echo "       open -a Docker"
   fi
 }
 
@@ -81,6 +83,11 @@ install_extensions() {
 
 install_tools
 clone_or_update_repo
+
+if [[ -f "$repo_path/scripts/portable/pin_devcontainer_image.py" ]]; then
+  echo "Pinning Dev Container image (GHCR)..."
+  python3 "$repo_path/scripts/portable/pin_devcontainer_image.py" || true
+fi
 install_extensions
 
 echo "Done. Next steps:"

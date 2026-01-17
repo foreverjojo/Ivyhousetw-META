@@ -27,6 +27,35 @@ function Assert-Winget {
   }
 }
 
+function Print-Preflight {
+  Write-Host "=== Preflight Checks (Windows) ==="
+  Write-Host "- Docker Desktop requires virtualization + WSL2 backend (recommended)."
+  Write-Host "- Dev Containers requires VS Code + Dev Containers extension + Docker running."
+  Write-Host ""
+
+  try {
+    $sys = systeminfo 2>$null
+    if ($sys) {
+      $virt = $sys | Select-String -Pattern "Virtualization Enabled In Firmware" -SimpleMatch
+      if ($virt) { Write-Host $virt.Line }
+      $hv = $sys | Select-String -Pattern "Hyper-V Requirements" -SimpleMatch
+      if ($hv) { Write-Host $hv.Line }
+    }
+  } catch { }
+
+  if (Get-Command wsl -ErrorAction SilentlyContinue) {
+    try {
+      Write-Host "`nWSL status:"
+      wsl --status
+    } catch {
+      Write-Host "[WARN] wsl exists but 'wsl --status' failed. You may need to enable WSL2 features and reboot."
+    }
+  } else {
+    Write-Host "`n[WARN] WSL not found. Recommended: run 'wsl --install' then reboot."
+  }
+  Write-Host ""
+}
+
 function Ensure-Folder([string]$path) {
   if (!(Test-Path $path)) { New-Item -ItemType Directory -Path $path | Out-Null }
 }
@@ -86,6 +115,7 @@ function Winget-Install([string]$id, [string]$name) {
 
 Assert-Admin
 Assert-Winget
+Print-Preflight
 
 Winget-Install -id "Microsoft.VisualStudioCode" -name "VS Code"
 Winget-Install -id "Git.Git" -name "Git"
@@ -98,13 +128,37 @@ if (-not $SkipDocker) {
 $repoPath = Get-RepoPath
 Ensure-Repo $repoPath
 
+$pinScript = Join-Path $repoPath "scripts\portable\pin_devcontainer_image.py"
+if (Test-Path $pinScript) {
+  try {
+    Write-Host "Pinning Dev Container image (GHCR)..."
+    python $pinScript
+  } catch {
+    Write-Host "[WARN] Failed to pin devcontainer image. You can run later:"
+    Write-Host "       python scripts\\portable\\pin_devcontainer_image.py"
+  }
+}
+
 $extInstaller = Join-Path $repoPath "scripts\portable\install_extensions.ps1"
 if (Test-Path $extInstaller) {
   Write-Host "Installing VS Code extensions..."
   powershell -ExecutionPolicy Bypass -File $extInstaller -RepoRoot $repoPath
 }
 
+if (-not $SkipDocker) {
+  if (Get-Command docker -ErrorAction SilentlyContinue) {
+    Write-Host "`nDocker check:"
+    try { docker version | Out-Null } catch { Write-Host "[WARN] 'docker version' failed. Please open Docker Desktop and wait until it's running." }
+  } else {
+    Write-Host "`n[WARN] Docker CLI not found yet. Please open Docker Desktop once and wait for initialization."
+  }
+}
+
 Write-Host "Done. Next steps:"
 Write-Host "- Open the repo in VS Code: code $repoPath"
 Write-Host "- Then: Dev Containers: Reopen in Container"
 Write-Host "If 'code' is not recognized, restart your terminal and open VS Code once."
+Write-Host ""
+Write-Host "Recommended verification:"
+Write-Host "- python scripts\\portable\\check_extensions_consistency.py --verbose"
+Write-Host "- (inside container) uv sync --frozen"

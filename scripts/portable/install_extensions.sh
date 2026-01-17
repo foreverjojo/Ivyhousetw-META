@@ -17,8 +17,10 @@ elif [[ -x "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code
 fi
 
 if [[ -z "$code_cmd" ]]; then
-  echo "[ERROR] VS Code command not found." >&2
-  exit 1
+  echo "[WARN] VS Code command not found; skipping extension installation." >&2
+  echo "       - Install VS Code from https://code.visualstudio.com/" >&2
+  echo "       - Open VS Code once, then re-run this script." >&2
+  exit 0
 fi
 
 mapfile -t exts < <(python3 - <<'PY'
