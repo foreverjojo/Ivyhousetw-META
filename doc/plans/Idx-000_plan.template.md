@@ -12,6 +12,68 @@
 
 ---
 
+## 📋 SPEC
+
+### Goal
+[任務的主要目標，一句話總結]
+
+### Non-goals
+[明確排除的範圍，避免 scope 漂移]
+- ❌ 不做：[具體排除項目]
+
+### Acceptance Criteria
+[可驗收的條件清單]
+1. ✅ [驗收條件 1]
+2. ✅ [驗收條件 2]
+
+### Edge cases
+[需要處理的邊界情況]
+- [邊界情況 1] → [處理方式]
+
+---
+
+## 🔍 RESEARCH & ASSUMPTIONS
+
+> Planner 在此用 `research_required: true/false` 做出明確標記。
+> 若 `research_required: true`，則必須補齊 Sources/Assumptions（Link-required；無來源則標註 `RISK: unverified`）。
+
+research_required: [true|false]
+
+### Sources
+[僅限 user 提供的官方連結或 repo 內文檔]
+- [官方文檔連結]
+- [repo 內參考文件路徑]
+
+### Assumptions
+[若無可驗證來源，列出假設並標注風險]
+- ⚠️ RISK: unverified - [假設內容]
+- ✅ VERIFIED - [已驗證的假設]
+
+---
+
+## 🔒 SCOPE & CONSTRAINTS
+
+### File whitelist
+[允許變更的文件/目錄清單]
+- `path/to/file.py` - [變更原因]
+- `path/to/dir/**` - [批次變更原因]
+
+### Done 定義
+[完成條件，用於判定任務是否完成]
+1. ✅ [條件 1]
+2. ✅ [條件 2]
+
+### Rollback 策略
+- **Level**: [L1|L2|L3|L4]
+- **前置條件**: [執行前必須滿足的條件]
+- **回滾動作**: [具體回滾命令或步驟]
+
+### Max rounds
+- **估計**: [預估執行回合數]
+- **超過處理**: [超過時的處理方式]
+
+---
+
 ## 📁 檔案變更
 
 | 檔案 | 動作 | 說明 |
@@ -48,45 +110,67 @@
 ## 🔧 執行資訊
 
 <!-- EXECUTION_BLOCK_START -->
-executor_tool: [待用戶確認: copilot|codex-cli|opencode]
+# Plan 狀態
+plan_created: [YYYY-MM-DD HH:mm:ss]
+plan_approved: [YYYY-MM-DD HH:mm:ss]
+scope_policy: [strict|flexible]
+expert_required: [true|false]
+expert_conclusion: [N/A|結論摘要]
+scope_exceptions: []
+
+# Engineer 執行
+executor_tool: [待用戶確認: codex-cli|opencode]
 executor_tool_version: [version number]
 executor_user: [github-account or email]
 executor_start: [執行開始時間]
 executor_end: [執行結束時間]
 session_id: [terminal session ID if available]
-qa_tool: [待用戶確認: copilot|codex-cli|opencode]
+last_change_tool: [codex-cli|opencode]
+
+# QA 執行
+qa_tool: [待用戶確認: codex-cli|opencode]
 qa_tool_version: [version number]
 qa_user: [github-account or email]
 qa_start: [QA 開始時間]
+qa_end: [QA 結束時間]
 qa_result: [PASS|PASS_WITH_RISK|FAIL]
+qa_compliance: [✅ 符合|⚠️ 例外：原因]
+
+# 收尾
+log_file_path: [doc/logs/Idx-XXX_log.md]
+commit_hash: [pending|hash]
+rollback_at: [N/A|YYYY-MM-DD HH:mm:ss]
+rollback_reason: [N/A|原因]
+rollback_files: [N/A|檔案清單]
 <!-- EXECUTION_BLOCK_END -->
+
+> ⚠️ **注意**：`last_change_tool` 只允許 `codex-cli` 或 `opencode`，不含 `copilot`（Copilot 固定為 Coordinator，不做實作）。
 
 ### 執行模式建議
 
 | 工具 | 適用場景 | 優勢 | 限制 | 需要監控 |
 |------|---------|------|------|----------|
-| **Copilot** | 互動式開發、複雜邏輯重構、需即時反饋 | 內建監控、即時回應、上下文理解強 | 執行速度較慢 | ❌ 否 |
-| **Codex CLI** | 批次檔案操作、模板化工作、大規模重構 | 執行速度快、支援批次操作 | 需要外部監控、無即時反饋 | ✅ 是 |
-| **OpenCode** | 需要 captured output、複雜指令執行 | 強大的 terminal 整合、output 監控 | 需要學習曲線、設定較複雜 | ✅ 是 |
+| **GitHub Copilot Chat（Coordinator）** | 目標確認、分派、更新 Plan/Log | VS Code 內建 `terminal.sendText` 注入 + Proposed API 監控 | 不直接執行/QA（由終端工具負責） | ✅ 是 |
+| **Codex CLI（VS Code Terminal）** | 批次檔案操作、模板化工作、大規模重構 | 執行速度快、適合批次 | 需由 Coordinator 注入/監控 | ✅ 是 |
+| **OpenCode CLI（VS Code Terminal）** | 需要互動式終端操作/實跑指令 | 終端整合強、適合互動 | 需由 Coordinator 注入/監控 | ✅ 是 |
 
 ### QA 模式建議
 
 | Executor Tool | 建議 QA Tool | 理由 |
 |---------------|--------------|------|
-| Copilot | Codex CLI / OpenCode | 自動化 QA 可驗證 Copilot 產出的語法正確性 |
-| Codex CLI | Copilot / OpenCode | Copilot 可提供語意檢查，OpenCode 可驗證執行結果 |
-| OpenCode | Copilot / Codex CLI | Copilot 可提供程式碼審查，Codex CLI 可批次驗證 |
+| Codex CLI | OpenCode | 避免同工具自審，保留交叉驗證 |
+| OpenCode | Codex CLI | 避免同工具自審，保留交叉驗證 |
 
 **Cross-QA 例外情況**：
 
 | 例外類型 | 條件 | 審批流程 | 記錄格式 |
 |---------|------|---------|----------|
-| **小修正** | ≤20 行程式碼變更 | 1. Copilot 詢問用戶確認<br/>2. 用戶明確回覆「允許」<br/>3. 記錄變更行數 | `QA Compliance: ⚠️ 例外（小修正）- 變更：[X 行] - 用戶：已確認` |
-| **緊急修復** | P0 級別 bug<br/>影響生產環境 | 1. 確認優先級為 P0<br/>2. 用戶說明緊急原因<br/>3. 記錄 issue/ticket 編號 | `QA Compliance: ⚠️ 例外（緊急修復）- Issue: [#NNN] - 理由：[說明]` |
-| **文件修正** | 無程式碼變更<br/>僅修改 .md/.txt | 自動豁免<br/>無需用戶確認 | `QA Compliance: ✅ 豁免（文件修正）- 檔案：[列表]` |
+| **小修正** | ≤20 行程式碼變更 | 1. Copilot 詢問用戶確認<br/>2. 用戶明確回覆「允許」<br/>3. 記錄變更行數 | `qa_compliance: ⚠️ 例外（小修正）- 變更：[X 行] - 用戶：已確認` |
+| **緊急修復** | P0 級別 bug<br/>影響生產環境 | 1. 確認優先級為 P0<br/>2. 用戶說明緊急原因<br/>3. 記錄 issue/ticket 編號 | `qa_compliance: ⚠️ 例外（緊急修復）- Issue: [#NNN] - 理由：[說明]` |
+| **文件修正** | 無程式碼變更<br/>僅修改 .md/.txt | 自動豁免<br/>無需用戶確認 | `qa_compliance: ✅ 豁免（文件修正）- 檔案：[列表]` |
 
 **違規處理流程**：
-1. QA 工具檢測到 `executor_tool == qa_tool`
+1. QA 工具檢測到 `last_change_tool == qa_tool`（或舊版 fallback：`executor_tool == qa_tool`）
 2. 檢查是否符合例外條件（小修正/緊急修復/文件修正）
 3. 若不符合例外，**拒絕執行** QA 並要求用戶重新選擇工具
 4. 若符合例外，詢問用戶確認並記錄到 plan 的 EXECUTION_BLOCK
@@ -98,7 +182,7 @@ qa_result: [PASS|PASS_WITH_RISK|FAIL]
 
 **L1 (自我修正)**: Engineer 發現錯誤，立即修正
 
-**L2 (腳本回滾)**: 執行失敗時自動觸發（僅限 `execution: codex-cli`）
+**L2 (回滾建議)**: 執行失敗/超範圍時提供回滾建議（任何破壞性操作必須用戶明確確認）
   - 前置條件：乾淨 worktree（`git status --porcelain` 為空）
   - 回滾動作：
     - 還原 tracked 變更：`git restore --worktree --staged -- .`
@@ -123,10 +207,12 @@ qa_result: [PASS|PASS_WITH_RISK|FAIL]
 > 🛑 **必要停頓點**：Planner 產出 Spec 後，必須等待用戶確認才能進入 Step 2。
 
 - [ ] Spec 已確認，可進入 Step 2 (Meta Expert)
-- [ ] 執行工具已選擇：`[copilot|codex-cli]`
+- [ ] Engineer Tool 已選擇：`[codex-cli|opencode]`（並已寫入 EXECUTION_BLOCK）
+- [ ] QA Tool 已選擇：`[codex-cli|opencode]`（必須 ≠ last_change_tool，並已寫入 EXECUTION_BLOCK）
 - [ ] Terminal 管理策略已確認
 
 ---
 
-**Template Version**: 2.1.0
-**Last Updated**: 2026-01-13
+**Template Version**: 2.3.0
+**Last Updated**: 2026-01-17
+**Synced With**: .agent/roles/coordinator.md v1.4.0

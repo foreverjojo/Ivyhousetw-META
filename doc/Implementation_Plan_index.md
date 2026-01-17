@@ -21,6 +21,7 @@
 | Idx-007 | 補齊 Plan.md 產出規範 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v4 | `doc/logs/Idx-007_log.md` | 建立 plan template + 更新 workflow |
 | Idx-008 | 實現 Plan Summary + 完成後刪除 plan.md | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v5 | `doc/logs/Idx-008_log.md` | log template 加入 summary 區段 |
 | Idx-009 | Terminal 管理完整方案 | P0 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 2026-01-12-v1 | `doc/logs/Idx-009_log.md` | Terminal Manager + Codex CLI 整合 + Role Selection Gate |
+| Idx-010 | Agent Architecture Enhancement - Research/Reviewer/UI-UX Gates | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.3 | `doc/logs/Idx-010_log.md` | 三個條件式 Gate + 機械化判定規則 |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
@@ -109,7 +110,7 @@
 
 > [!IMPORTANT]
 > **工程補強優先級**：根據 Codex 專業團隊審計，系統性補強 7 大關鍵缺口。
-> 詳細內容請參閱：[工程補強計畫](file:///C:/Users/forev/.gemini/antigravity/brain/943d9e5e-52e6-4be3-965f-1193d4130cb0/engineering_reinforcement_plan.md) 與 [工程待辦清單](file:///C:/Users/forev/.gemini/antigravity/brain/943d9e5e-52e6-4be3-965f-1193d4130cb0/engineering_backlog.md)
+> 詳細內容請參閱下方「工程補強任務」章節。
 
 #### 🔴 P0: 立即執行（本週內）
 
@@ -295,7 +296,7 @@
 #### 🛠️ Agent Skill 擴充 (整合至 Workflow) - ⏳ 進行中
 
 > [!NOTE]
-> 詳細技能規格請參閱：[Agent Skills 執行方針](file:///c:/Users/forev/OneDrive/4-管理專用/Jonas/AI生成/廣告數據報告/ivyhousetw%20ad%20analyzer/Ivyhousetw-META/doc/agent_skills_execution_guideline.md)
+> 詳細技能規格請參閱：[Agent Skills 執行方針](doc/agent_skills_execution_guideline.md)
 
 ##### 🎯 Top 1：全漏斗指標樹診斷 (Metric Tree Diagnostic)
 - [X] 實作 `scripts/skills/metric_tree_diagnostic.py` ✅
