@@ -35,6 +35,7 @@ MOMO_COL_MAP = {
 
 # === 工具函式 ===
 
+
 def _read_momo_csv(path: Path) -> pd.DataFrame:
     """讀取 MOMO 報表 (支援 csv, xlsx, xls)。"""
     suffix = path.suffix.lower()
@@ -156,9 +157,9 @@ def _build_momo_record(
     # ID 策略
     record_id = raw_id
     if not record_id:
-         # Fallback for rows without ID but with name
-         raw_str = f"momo|{raw_name}|{time_range.get('start')}"
-         record_id = f"momo_fallback_{hashlib.sha1(raw_str.encode('utf-8')).hexdigest()[:10]}"
+        # Fallback for rows without ID but with name
+        raw_str = f"momo|{raw_name}|{time_range.get('start')}"
+        record_id = f"momo_fallback_{hashlib.sha1(raw_str.encode('utf-8')).hexdigest()[:10]}"
 
     return {
         "platform": "momo",
@@ -172,14 +173,10 @@ def _build_momo_record(
             "impressions": impressions,
             "clicks": clicks,
             "conversions": {
-                "truth": {"count": 0, "value": 0.0}, # MOMO 無直接轉換數據
+                "truth": {"count": 0, "value": 0.0},  # MOMO 無直接轉換數據
                 "platform": {"count": conv_count, "value": round(conv_value, 2)},
             },
-            "funnel": {
-                "atc": atc,
-                "ic": 0,
-                "lpv": 0
-            },
+            "funnel": {"atc": atc, "ic": 0, "lpv": 0},
         },
         "source": {
             "kind": "momo_ad_report",
@@ -190,6 +187,7 @@ def _build_momo_record(
 
 
 # === 主要轉換函式 ===
+
 
 def adapt_momo_ad_report(path: Path) -> Dict[str, Any]:
     """將 MOMO 報表轉換為 Unified Ad Data 格式。"""
@@ -216,11 +214,14 @@ def adapt_momo_ad_report(path: Path) -> Dict[str, Any]:
 
 # === CLI 入口 ===
 
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="MOMO ADS 報表 -> Unified Ad Data")
     p.add_argument("--input", type=Path, required=True, help="MOMO 報表檔案路徑 (csv/xlsx/xls)")
     p.add_argument("--out", type=Path, required=True, help="輸出 unified JSON 檔案路徑")
-    p.add_argument("--validate", action="store_true", help="輸出後用 schemas/unified_ad_data.json 驗證")
+    p.add_argument(
+        "--validate", action="store_true", help="輸出後用 schemas/unified_ad_data.json 驗證"
+    )
     args = p.parse_args(argv)
 
     payload = adapt_momo_ad_report(args.input)
@@ -232,6 +233,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.validate:
         from scripts.validator import validate_file
+
         validate_file(payload, schema_filename="unified_ad_data.json", label="unified_ad_data")
 
     return 0

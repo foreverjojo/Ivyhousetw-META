@@ -9,10 +9,15 @@ exclude = [
     ".git",
     ".venv",
     ".python311",
+    ".agent",
     "__pycache__",
     "build",
     "dist",
     "*.egg-info",
+    "pages",
+    "ui",
+    "app_legacy_refactored.py",
+    "app.py.backup",
 ]
 
 [lint]

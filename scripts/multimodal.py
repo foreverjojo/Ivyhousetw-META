@@ -69,7 +69,11 @@ def openrouter_multimodal_completion(
     - response_format：可傳入 "json_object" 或 dict（例如 {"type": "json_object"}）
     """
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") or "https://openrouter.ai/api/v1"
+    base_url = (
+        os.getenv("OPENAI_BASE_URL")
+        or os.getenv("OPENAI_API_BASE")
+        or "https://openrouter.ai/api/v1"
+    )
     url = base_url.rstrip("/") + "/chat/completions"
 
     if not api_key:

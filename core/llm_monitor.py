@@ -39,6 +39,7 @@ from core.config import TAIPEI_TZ
 @dataclass
 class LLMCall:
     """單次 LLM 呼叫記錄"""
+
     timestamp: str
     model: str
     prompt_tokens: int
@@ -138,11 +139,7 @@ class LLMMonitor:
         calls_by_model: Dict[str, Dict] = {}
         for call in calls:
             if call.model not in calls_by_model:
-                calls_by_model[call.model] = {
-                    "count": 0,
-                    "tokens": 0,
-                    "cost_usd": 0.0
-                }
+                calls_by_model[call.model] = {"count": 0, "tokens": 0, "cost_usd": 0.0}
             calls_by_model[call.model]["count"] += 1
             calls_by_model[call.model]["tokens"] += call.total_tokens
             calls_by_model[call.model]["cost_usd"] += call.cost_usd
@@ -151,11 +148,7 @@ class LLMMonitor:
         calls_by_function: Dict[str, Dict] = {}
         for call in calls:
             if call.function not in calls_by_function:
-                calls_by_function[call.function] = {
-                    "count": 0,
-                    "tokens": 0,
-                    "cost_usd": 0.0
-                }
+                calls_by_function[call.function] = {"count": 0, "tokens": 0, "cost_usd": 0.0}
             calls_by_function[call.function]["count"] += 1
             calls_by_function[call.function]["tokens"] += call.total_tokens
             calls_by_function[call.function]["cost_usd"] += call.cost_usd

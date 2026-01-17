@@ -35,6 +35,7 @@ TASK_PATTERN = re.compile(r"^(\s*)-\s*\[([ x/])\]\s*(.+)$", re.MULTILINE)
 @dataclass
 class TaskItem:
     """單一任務項目"""
+
     indent: str
     status: str  # ' '=未開始, 'x'=完成, '/'=進行中
     text: str
@@ -55,6 +56,7 @@ class TaskItem:
 @dataclass
 class TaskSummary:
     """任務統計摘要"""
+
     completed: int = 0
     in_progress: int = 0
     pending: int = 0
@@ -67,6 +69,7 @@ class TaskSummary:
 @dataclass
 class PrepResult:
     """準備結果"""
+
     success: bool = False
     backup_path: Optional[Path] = None
     tasks_updated: int = 0
@@ -79,6 +82,7 @@ class PrepResult:
 # ---------------------------------------------------------------------------
 # 檔案與解析工具
 # ---------------------------------------------------------------------------
+
 
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
@@ -114,11 +118,7 @@ def safe_write_file(path: Path, content: str) -> Tuple[bool, Optional[str]]:
         ensure_dir(path.parent)
 
         # Step 1: 建立暫存檔 (同目錄以確保同一檔案系統)
-        fd, tmp_path = tempfile.mkstemp(
-            suffix=".tmp",
-            prefix=f".{path.stem}_",
-            dir=path.parent
-        )
+        fd, tmp_path = tempfile.mkstemp(suffix=".tmp", prefix=f".{path.stem}_", dir=path.parent)
         tmp_file = Path(tmp_path)
 
         # Step 2: 寫入內容並 fsync
@@ -198,6 +198,7 @@ def update_task_in_content(content: str, task: TaskItem, new_status: str) -> str
 # 互動功能
 # ---------------------------------------------------------------------------
 
+
 def prompt_user(message: str, options: List[str], default: int = 1) -> int:
     print(f"\n{message}")
     for i, opt in enumerate(options, 1):
@@ -232,6 +233,7 @@ def prompt_yes_no(message: str, default: bool = True) -> bool:
 # ---------------------------------------------------------------------------
 # 核心功能
 # ---------------------------------------------------------------------------
+
 
 def interactive_update_tasks(content: str) -> Tuple[str, int]:
     """互動式更新進行中的任務"""
@@ -316,12 +318,17 @@ def generate_handover(task_content: Optional[str], walkthrough_content: Optional
         summary = TaskSummary()
         pending_tasks = []
 
-    next_steps = "\n".join(f"- [ ] {t.text}" for t in pending_tasks) if pending_tasks else "- 所有任務已完成"
+    next_steps = (
+        "\n".join(f"- [ ] {t.text}" for t in pending_tasks) if pending_tasks else "- 所有任務已完成"
+    )
 
     known_issues = "None"
     if task_content:
-        issues = [f"- {ln.strip()}" for ln in task_content.split("\n")
-                  if any(kw in ln.upper() for kw in ["ISSUE", "BUG", "FIXME", "問題"])]
+        issues = [
+            f"- {ln.strip()}"
+            for ln in task_content.split("\n")
+            if any(kw in ln.upper() for kw in ["ISSUE", "BUG", "FIXME", "問題"])
+        ]
         if issues:
             known_issues = "\n".join(issues)
 
@@ -359,6 +366,7 @@ def generate_handover(task_content: Optional[str], walkthrough_content: Optional
 # ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
+
 
 def run_reset_memory_prep(
     project_root: Optional[Path] = None, interactive: bool = True
@@ -426,7 +434,9 @@ def run_reset_memory_prep(
     # Step 3: 更新 walkthrough.md
     print("\n[Step 3/4] 同步 walkthrough.md...")
     if interactive:
-        walkthrough_content, wt_updated = interactive_update_walkthrough(task_content, walkthrough_content)
+        walkthrough_content, wt_updated = interactive_update_walkthrough(
+            task_content, walkthrough_content
+        )
         result.walkthrough_updated = wt_updated
         if wt_updated > 0:
             success, write_err = safe_write_file(walkthrough_file, walkthrough_content)
@@ -469,12 +479,15 @@ def run_reset_memory_prep(
 
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser(description="記憶重置準備 - 生成交接文件")
     parser.add_argument("--project-root", type=Path, default=None, help="專案根目錄")
     parser.add_argument("--non-interactive", action="store_true", help="非互動模式")
     args = parser.parse_args()
 
-    result = run_reset_memory_prep(project_root=args.project_root, interactive=not args.non_interactive)
+    result = run_reset_memory_prep(
+        project_root=args.project_root, interactive=not args.non_interactive
+    )
     exit(0 if result.success else 1)
 
 

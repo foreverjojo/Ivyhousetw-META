@@ -26,15 +26,32 @@ from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse
 import subprocess
 
-# HTTP 請求套件
-try:
-    import requests
-except ImportError:
-    print(json.dumps({
-        "status": "error",
-        "message": "缺少 requests 套件，請執行：pip install requests"
-    }, ensure_ascii=False, indent=2))
-    sys.exit(1)
+def validate_output_schema(result: Dict[str, Any], skill_name: str) -> Dict[str, Any]:
+    """可選 JSON Schema 驗證（graceful degradation）"""
+    try:
+        import jsonschema
+    except ImportError:
+        return result
+
+    schema_path = Path(__file__).resolve().parent / "schemas" / f"{skill_name}_output.schema.json"
+    if not schema_path.exists():
+        return result
+
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(result, schema)
+        return result
+    except jsonschema.ValidationError as exc:
+        result["validation_errors"] = [
+            {"message": exc.message, "path": list(exc.path), "schema_path": list(exc.schema_path)}
+        ]
+        result.setdefault(
+            "suggestion",
+            f"輸出格式不符合 schema 規範。請檢查 {skill_name}_output.schema.json 並確認欄位正確性。",
+        )
+        return result
+    except Exception:
+        return result
 
 
 # =========================
@@ -295,6 +312,16 @@ def search_github_skills(keyword: str) -> Dict[str, Any]:
     回傳:
         包含搜尋結果的 JSON 物件
     """
+    try:
+        import requests
+    except ImportError:
+        return {
+            "status": "error",
+            "message": "缺少 requests 套件，無法執行 GitHub 搜尋",
+            "suggestion": "請先安裝 requests，例如：pip install requests",
+            "usage": "python .agent/skills/github_explorer.py search <keyword>",
+        }
+
     # 搜尋含有 SKILL.md 檔案的 Repo
     query = f"{keyword} filename:SKILL.md"
     url = f"{GITHUB_API_BASE}/search/code"
@@ -396,6 +423,16 @@ def preview_skill(repo_url: str, skill_path: str = "SKILL.md") -> Dict[str, Any]
     回傳:
         包含 SKILL.md 內容的 JSON 物件
     """
+    try:
+        import requests
+    except ImportError:
+        return {
+            "status": "error",
+            "message": "缺少 requests 套件，無法執行 GitHub 預覽",
+            "suggestion": "請先安裝 requests，例如：pip install requests",
+            "usage": "python .agent/skills/github_explorer.py preview <repo_url> [skill_path]",
+        }
+
     # 解析 repo_url 取得 owner/repo
     if repo_url.startswith("http"):
         parsed = urlparse(repo_url)
@@ -466,6 +503,16 @@ def download_skill(
             "status": "blocked",
             "message": "⛔ 安全機制啟動：下載前必須先執行 preview 並取得使用者確認",
             "action_required": "請先使用 preview 指令查看內容，確認無安全疑慮後再下載"
+        }
+
+    try:
+        import requests
+    except ImportError:
+        return {
+            "status": "error",
+            "message": "缺少 requests 套件，無法執行 GitHub 下載",
+            "suggestion": "請先安裝 requests，例如：pip install requests",
+            "usage": "python .agent/skills/github_explorer.py download <repo_url> <file_path> --confirm",
         }
 
     # 解析 repo_url
@@ -714,7 +761,8 @@ def list_local_skills() -> Dict[str, Any]:
         "status": "success",
         "skills_dir": str(SKILLS_DIR),
         "count": len(skills),
-        "skills": skills
+        "skills": skills,
+        "message": f"共 {len(skills)} 個本地技能",
     }
 
 
@@ -724,53 +772,70 @@ def list_local_skills() -> Dict[str, Any]:
 def main():
     """主程式入口"""
     if len(sys.argv) < 2:
-        print(json.dumps({
-            "status": "help",
-            "message": "GitHub 技能搜尋與下載工具",
+        result = {
+            "status": "success",
+            "message": "GitHub 技能搜尋與下載工具（使用說明）",
+            "help": True,
             "usage": {
-                "search": "python github_explorer.py search <keyword>",
-                "preview": "python github_explorer.py preview <repo_url> [skill_path]",
-                "download": "python github_explorer.py download <repo_url> <file_path> --confirm",
-                "list": "python github_explorer.py list",
-                "rollback": "python github_explorer.py rollback <skill_name>"
+                "search": "python .agent/skills/github_explorer.py search <keyword>",
+                "preview": "python .agent/skills/github_explorer.py preview <repo_url> [skill_path]",
+                "download": "python .agent/skills/github_explorer.py download <repo_url> <file_path> --confirm",
+                "list": "python .agent/skills/github_explorer.py list",
+                "rollback": "python .agent/skills/github_explorer.py rollback <skill_name>",
             },
-            "security_note": "⚠️ 下載前必須先 preview 並取得使用者確認"
-        }, ensure_ascii=False, indent=2))
+            "security_note": "下載前必須先 preview 並取得使用者確認",
+        }
+        result = validate_output_schema(result, "github_explorer")
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         sys.exit(0)
 
     command = sys.argv[1].lower()
 
     if command == "search":
         if len(sys.argv) < 3:
-            print(json.dumps({
+            result = {
                 "status": "error",
-                "message": "請提供搜尋關鍵字。範例：python github_explorer.py search crewai"
-            }, ensure_ascii=False, indent=2))
+                "message": "請提供搜尋關鍵字",
+                "usage": "python .agent/skills/github_explorer.py search <keyword>",
+                "suggestion": "範例：python .agent/skills/github_explorer.py search crewai",
+            }
+            result = validate_output_schema(result, "github_explorer")
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             sys.exit(1)
 
         keyword = " ".join(sys.argv[2:])
         result = search_github_skills(keyword)
+        result = validate_output_schema(result, "github_explorer")
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
     elif command == "preview":
         if len(sys.argv) < 3:
-            print(json.dumps({
+            result = {
                 "status": "error",
-                "message": "請提供 Repo URL。範例：python github_explorer.py preview owner/repo"
-            }, ensure_ascii=False, indent=2))
+                "message": "請提供 Repo URL",
+                "usage": "python .agent/skills/github_explorer.py preview <repo_url> [skill_path]",
+                "suggestion": "範例：python .agent/skills/github_explorer.py preview owner/repo",
+            }
+            result = validate_output_schema(result, "github_explorer")
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             sys.exit(1)
 
         repo_url = sys.argv[2]
         skill_path = sys.argv[3] if len(sys.argv) > 3 else "SKILL.md"
         result = preview_skill(repo_url, skill_path)
+        result = validate_output_schema(result, "github_explorer")
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
     elif command == "download":
         if len(sys.argv) < 4:
-            print(json.dumps({
+            result = {
                 "status": "error",
-                "message": "請提供 Repo URL 與檔案路徑。範例：python github_explorer.py download owner/repo SKILL.md --confirm"
-            }, ensure_ascii=False, indent=2))
+                "message": "請提供 Repo URL 與檔案路徑",
+                "usage": "python .agent/skills/github_explorer.py download <repo_url> <file_path> --confirm",
+                "suggestion": "範例：python .agent/skills/github_explorer.py download owner/repo SKILL.md --confirm",
+            }
+            result = validate_output_schema(result, "github_explorer")
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             sys.exit(1)
 
         repo_url = sys.argv[2]
@@ -778,30 +843,41 @@ def main():
         user_confirmed = "--confirm" in sys.argv
 
         result = download_skill(repo_url, file_path, user_confirmed=user_confirmed)
+        result = validate_output_schema(result, "github_explorer")
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
     elif command == "list":
         result = list_local_skills()
+        result = validate_output_schema(result, "github_explorer")
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
     elif command == "rollback":
         if len(sys.argv) < 3:
-            print(json.dumps({
+            result = {
                 "status": "error",
-                "message": "請提供技能名稱。範例：python github_explorer.py rollback example_skill"
-            }, ensure_ascii=False, indent=2))
+                "message": "請提供技能名稱",
+                "usage": "python .agent/skills/github_explorer.py rollback <skill_name>",
+                "suggestion": "範例：python .agent/skills/github_explorer.py rollback example_skill",
+            }
+            result = validate_output_schema(result, "github_explorer")
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             sys.exit(1)
 
         skill_name = sys.argv[2]
         result = rollback_skill(skill_name)
+        result = validate_output_schema(result, "github_explorer")
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
     else:
-        print(json.dumps({
+        result = {
             "status": "error",
             "message": f"未知指令：{command}",
-            "available_commands": ["search", "preview", "download", "list", "rollback"]
-        }, ensure_ascii=False, indent=2))
+            "available_commands": ["search", "preview", "download", "list", "rollback"],
+            "usage": "python .agent/skills/github_explorer.py <command> [args]",
+            "suggestion": "請先執行：python .agent/skills/github_explorer.py 以查看使用說明。",
+        }
+        result = validate_output_schema(result, "github_explorer")
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         sys.exit(1)
 
 

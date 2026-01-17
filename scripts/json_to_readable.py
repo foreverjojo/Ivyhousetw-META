@@ -402,15 +402,15 @@ def _format_value(value: Any) -> str:
 
     if isinstance(value, float):
         if value >= 1000000:
-            return f"{value/1000000:.2f}M"
+            return f"{value / 1000000:.2f}M"
         elif value >= 1000:
-            return f"{value/1000:.1f}K"
+            return f"{value / 1000:.1f}K"
         else:
             return f"{value:.2f}"
 
     if isinstance(value, int):
         if value >= 1000000:
-            return f"{value/1000000:.2f}M"
+            return f"{value / 1000000:.2f}M"
         elif value >= 1000:
             return f"{value:,}"
         else:

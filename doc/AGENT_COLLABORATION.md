@@ -5,7 +5,7 @@
 ### 🚩 總司令：Antigravity (IDE Agent)
 - **職責**：理解 `ivy_house_rules.md`、維護 `Implementation_Plan.md`、撰寫 `Dev Spec`、執行 QA。
 - **特點**：具備全域視角，擁有最強的邏輯檢查能力。
-- **任務觸發**：對話框輸入、`/dev-team` 工作流。
+- **任務觸發**：對話框輸入、`/dev`（相容 `/dev-team`）工作流。
 
 ### 🔫 前線士兵：Codex CLI (Terminal)
 - **職責**：根據 Spec 執行代碼撰寫、重構、存檔。

@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from scripts.skills import build_standard_skill_contract
+
 
 def _to_float(x: Any) -> float:
     """安全轉換為浮點數"""
@@ -41,18 +43,20 @@ def _safe_div(num: float, den: float) -> Optional[float]:
 @dataclass(frozen=True)
 class FatigueThresholds:
     """素材疲乏偵測門檻值"""
-    frequency_fatigue: float = 2.5          # 頻率超過此值視為疲乏風險
-    ctr_below_avg_ratio: float = 0.8        # CTR 低於平均的比例閾值
-    hook_rate_min: float = 0.15             # 最低 Hook Rate（3秒觀看/曝光）
-    hold_rate_min: float = 0.05             # 最低 Hold Rate（完整觀看/曝光）
+
+    frequency_fatigue: float = 2.5  # 頻率超過此值視為疲乏風險
+    ctr_below_avg_ratio: float = 0.8  # CTR 低於平均的比例閾值
+    hook_rate_min: float = 0.15  # 最低 Hook Rate（3秒觀看/曝光）
+    hold_rate_min: float = 0.05  # 最低 Hold Rate（完整觀看/曝光）
     high_potential_hook_rate: float = 0.25  # 高潛力素材 Hook Rate 閾值
     high_potential_hold_rate: float = 0.10  # 高潛力素材 Hold Rate 閾值
-    min_impressions: int = 1000             # 最低曝光數（避免樣本過小）
+    min_impressions: int = 1000  # 最低曝光數（避免樣本過小）
 
 
 @dataclass
 class AdMetrics:
     """單一廣告的計算指標"""
+
     ad_name: str
     ad_id: str = ""
     impressions: float = 0.0
@@ -147,7 +151,7 @@ def run_creative_fatigue_diagnostic(
         warnings.append(f"missing_fields: {', '.join(missing_fields)}")
 
     if not ads_df_records:
-        return {
+        output: Dict[str, Any] = {
             "skill_version": "creative_fatigue.v1",
             "triggered": False,
             "ads_analyzed": 0,
@@ -156,6 +160,33 @@ def run_creative_fatigue_diagnostic(
             "recommendations": ["請提供廣告層級資料以進行素材疲乏分析"],
             "warnings": warnings,
         }
+        output.update(
+            build_standard_skill_contract(
+                schema_version="skill_creative_fatigue_output.v1",
+                inputs={
+                    "week_id": report_summary.get("week_id"),
+                    "ads_records_count": len(ads_df_records),
+                },
+                thresholds={
+                    "frequency_fatigue": thresholds.frequency_fatigue,
+                    "ctr_below_avg_ratio": thresholds.ctr_below_avg_ratio,
+                    "hook_rate_min": thresholds.hook_rate_min,
+                    "hold_rate_min": thresholds.hold_rate_min,
+                    "high_potential_hook_rate": thresholds.high_potential_hook_rate,
+                    "high_potential_hold_rate": thresholds.high_potential_hold_rate,
+                    "min_impressions": thresholds.min_impressions,
+                },
+                results={
+                    "triggered": output.get("triggered"),
+                    "ads_analyzed": output.get("ads_analyzed"),
+                    "fatigue_ads": output.get("fatigue_ads"),
+                    "high_potential_ads": output.get("high_potential_ads"),
+                    "recommendations": output.get("recommendations"),
+                },
+                warnings=warnings,
+            )
+        )
+        return output
 
     # 提取所有廣告指標
     ad_metrics_list: List[AdMetrics] = []
@@ -165,7 +196,7 @@ def run_creative_fatigue_diagnostic(
             ad_metrics_list.append(metrics)
 
     if not ad_metrics_list:
-        return {
+        output = {
             "skill_version": "creative_fatigue.v1",
             "triggered": False,
             "ads_analyzed": 0,
@@ -174,6 +205,33 @@ def run_creative_fatigue_diagnostic(
             "recommendations": [f"沒有曝光數超過 {thresholds.min_impressions} 的廣告可供分析"],
             "warnings": warnings,
         }
+        output.update(
+            build_standard_skill_contract(
+                schema_version="skill_creative_fatigue_output.v1",
+                inputs={
+                    "week_id": report_summary.get("week_id"),
+                    "ads_records_count": len(ads_df_records),
+                },
+                thresholds={
+                    "frequency_fatigue": thresholds.frequency_fatigue,
+                    "ctr_below_avg_ratio": thresholds.ctr_below_avg_ratio,
+                    "hook_rate_min": thresholds.hook_rate_min,
+                    "hold_rate_min": thresholds.hold_rate_min,
+                    "high_potential_hook_rate": thresholds.high_potential_hook_rate,
+                    "high_potential_hold_rate": thresholds.high_potential_hold_rate,
+                    "min_impressions": thresholds.min_impressions,
+                },
+                results={
+                    "triggered": output.get("triggered"),
+                    "ads_analyzed": output.get("ads_analyzed"),
+                    "fatigue_ads": output.get("fatigue_ads"),
+                    "high_potential_ads": output.get("high_potential_ads"),
+                    "recommendations": output.get("recommendations"),
+                },
+                warnings=warnings,
+            )
+        )
+        return output
 
     # 計算平均 CTR（僅計入有值的廣告）
     valid_ctrs = [m.ctr for m in ad_metrics_list if m.ctr is not None and m.ctr > 0]
@@ -192,35 +250,45 @@ def run_creative_fatigue_diagnostic(
         )
 
         if is_fatigued:
-            fatigue_ads.append({
-                "ad_name": metrics.ad_name,
-                "ad_id": metrics.ad_id,
-                "frequency": round(metrics.frequency, 2),
-                "ctr_pct": round(metrics.ctr, 4) if metrics.ctr else None,
-                "avg_ctr_pct": round(avg_ctr, 4),
-                "impressions": int(metrics.impressions),
-                "hook_rate": round(metrics.hook_rate, 4) if metrics.hook_rate else None,
-                "hold_rate": round(metrics.hold_rate, 4) if metrics.hold_rate else None,
-                "reason": f"頻率 {metrics.frequency:.2f} > {thresholds.frequency_fatigue}，CTR {metrics.ctr:.2f}% < 平均 {avg_ctr:.2f}%",
-            })
+            fatigue_ads.append(
+                {
+                    "ad_name": metrics.ad_name,
+                    "ad_id": metrics.ad_id,
+                    "frequency": round(metrics.frequency, 2),
+                    "ctr_pct": round(metrics.ctr, 4) if metrics.ctr else None,
+                    "avg_ctr_pct": round(avg_ctr, 4),
+                    "impressions": int(metrics.impressions),
+                    "hook_rate": round(metrics.hook_rate, 4) if metrics.hook_rate else None,
+                    "hold_rate": round(metrics.hold_rate, 4) if metrics.hold_rate else None,
+                    "reason": f"頻率 {metrics.frequency:.2f} > {thresholds.frequency_fatigue}，CTR {metrics.ctr:.2f}% < 平均 {avg_ctr:.2f}%",
+                }
+            )
 
         # 高潛力判定：Hook Rate 或 Hold Rate 高
         has_video_metrics = metrics.hook_rate is not None or metrics.hold_rate is not None
         is_high_potential = has_video_metrics and (
-            (metrics.hook_rate is not None and metrics.hook_rate >= thresholds.high_potential_hook_rate)
-            or (metrics.hold_rate is not None and metrics.hold_rate >= thresholds.high_potential_hold_rate)
+            (
+                metrics.hook_rate is not None
+                and metrics.hook_rate >= thresholds.high_potential_hook_rate
+            )
+            or (
+                metrics.hold_rate is not None
+                and metrics.hold_rate >= thresholds.high_potential_hold_rate
+            )
         )
 
         if is_high_potential and not is_fatigued:
-            high_potential_ads.append({
-                "ad_name": metrics.ad_name,
-                "ad_id": metrics.ad_id,
-                "hook_rate": round(metrics.hook_rate, 4) if metrics.hook_rate else None,
-                "hold_rate": round(metrics.hold_rate, 4) if metrics.hold_rate else None,
-                "impressions": int(metrics.impressions),
-                "spend": round(metrics.spend, 2),
-                "reason": f"Hook Rate {(metrics.hook_rate or 0)*100:.1f}% / Hold Rate {(metrics.hold_rate or 0)*100:.1f}% 超過門檻",
-            })
+            high_potential_ads.append(
+                {
+                    "ad_name": metrics.ad_name,
+                    "ad_id": metrics.ad_id,
+                    "hook_rate": round(metrics.hook_rate, 4) if metrics.hook_rate else None,
+                    "hold_rate": round(metrics.hold_rate, 4) if metrics.hold_rate else None,
+                    "impressions": int(metrics.impressions),
+                    "spend": round(metrics.spend, 2),
+                    "reason": f"Hook Rate {(metrics.hook_rate or 0) * 100:.1f}% / Hold Rate {(metrics.hold_rate or 0) * 100:.1f}% 超過門檻",
+                }
+            )
 
     # 生成建議
     recommendations: List[str] = []
@@ -230,7 +298,9 @@ def run_creative_fatigue_diagnostic(
             f"發現 {len(fatigue_ads)} 則疲乏廣告（頻率>{thresholds.frequency_fatigue} 且 CTR<平均）"
             "，建議暫停或更換素材。"
         )
-        recommendations.append("疲乏素材可複製成新廣告並更換前 3 秒 Hook 或文案，避免持續消耗預算。")
+        recommendations.append(
+            "疲乏素材可複製成新廣告並更換前 3 秒 Hook 或文案，避免持續消耗預算。"
+        )
 
     if high_potential_ads:
         recommendations.append(
@@ -248,7 +318,7 @@ def run_creative_fatigue_diagnostic(
 
     triggered = len(fatigue_ads) > 0
 
-    return {
+    output = {
         "skill_version": "creative_fatigue.v1",
         "triggered": triggered,
         "ads_analyzed": len(ad_metrics_list),
@@ -257,6 +327,8 @@ def run_creative_fatigue_diagnostic(
             "ctr_below_avg_ratio": thresholds.ctr_below_avg_ratio,
             "hook_rate_min": thresholds.hook_rate_min,
             "hold_rate_min": thresholds.hold_rate_min,
+            "high_potential_hook_rate": thresholds.high_potential_hook_rate,
+            "high_potential_hold_rate": thresholds.high_potential_hold_rate,
             "min_impressions": thresholds.min_impressions,
         },
         "avg_ctr_pct": round(avg_ctr, 4) if avg_ctr > 0 else None,
@@ -265,3 +337,31 @@ def run_creative_fatigue_diagnostic(
         "recommendations": recommendations[:8],
         "warnings": warnings,
     }
+    output.update(
+        build_standard_skill_contract(
+            schema_version="skill_creative_fatigue_output.v1",
+            inputs={
+                "week_id": report_summary.get("week_id"),
+                "ads_records_count": len(ads_df_records),
+                "ads_analyzed": len(ad_metrics_list),
+            },
+            thresholds={
+                "frequency_fatigue": thresholds.frequency_fatigue,
+                "ctr_below_avg_ratio": thresholds.ctr_below_avg_ratio,
+                "hook_rate_min": thresholds.hook_rate_min,
+                "hold_rate_min": thresholds.hold_rate_min,
+                "high_potential_hook_rate": thresholds.high_potential_hook_rate,
+                "high_potential_hold_rate": thresholds.high_potential_hold_rate,
+                "min_impressions": thresholds.min_impressions,
+            },
+            results={
+                "triggered": output.get("triggered"),
+                "ads_analyzed": output.get("ads_analyzed"),
+                "fatigue_ads": output.get("fatigue_ads"),
+                "high_potential_ads": output.get("high_potential_ads"),
+                "recommendations": output.get("recommendations"),
+            },
+            warnings=warnings,
+        )
+    )
+    return output

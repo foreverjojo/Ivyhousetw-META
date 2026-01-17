@@ -236,7 +236,8 @@ def main() -> int:
     )
 
     parser.add_argument(
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         type=Path,
         default=DEFAULT_BACKUP_DIR,
         help=f"備份輸出目錄（預設：{DEFAULT_BACKUP_DIR}）",
@@ -247,17 +248,20 @@ def main() -> int:
         help="即使沒有任何 Log 檔案也建立備份（只包含 _backup_info.txt）",
     )
     parser.add_argument(
-        "--list", "-l",
+        "--list",
+        "-l",
         action="store_true",
         help="列出現有備份",
     )
     parser.add_argument(
-        "--cleanup", "-c",
+        "--cleanup",
+        "-c",
         action="store_true",
         help="清理過期備份",
     )
     parser.add_argument(
-        "--days", "-d",
+        "--days",
+        "-d",
         type=int,
         default=30,
         help="保留天數（預設 30）",
@@ -268,7 +272,8 @@ def main() -> int:
         help="只顯示不執行（用於清理）",
     )
     parser.add_argument(
-        "--restore", "-r",
+        "--restore",
+        "-r",
         type=Path,
         help="從備份還原",
     )

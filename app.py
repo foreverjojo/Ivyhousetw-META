@@ -18,7 +18,7 @@ st.set_page_config(
     page_title="首頁 | Ivy House Meta",
     page_icon="🏠",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # 載入主題與導航
@@ -38,53 +38,68 @@ render_sidebar_navigation()
 
 render_page_header("Meta 週報分析系統", icon="🏠", subtitle="Ivy House 自動化廣告數據分析平台")
 
-st.markdown("""
+st.markdown(
+    """
 <div class="ivy-card" style="margin-bottom: 2rem;">
     <h3>👋 歡迎使用 Ivy House 智慧分析系統</h3>
     <p>本系統整合 Meta 廣告數據與官網銷售數據，透過 AI 顧問團隊提供深度洞察與行動建議。</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # 功能卡片區
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background-color: #fbf7ef; padding: 1.5rem; border-radius: 10px; border: 1px solid #e0e0e0; height: 100%;">
         <h4 style="color: #3f2f24; margin-bottom: 0.5rem;">📊 儀表板</h4>
         <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">查看系統概覽、執行統計與關鍵指標。</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     if st.button("前往儀表板", use_container_width=True):
         st.switch_page("pages/01_dashboard.py")
 
 with col2:
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background-color: #fbf7ef; padding: 1.5rem; border-radius: 10px; border: 1px solid #e0e0e0; height: 100%;">
         <h4 style="color: #3f2f24; margin-bottom: 0.5rem;">📝 報告生成</h4>
         <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">上傳本週數據，執行一鍵分析流程 (Step A-F)。</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     if st.button("前往報告生成", use_container_width=True):
         st.switch_page("pages/02_report_generation.py")
 
 with col3:
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background-color: #fbf7ef; padding: 1.5rem; border-radius: 10px; border: 1px solid #e0e0e0; height: 100%;">
         <h4 style="color: #3f2f24; margin-bottom: 0.5rem;">📂 歷史檢視</h4>
         <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">瀏覽過往週報、下載最終報告與會議草稿。</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     if st.button("檢視歷史報告", use_container_width=True):
         st.switch_page("pages/03_history_viewer.py")
 
 with col4:
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background-color: #fbf7ef; padding: 1.5rem; border-radius: 10px; border: 1px solid #e0e0e0; height: 100%;">
         <h4 style="color: #3f2f24; margin-bottom: 0.5rem;">🤖 AI 助手</h4>
         <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">與 AI 顧問對話，深入探討數據問題與策略。</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     if st.button("諮詢 AI 助手", use_container_width=True):
         st.switch_page("pages/04_ai_assistant.py")
 
@@ -105,8 +120,8 @@ with c1:
 
 with c2:
     st.markdown("### 🔗 快速連結")
-    st.markdown("- [📄 系統文件 (README)](file:///readme.md)")
-    st.markdown("- [📋 開發紀錄 (CHANGELOG)](file:///CHANGELOG.md)")
+    st.markdown("- [📄 系統文件 (README)](readme.md)")
+    st.markdown("- [📋 開發紀錄 (CHANGELOG)](CHANGELOG.md)")
     st.markdown("- [🐛 回報問題](https://github.com/foreverjojo/Ivyhousetw-META/issues)")
 
 st.divider()

@@ -19,6 +19,10 @@ AVAILABLE_SKILLS = [
     "test_runner",
     "github_explorer",
     "skill_converter",
+    "plan_validator",
+    "git_stats_reporter",
+    "manifest_updater",
+    "skills_evaluator",
 ]
 
 __all__ = ["SKILLS_DIR", "AVAILABLE_SKILLS"]

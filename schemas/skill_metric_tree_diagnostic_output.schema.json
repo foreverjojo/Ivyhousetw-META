@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ivyhouse.local/schemas/skill_metric_tree_diagnostic_output.v1.json",
+  "title": "Ivy House Skills - Metric Tree Diagnostic Output (v1)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "skill_version",
+    "inputs",
+    "thresholds",
+    "results",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "skill_metric_tree_diagnostic_output.v1" },
+    "generated_at": { "type": "string" },
+    "skill_version": { "type": "string" },
+    "inputs": { "type": "object", "additionalProperties": true },
+    "thresholds": { "type": "object", "additionalProperties": true },
+    "results": { "type": "object", "additionalProperties": true },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+
+    "triggered": { "type": "boolean" },
+    "trigger_rule": { "type": "object", "additionalProperties": true },
+    "metric_tree_summary": { "type": "array", "items": { "type": "string" } },
+    "roas_primary": { "type": "object", "additionalProperties": true },
+    "suspected_bottlenecks": { "type": "array", "items": { "type": "string" } },
+    "recommendations": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

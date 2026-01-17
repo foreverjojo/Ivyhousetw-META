@@ -32,6 +32,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+
 def _try_load_env() -> None:
     """
     嘗試載入 ifp.env/.env 與 Secret Manager（若專案有啟用）。
@@ -39,6 +40,7 @@ def _try_load_env() -> None:
     """
     try:
         from core.env_loader import load_environment_variables
+
         load_environment_variables()
     except Exception:
         return
@@ -163,7 +165,13 @@ def _summarize_consultants(cn: dict) -> None:
         elif isinstance(c, dict):
             # 嘗試找 1~2 個可讀欄位，避免滿版輸出
             summary = None
-            for k in ["summary", "executive_summary", "creative_performance_analysis", "next_steps", "opportunities"]:
+            for k in [
+                "summary",
+                "executive_summary",
+                "creative_performance_analysis",
+                "next_steps",
+                "opportunities",
+            ]:
                 if k in c:
                     summary = c.get(k)
                     break
@@ -198,7 +206,9 @@ def run_debug_pipeline(
     web_excel_b = _read_bytes(files.web_excel)
 
     # 計算 fingerprint（對齊 UI 的版本機制）
-    fp = compute_inputs_fingerprint(io.BytesIO(meta_adset_b), io.BytesIO(meta_ads_b), io.BytesIO(web_excel_b), detail_level)
+    fp = compute_inputs_fingerprint(
+        io.BytesIO(meta_adset_b), io.BytesIO(meta_ads_b), io.BytesIO(web_excel_b), detail_level
+    )
     fp_code = fp_short(fp)
 
     debug_root = _mk_debug_history_root()
@@ -207,7 +217,9 @@ def run_debug_pipeline(
     t0 = time.time()
     report_summary = build_report_summary(meta_adset_b, meta_ads_b, web_excel_b)
     t1 = time.time()
-    print(f"week_id={report_summary.get('week_id')} date_range={report_summary.get('date_range')} ({t1 - t0:.1f}s)")
+    print(
+        f"week_id={report_summary.get('week_id')} date_range={report_summary.get('date_range')} ({t1 - t0:.1f}s)"
+    )
 
     week_id = str(report_summary.get("week_id") or "").strip()
     if not week_id:
@@ -223,7 +235,9 @@ def run_debug_pipeline(
     _print_step("Step C：LLM 洞察")
     t0 = time.time()
     if model_insights:
-        report_insights = generate_report_insights(report_summary, model=model_insights, version_fp=vdir.name)
+        report_insights = generate_report_insights(
+            report_summary, model=model_insights, version_fp=vdir.name
+        )
     else:
         report_insights = generate_report_insights(report_summary, version_fp=vdir.name)
     t1 = time.time()
@@ -233,6 +247,7 @@ def run_debug_pipeline(
         print(f"[WARN] Step C JSON 解析失敗：{report_insights.get('error')}")
 
     _print_step("Step E：三顧問")
+
     def cb(role: str, model: str) -> None:
         print(f"[{role}] start model={model}", flush=True)
 
@@ -279,7 +294,14 @@ def run_debug_pipeline(
 
     # 額外輸出 quick pointers
     print("\nArtifacts:")
-    for name in ["inputs.json", "report_summary.json", "report_insights.json", "consultant_notes.json", "workflow_state.json", "meeting.md"]:
+    for name in [
+        "inputs.json",
+        "report_summary.json",
+        "report_insights.json",
+        "consultant_notes.json",
+        "workflow_state.json",
+        "meeting.md",
+    ]:
         print(f"- {vdir / name}")
 
     return vdir, week_id
@@ -302,7 +324,9 @@ def main(argv: list[str]) -> int:
         default="default",
         help="輸入指紋 detail_level（預設 default；只影響 fingerprint）",
     )
-    p.add_argument("--model-insights", type=str, default=None, help="覆寫 MODEL_INSIGHTS（例：openai/gpt-5.2）")
+    p.add_argument(
+        "--model-insights", type=str, default=None, help="覆寫 MODEL_INSIGHTS（例：openai/gpt-5.2）"
+    )
     p.add_argument("--model-a", type=str, default=None, help="覆寫 MODEL_CONSULTANT_A")
     p.add_argument("--model-b", type=str, default=None, help="覆寫 MODEL_CONSULTANT_B")
     p.add_argument("--model-c", type=str, default=None, help="覆寫 MODEL_CONSULTANT_C")

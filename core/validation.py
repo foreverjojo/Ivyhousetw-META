@@ -47,7 +47,7 @@ def validate_json(instance: dict, schema: dict, *, label: str = "") -> None:
         path = ".".join(str(p) for p in e.path) or "(root)"
         lines.append(f"- {path}: {e.message}")
 
-    hint = f"\n（還有 {len(errors)-20} 條未顯示）" if len(errors) > 20 else ""
+    hint = f"\n（還有 {len(errors) - 20} 條未顯示）" if len(errors) > 20 else ""
     name = f"[{label}] " if label else ""
     msg = name + "Schema validate 失敗：\n" + "\n".join(lines) + hint
     raise SchemaValidationError(msg, details=lines)

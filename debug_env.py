@@ -1,4 +1,3 @@
-
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -15,10 +14,10 @@ else:
 # 2. 檢查變數
 print("\n--- Environment Variables Check ---")
 vars_to_check = [
-    "OPENROUTER_MODEL_CONSULTANT_B", # 舊名
-    "MODEL_CONSULTANT_B",            # 新名 (程式碼現在讀這個)
+    "OPENROUTER_MODEL_CONSULTANT_B",  # 舊名
+    "MODEL_CONSULTANT_B",  # 新名 (程式碼現在讀這個)
     "MODEL_INSIGHTS",
-    "GCP_PROJECT_ID"
+    "GCP_PROJECT_ID",
 ]
 
 for var in vars_to_check:

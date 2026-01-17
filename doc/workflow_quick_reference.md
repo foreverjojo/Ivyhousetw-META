@@ -10,7 +10,7 @@
 ### 1️⃣ 啟動新任務
 
 ```powershell
-# 確認 Index 存在於 implementation_plan_index.md
+# 確認 Index 存在於 doc/Implementation_Plan_index.md
 # 建立 Plan
 # 範本：doc/plans/Idx-003_plan.md
 
@@ -201,7 +201,7 @@ revert: 回退某 commit
 ### 驗證規則
 
 1. ✅ Commit Message 包含 `(Idx-NNN)` 或豁免關鍵字
-2. ✅ Index 存在於 `implementation_plan_index.md`
+2. ✅ Index 存在於 `Implementation_Plan_index.md`
 3. ✅ 任務鎖一致性（若有鎖）
 
 ---
@@ -337,7 +337,7 @@ cat doc/logs/Idx-000_log.template.md
 ---
 
 **工件為真值 (Artifacts as Source of Truth)**:
-- **Index** → `implementation_plan_index.md`
+- **Index** → `Implementation_Plan_index.md`
 - **Plan** → `doc/plans/Idx-NNN_plan.md`
 - **Log** → `doc/logs/Idx-NNN_log.md`
 - **Commit** → Git 歷史

@@ -13,6 +13,7 @@ from pathlib import Path
 # =========================
 try:
     from zoneinfo import ZoneInfo  # Python 3.9 以上
+
     TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 except Exception:
     TAIPEI_TZ = None  # 備援：使用本地時間
@@ -31,6 +32,7 @@ SCHEMAS_DIR = Path("schemas")
 # 注意：這些是備援預設值，應透過環境變數 MODEL_CONSULTANT_X 覆蓋
 # =========================
 import os
+
 MODEL_CONSULTANT_A = os.getenv("MODEL_CONSULTANT_A", "openai/gpt-4o-mini")
 MODEL_CONSULTANT_B = os.getenv("MODEL_CONSULTANT_B", "google/gemini-pro-1.5")
 MODEL_CONSULTANT_C = os.getenv("MODEL_CONSULTANT_C", "anthropic/claude-3.5-sonnet")

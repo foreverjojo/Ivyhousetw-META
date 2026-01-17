@@ -7,48 +7,36 @@
 ## 🤝 多工具協作模式
 
 ### 基本原則
-1. **工具選擇分離**：Executor 與 QA 必須使用不同工具（Cross-QA 原則）
-2. **監控同步**：若需要自動監控外部工具狀態，使用 Terminal Bridge Server（或改用人工確認）
-3. **記錄可追蹤**：所有工具選擇與執行結果記錄於 plan 的 EXECUTION_BLOCK
+1. **工具選擇分離（Cross-QA）**：`qa_tool` 必須與 `last_change_tool` 不同
+2. **終端注入**：由 GitHub Copilot Chat（Coordinator）使用 VS Code 內建 `terminal.sendText` 對指定終端送出指令/Plan 文字
+3. **即時監控**：由 Coordinator 使用 VS Code Proposed API 監測終端輸出（例如 `terminalDataWriteEvent`），以 completion marker 作為完成條件
+4. **記錄可追蹤**：工具選擇與結果寫入 plan 的 `EXECUTION_BLOCK`（含 `last_change_tool`）
 
-### 協作流程範例：Copilot 監控 Codex CLI
+### 協作流程範例：Copilot 協調 Codex CLI（注入 + 監控）
 
-**場景**：Plan 執行階段選擇 Codex CLI，Copilot 需監控其執行狀態
+**場景**：Engineer Tool = Codex CLI（VS Code Terminal），Copilot Chat 負責注入與監控
 
 1. **啟動 Codex CLI 執行**
-   ```bash
-   # 用戶在 "Codex CLI" terminal 中執行
-   codex apply plan.md
-   ```
+   - 用戶先在 VS Code 建立/選取固定終端（例如 terminal 名稱：`Codex CLI`），確保 Codex CLI 可接收指令。
 
-2. **Copilot 啟動監控（可選）**
-   - 若需要「偵測完成」：啟動 Terminal Bridge Server，並使用 `/wait` 監看 git 狀態是否穩定。
-   ```bash
-   .agent/scripts/start_terminal_bridge.sh
+2. **Copilot 注入 Plan/指令**
+   - 只能使用 VS Code 內建 `terminal.sendText` 注入（禁止用 bash 腳本代送，避免程序/TUI 退出）。
 
-   TOKEN=$(cat .agent/state/terminal_bridge_token)
-   curl -sS -X POST http://127.0.0.1:38765/wait \
-     -H "Authorization: Bearer ${TOKEN}" \
-     -H "Content-Type: application/json" \
-     -d '{"timeout":300000,"checkInterval":2000}'
-   ```
-
-3. **監控回報結果**
-   - `completed: true`：git status 已穩定（可視為執行階段結束的訊號）
-   - `completed: false`：timeout（超過 `timeout` 未達穩定）
-   - HTTP 401/5xx：認證或伺服器錯誤
+3. **監控完成**
+   - 以 completion marker 作為完成條件（例如：`[ENGINEER_DONE]` / `[QA_DONE]` / `[FIX_DONE]`）
+   - Coordinator 監測終端輸出直到偵測 marker 或 timeout
 
 4. **Copilot 處理結果**
    - 更新 plan 的 `executor_end` 時間戳
-   - 通知用戶選擇 QA 工具
+   - 更新 `last_change_tool`（本輪最後修改程式碼的工具）
+   - 通知用戶選擇 QA 工具（必須 ≠ last_change_tool）
 
 ### Cross-QA 工具選擇範例
 
 | 情境 | Executor | QA Tool | 理由 |
 |------|----------|---------|------|
-| 大規模重構 | Codex CLI | Copilot | Copilot 提供語意層級審查 |
-| 互動式開發 | Copilot | OpenCode | OpenCode 驗證執行結果 |
-| 批次測試 | OpenCode | Codex CLI | Codex CLI 可批次檢查語法 |
+| 批次修改/大量檔案 | Codex CLI | OpenCode | 交叉審查，避免同工具自審 |
+| 互動式終端驗證 | OpenCode | Codex CLI | 交叉審查，避免同工具自審 |
 
 ### Cross-QA 例外情況處理
 
@@ -60,7 +48,7 @@
 **記錄格式**：
 ```markdown
 <!-- 例外情況記錄於 plan 的 EXECUTION_BLOCK -->
-QA Compliance: ⚠️ 例外（小修正）- 變更：15 行 - 用戶：已確認
+qa_compliance: ⚠️ 例外（小修正）- 變更：15 行 - 用戶：已確認
 ```
 
 ---
@@ -211,5 +199,5 @@ Select-String -Path "*.py" -Pattern "pattern"
 
 ## 📚 延伸閱讀
 
-- [CLI 工具探索 SOP](file:///.agent/skills/explore_cli_tool.md)
-- [艾薇品管員角色](file:///.agent/roles/qa.md)
+- [CLI 工具探索 SOP](.agent/skills/explore_cli_tool.md)
+- [艾薇品管員角色](.agent/roles/qa.md)

@@ -172,7 +172,7 @@ ls backups/
 建立一個真實任務並走完整流程：
 
 ```powershell
-# 1. 確認 Index 已在 implementation_plan_index.md 中註冊
+# 1. 確認 Index 已在 doc/Implementation_Plan_index.md 中註冊
 # 2. 建立 Plan: doc/plans/Idx-XXX_plan.md
 
 # 3. 建立分支
@@ -205,7 +205,7 @@ python scripts/check_active_task.py release Idx-XXX
 python scripts/validate_log.py doc/logs/Idx-XXX_log.md
 
 # 12. 更新 Index
-# 在 implementation_plan_index.md 中標記為 COMPLETED
+# 在 doc/Implementation_Plan_index.md 中標記為 COMPLETED
 ```
 
 **驗收標準**:

@@ -19,12 +19,7 @@ def run_command(cmd, check=True):
     """執行 shell 指令"""
     try:
         result = subprocess.run(
-            cmd,
-            shell=True,
-            check=check,
-            capture_output=True,
-            text=True,
-            encoding='utf-8'
+            cmd, shell=True, check=check, capture_output=True, text=True, encoding="utf-8"
         )
         return result.stdout.strip(), result.returncode
     except subprocess.CalledProcessError as e:
@@ -60,7 +55,7 @@ def create_branch(index):
     if current_branch != "main":
         print(f"⚠️  警告: 當前分支是 {current_branch}，不是 main")
         response = input("是否繼續？(yes/no): ")
-        if response.lower() != 'yes':
+        if response.lower() != "yes":
             print("❌ 取消操作")
             return False
 
@@ -124,7 +119,7 @@ def merge_branch(index):
     print()
     response = input("確定繼續？(yes/no): ")
 
-    if response.lower() != 'yes':
+    if response.lower() != "yes":
         print("❌ 取消操作")
         return False
 
@@ -150,14 +145,14 @@ def merge_branch(index):
 
     # 詢問是否刪除分支
     response = input(f"\n是否刪除分支 {branch_name}？(yes/no): ")
-    if response.lower() == 'yes':
+    if response.lower() == "yes":
         run_command(f"git branch -d {branch_name}")
         print(f"✅ 已刪除分支 {branch_name}")
 
     print()
     print("下一步：")
     print(f"  1. python scripts/check_active_task.py release {index}")
-    print(f"  2. 更新 implementation_plan_index.md（狀態改為 COMPLETED）")
+    print(f"  2. 更新 doc/Implementation_Plan_index.md（狀態改為 COMPLETED）")
     print(f"  3. 完成 Log: doc/logs/{index}_log.md")
 
     return True
@@ -180,7 +175,7 @@ def abort_branch(index):
     print()
     response = input("確定要中止任務？(yes/no): ")
 
-    if response.lower() != 'yes':
+    if response.lower() != "yes":
         print("❌ 取消操作")
         return False
 
@@ -202,7 +197,7 @@ def abort_branch(index):
         print()
         print("下一步：")
         print(f"  1. python scripts/check_active_task.py release {index}")
-        print(f"  2. 更新 implementation_plan_index.md（狀態改為 ABORTED）")
+        print(f"  2. 更新 doc/Implementation_Plan_index.md（狀態改為 ABORTED）")
         print(f"  3. 記錄 Log 並說明中止原因")
         return True
     else:

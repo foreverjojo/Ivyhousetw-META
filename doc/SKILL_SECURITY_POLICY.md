@@ -184,6 +184,6 @@ python .agent/skills/github_explorer.py rollback <skill_name>
 
 ## 📚 參考文件
 
-- [工程補強計畫](file:///C:/Users/forev/.gemini/antigravity/brain/943d9e5e-52e6-4be3-965f-1193d4130cb0/engineering_reinforcement_plan.md)
-- [工程待辦清單](file:///C:/Users/forev/.gemini/antigravity/brain/943d9e5e-52e6-4be3-965f-1193d4130cb0/engineering_backlog.md)
-- [Ivy House Rules](file:///c:/Users/forev/OneDrive/4-管理專用/Jonas/AI生成/廣告數據報告/ivyhousetw%20ad%20analyzer/Ivyhousetw-META/ivy_house_rules.md)
+- 工程補強計畫（已移除，請參考 doc/Implementation_Plan_index.md）
+- 工程待辦清單（已移除，請參考 doc/Implementation_Plan_index.md）
+- [Ivy House Rules](ivy_house_rules.md)

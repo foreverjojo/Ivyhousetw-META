@@ -200,7 +200,9 @@ def _is_daily_data(df: pd.DataFrame) -> bool:
     return same_day_count >= len(sample) * 0.8  # 80% 以上是同一天即判定為日資料
 
 
-def _aggregate_daily_to_weekly(df: pd.DataFrame, name_col: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
+def _aggregate_daily_to_weekly(
+    df: pd.DataFrame, name_col: str
+) -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
     將日資料按 name_col 聚合為週彙總。
 

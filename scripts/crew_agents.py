@@ -13,6 +13,7 @@ from crewai import Agent, Crew, Process, Task
 # 角色定義 (Agent Definitions)
 # ==============================================================================
 
+
 class IvyAgents:
     def __init__(self):
         # 這裡的 model 可以根據使用者偏好動態調整
@@ -36,7 +37,7 @@ class IvyAgents:
             """),
             verbose=True,
             allow_delegation=False,
-            llm=self.advanced_model, # 建議使用更強的模型如 Opus/4o
+            llm=self.advanced_model,  # 建議使用更強的模型如 Opus/4o
         )
 
     def engineer_agent(self):
@@ -75,12 +76,14 @@ class IvyAgents:
             """),
             verbose=True,
             allow_delegation=False,
-            llm=self.advanced_model, # QA 也建議使用較強模型
+            llm=self.advanced_model,  # QA 也建議使用較強模型
         )
+
 
 # ==============================================================================
 # 任務定義 (Task Definitions)
 # ==============================================================================
+
 
 class IvyTasks:
     def plan_task(self, agent, user_request):
@@ -139,9 +142,11 @@ class IvyTasks:
             expected_output="一份詳細的 Code Review 報告，包含通過/拒絕的結論與具體修改建議。",
         )
 
+
 # ==============================================================================
 # 主要執行入口 (Crew Definition)
 # ==============================================================================
+
 
 def run_ivy_dev_flow(user_request: str):
     """
@@ -159,30 +164,35 @@ def run_ivy_dev_flow(user_request: str):
     #    CrewAI 預設會將前一個 Task 的 output 作為 context 傳給下一個 Task
 
     task_plan = tasks.plan_task(planner, user_request)
-    task_implement = tasks.implement_task(engineer, user_request) # Engineer 也需要知道原始需求，或者只依賴 spec
+    task_implement = tasks.implement_task(
+        engineer, user_request
+    )  # Engineer 也需要知道原始需求，或者只依賴 spec
     # 更好的做法是讓 Crew 自動傳遞 context，這裡我們先簡單設定
     # 在 Crew 中，tasks 順序決定了執行順序
 
-    task_implement.context = [task_plan] # 明確指定依賴
+    task_implement.context = [task_plan]  # 明確指定依賴
 
-    task_review = tasks.review_task(qa, user_request) # QA 審查的是 Engineer 的產出
-    task_review.context = [task_implement] # QA 依賴實作結果
+    task_review = tasks.review_task(qa, user_request)  # QA 審查的是 Engineer 的產出
+    task_review.context = [task_implement]  # QA 依賴實作結果
 
     # 3. 建立 Crew
     crew = Crew(
         agents=[planner, engineer, qa],
         tasks=[task_plan, task_implement, task_review],
-        process=Process.sequential, # 循序執行
-        verbose=True
+        process=Process.sequential,  # 循序執行
+        verbose=True,
     )
 
     result = crew.kickoff()
     return result
 
+
 if __name__ == "__main__":
     # 本地測試用
     print("Initializing Ivy House Crew...")
-    sample_request = "我想開發一個『原料過期預警系統』，當原料效期少於 7 天時，在首頁顯示紅色警告卡片。"
+    sample_request = (
+        "我想開發一個『原料過期預警系統』，當原料效期少於 7 天時，在首頁顯示紅色警告卡片。"
+    )
     result = run_ivy_dev_flow(sample_request)
     print("\n\n########################\nFINAL RESULT\n########################\n")
     print(result)

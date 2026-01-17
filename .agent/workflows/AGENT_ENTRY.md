@@ -18,7 +18,7 @@
 
 1. `./.agent/workflows/dev-team.md`
 2. `./ivy_house_rules.md`
-3. `./docs/implementation_plan_index.md`
+3. `./doc/Implementation_Plan_index.md`
 
 > 注意：
 > - 「提到」不等於「已讀」。你必須實際打開檔案並萃取重點。
@@ -34,7 +34,7 @@
 - 已開啟閱讀的檔案（含路徑）：
   - [ ] ./.agent/workflows/dev-team.md
   - [ ] ./ivy_house_rules.md
-  - [ ] ./doc/implementation_plan_index.md
+  - [ ] ./doc/Implementation_Plan_index.md
 
 - 從「規則/流程」萃取的 Top 5 硬約束（請用條列）：
   1.
@@ -70,9 +70,11 @@
 
 3) **角色選擇 Gate**
 必須詢問使用者選擇：
-- **Executor（執行者）**：Continue / Copilot / Codex
-- **QA（驗收者）**：Continue / Copilot / Codex
-  - 原則上 QA 不應與 Executor 同一個（除非 ≤20 行小修且使用者明確允許）
+- **Engineer Tool（執行者）**：`codex-cli` / `opencode`（VS Code Terminals）
+- **QA Tool（驗收者）**：`codex-cli` / `opencode`（VS Code Terminals）
+  - **Cross-QA 硬規則**：`qa_tool ≠ last_change_tool`（例外需記錄在 `qa_compliance` 並由 user 明確允許）
+
+> 注意：GitHub Copilot Chat 固定為 Coordinator（只做討論/分派/監控/回填 Plan），不作為 Engineer/QA 工具，也不得直接改 code。
 
 4) **Execute（只允許被選定的 Executor 動手）**
 - 僅能依照已核准 Plan 執行
@@ -85,7 +87,7 @@
 6) **Log（QA 後必寫）**
 - QA 結束後必須產出 log
 - log 若已 commit，需包含 commit hash
-- logs 為本機保存、不可提交到 git
+- 是否提交（含 log）由使用者決策；若有提交，Log 應與變更一起納入版本控管以利稽核追蹤
 
 7) **Close**
 - 總結完成內容、變更範圍、風險、後續事項

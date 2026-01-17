@@ -30,11 +30,17 @@ def _openrouter_chat_completion(
     max_tokens: int = 10000,
 ) -> Tuple[str, Dict[str, int]]:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") or "https://openrouter.ai/api/v1"
+    base_url = (
+        os.getenv("OPENAI_BASE_URL")
+        or os.getenv("OPENAI_API_BASE")
+        or "https://openrouter.ai/api/v1"
+    )
     url = base_url.rstrip("/") + "/chat/completions"
 
     if not api_key:
-        raise RuntimeError("Missing OPENAI_API_KEY (or OPENROUTER_API_KEY). Please set it in Replit Secrets.")
+        raise RuntimeError(
+            "Missing OPENAI_API_KEY (or OPENROUTER_API_KEY). Please set it in Replit Secrets."
+        )
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -64,7 +70,9 @@ def _openrouter_chat_completion(
         raise RuntimeError(f"OpenRouter API Error: {json.dumps(data['error'])}")
 
     if not data.get("choices"):
-        raise RuntimeError(f"OpenRouter returned no choices. Model: {model}. Response: {json.dumps(data)}")
+        raise RuntimeError(
+            f"OpenRouter returned no choices. Model: {model}. Response: {json.dumps(data)}"
+        )
 
     usage = data.get("usage", {}) or {}
     prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
@@ -74,17 +82,25 @@ def _openrouter_chat_completion(
     content = data["choices"][0]["message"].get("content")
     if content is None:
         content = ""
-    return str(content), {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": total_tokens}
+    return str(content), {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+    }
 
 
 def _try_parse_json(s: str) -> Dict[str, Any]:
     if not s:
-        return {"error": "Empty response from LLM", "raw_content": "", "decisions": ["Error: Empty response"]}
+        return {
+            "error": "Empty response from LLM",
+            "raw_content": "",
+            "decisions": ["Error: Empty response"],
+        }
     s = s.strip()
     first = s.find("{")
     last = s.rfind("}")
     if first != -1 and last != -1 and last > first:
-        s = s[first:last + 1]
+        s = s[first : last + 1]
 
     try:
         # 使用 raw_decode 容忍「多個 JSON object 串接」或尾端雜訊（常見於 LLM 輸出）
@@ -95,7 +111,7 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
         return {
             "error": f"JSON parse error: {str(e)}",
             "raw_content": s[:4000] + "..." if len(s) > 4000 else s,
-            "decisions": [f"Error parsing JSON: {str(e)}"]
+            "decisions": [f"Error parsing JSON: {str(e)}"],
         }
 
 
@@ -195,8 +211,8 @@ def build_workflow_state(
     if consultant_notes:
         errs = []
         for k, v in consultant_notes.items():
-             if isinstance(v, dict) and "error" in v:
-                 errs.append(f"{k}: {v['error']}")
+            if isinstance(v, dict) and "error" in v:
+                errs.append(f"{k}: {v['error']}")
         if errs:
             user += f"\n\n[SYSTEM WARNING] Consultants returned errors: {'; '.join(errs)}. Please explicitly state these errors in 'consultant_summary' and 'risks' instead of hallucinating content."
 
@@ -208,7 +224,9 @@ def build_workflow_state(
     total_usage: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     try:
-        content, usage_main = _openrouter_chat_completion(messages, model=model, temperature=0.2, max_tokens=2400)
+        content, usage_main = _openrouter_chat_completion(
+            messages, model=model, temperature=0.2, max_tokens=2400
+        )
         total_usage = usage_main
     except Exception as e:
         # OpenRouter 失敗（常見：context 超限/網路問題），直接改走 deterministic 組裝，避免整段報告缺失
@@ -224,7 +242,12 @@ def build_workflow_state(
                     function="build_workflow_state",
                     week_id=str(report_summary.get("week_id") or "").strip() or None,
                     extra=(
-                        {"step": step, "version_fp": version_fp, "fallback": True, "error": str(e)[:200]}
+                        {
+                            "step": step,
+                            "version_fp": version_fp,
+                            "fallback": True,
+                            "error": str(e)[:200],
+                        }
                         if version_fp
                         else {"step": step, "fallback": True, "error": str(e)[:200]}
                     ),
@@ -242,18 +265,28 @@ def build_workflow_state(
     out = _try_parse_json(content)
     if "error" in out:  # 如果第一次解析失敗（包含 error key），嘗試修復
         # 避免把超長 raw content 全塞回 repair prompt 導致 context 超限
-        content_snippet = content if len(content) <= 12000 else (content[:12000] + "\n...[TRUNCATED]...")
+        content_snippet = (
+            content if len(content) <= 12000 else (content[:12000] + "\n...[TRUNCATED]...")
+        )
         repair_messages = [
             {"role": "system", "content": system},
-            {"role": "user", "content": "你上一次輸出不是合法 JSON。請只輸出『單一 JSON object』，不要任何多餘字元。"},
+            {
+                "role": "user",
+                "content": "你上一次輸出不是合法 JSON。請只輸出『單一 JSON object』，不要任何多餘字元。",
+            },
             {"role": "user", "content": content_snippet},
         ]
         try:
-            content2, usage_repair = _openrouter_chat_completion(repair_messages, model=model, temperature=0.0, max_tokens=2400)
+            content2, usage_repair = _openrouter_chat_completion(
+                repair_messages, model=model, temperature=0.0, max_tokens=2400
+            )
             total_usage = {
-                "prompt_tokens": int(total_usage.get("prompt_tokens", 0) or 0) + int(usage_repair.get("prompt_tokens", 0) or 0),
-                "completion_tokens": int(total_usage.get("completion_tokens", 0) or 0) + int(usage_repair.get("completion_tokens", 0) or 0),
-                "total_tokens": int(total_usage.get("total_tokens", 0) or 0) + int(usage_repair.get("total_tokens", 0) or 0),
+                "prompt_tokens": int(total_usage.get("prompt_tokens", 0) or 0)
+                + int(usage_repair.get("prompt_tokens", 0) or 0),
+                "completion_tokens": int(total_usage.get("completion_tokens", 0) or 0)
+                + int(usage_repair.get("completion_tokens", 0) or 0),
+                "total_tokens": int(total_usage.get("total_tokens", 0) or 0)
+                + int(usage_repair.get("total_tokens", 0) or 0),
             }
             out = _try_parse_json(content2)
         except Exception:
@@ -310,6 +343,7 @@ def build_workflow_state(
 
     # 次級保險：若模型仍輸出為空，從既有輸入做最小可用的 fallback（不憑空捏造數字）
     if consultant_notes and not out.get("consultant_summary"):
+
         def _sanitize_summary_text(s: str) -> str:
             """
             避免三顧問摘要直接露出 snake_case 技術欄位（例如 platform_purchase_value_twd）。
@@ -456,7 +490,10 @@ def build_workflow_state(
         for it in items:
             if not isinstance(it, dict):
                 return False
-            if any(not _is_missing(it.get(k)) for k in ["owner_role", "deliverable", "kpi", "stoploss", "due"]):
+            if any(
+                not _is_missing(it.get(k))
+                for k in ["owner_role", "deliverable", "kpi", "stoploss", "due"]
+            ):
                 return False
         return True
 

@@ -7,8 +7,16 @@ Pytest 配置檔案
 =====================================
 """
 
-import pytest
 from pathlib import Path
+import sys
+
+import pytest
+
+
+def pytest_configure():
+    """確保測試執行時可用專案根目錄做絕對匯入（例如 `scripts.*`）。"""
+    project_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(project_root))
 
 
 @pytest.fixture

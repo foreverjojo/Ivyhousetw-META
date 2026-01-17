@@ -125,4 +125,4 @@ cat file.py | <tool> <subcommand> "prompt"
 
 ## 📝 記錄與分享
 
-探索完成後，請將結果記錄至 [`doc/TOOL_USAGE.md`](file:///doc/TOOL_USAGE.md)，方便後續使用。
+探索完成後，請將結果記錄至 [`doc/TOOL_USAGE.md`](doc/TOOL_USAGE.md)，方便後續使用。

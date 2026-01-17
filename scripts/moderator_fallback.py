@@ -127,7 +127,9 @@ def build_deterministic_workflow_state(
             return "Finance"
         if any(k in o for k in ["電商", "營運", "PM", "E-commerce"]):
             return "E-commerce"
-        if any(k in o for k in ["投放", "內容", "行銷", "Marketing", "素材", "創意", "設計", "剪輯"]):
+        if any(
+            k in o for k in ["投放", "內容", "行銷", "Marketing", "素材", "創意", "設計", "剪輯"]
+        ):
             return "Marketing"
         if any(k in o for k in ["倉", "物流", "出貨", "Fulfillment"]):
             return "Fulfillment"
@@ -251,6 +253,7 @@ def build_deterministic_workflow_state(
     # consultant_summary：優先用顧問輸出中的可讀摘要；若缺則補顧問錯誤
     consultant_summary: list[str] = []
     if consultant_notes:
+
         def pick_readable_text(obj: Any) -> Optional[str]:
             if isinstance(obj, str):
                 s = obj.strip()
@@ -278,7 +281,15 @@ def build_deterministic_workflow_state(
                         if s:
                             return s
                 for kk, vv in obj.items():
-                    if kk in ["schema", "schema_version", "consultant_type", "consultant_name", "role", "consultant", "report_meta"]:
+                    if kk in [
+                        "schema",
+                        "schema_version",
+                        "consultant_type",
+                        "consultant_name",
+                        "role",
+                        "consultant",
+                        "report_meta",
+                    ]:
                         continue
                     s = pick_readable_text(vv)
                     if s:
@@ -294,7 +305,9 @@ def build_deterministic_workflow_state(
             if s:
                 consultant_summary.append(f"{key} 重點：{s}")
     if not consultant_summary:
-        consultant_summary = ["顧問摘要：以 deterministic actions 與風險清單補足（本次顧問輸出不足）。"]
+        consultant_summary = [
+            "顧問摘要：以 deterministic actions 與風險清單補足（本次顧問輸出不足）。"
+        ]
 
     return {
         "schema_version": "workflow_state.v1",

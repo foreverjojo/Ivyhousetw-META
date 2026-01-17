@@ -51,11 +51,13 @@ def _format_errors(errors: List[Any], *, limit: int = 20) -> List[str]:
         path = ".".join(str(p) for p in e.path) or "(root)"
         lines.append(f"- {path}: {e.message}")
     if len(errors) > limit:
-        lines.append(f"- ...（還有 {len(errors)-limit} 條未顯示）")
+        lines.append(f"- ...（還有 {len(errors) - limit} 條未顯示）")
     return lines
 
 
-def validate_jsonschema(instance: Dict[str, Any], schema: Dict[str, Any], *, label: str = "") -> None:
+def validate_jsonschema(
+    instance: Dict[str, Any], schema: Dict[str, Any], *, label: str = ""
+) -> None:
     """
     Validate instance against schema (auto-choose validator from $schema).
     Raises SchemaValidationError with `.details` (list[str]).

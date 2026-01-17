@@ -1,4 +1,4 @@
-﻿"""
+"""
 檔案用途：Meta 週報分析系統 - LLM 洞察生成模組
 職責：
   - 呼叫 OpenRouter API 產生 Meta 廣告成效洞察
@@ -37,11 +37,17 @@ def _openrouter_chat_completion(
         (content, usage) 其中 usage 包含 prompt_tokens / completion_tokens / total_tokens
     """
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") or "https://openrouter.ai/api/v1"
+    base_url = (
+        os.getenv("OPENAI_BASE_URL")
+        or os.getenv("OPENAI_API_BASE")
+        or "https://openrouter.ai/api/v1"
+    )
     url = base_url.rstrip("/") + "/chat/completions"
 
     if not api_key:
-        raise RuntimeError("缺少 OPENAI_API_KEY（或 OPENROUTER_API_KEY），請在 Replit Secrets 或環境變數中設定。")
+        raise RuntimeError(
+            "缺少 OPENAI_API_KEY（或 OPENROUTER_API_KEY），請在 Replit Secrets 或環境變數中設定。"
+        )
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -59,7 +65,6 @@ def _openrouter_chat_completion(
         # 移除 response_format 以避免與 OpenRouter Web Search 衝突
         # Prompt 中已明確要求 JSON 格式輸出
     }
-
 
     resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=90)
     if resp.status_code >= 400:
@@ -79,27 +84,37 @@ def _openrouter_chat_completion(
     total_tokens = int(usage.get("total_tokens", prompt_tokens + completion_tokens) or 0)
 
     if not data.get("choices"):
-        raise RuntimeError(f"OpenRouter returned no choices. Model: {model}. Response: {json.dumps(data)}")
+        raise RuntimeError(
+            f"OpenRouter returned no choices. Model: {model}. Response: {json.dumps(data)}"
+        )
 
     content = data["choices"][0]["message"].get("content")
     if content is None:
         content = ""
-    return (str(content), {
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_tokens": total_tokens,
-    })
+    return (
+        str(content),
+        {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        },
+    )
 
 
 def _try_parse_json(s: str) -> Dict[str, Any]:
     if not s:
-        return {"error": "Empty response from LLM", "raw_content": "", "insights_version": "error", "executive_summary": ["Error: Empty response"]}
+        return {
+            "error": "Empty response from LLM",
+            "raw_content": "",
+            "insights_version": "error",
+            "executive_summary": ["Error: Empty response"],
+        }
     s = s.strip()
     # 保險：避免模型加上多餘文字
     first = s.find("{")
     last = s.rfind("}")
     if first != -1 and last != -1 and last > first:
-        s = s[first:last + 1]
+        s = s[first : last + 1]
 
     try:
         return json.loads(s)
@@ -108,7 +123,7 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
             "error": f"JSON parse error: {str(e)}",
             "raw_content": s[:200] + "..." if len(s) > 200 else s,
             "insights_version": "error",
-            "executive_summary": [f"Error parsing JSON: {str(e)}"]
+            "executive_summary": [f"Error parsing JSON: {str(e)}"],
         }
 
 
@@ -169,7 +184,8 @@ def generate_report_insights(
     def _add_usage(a: Dict[str, int], b: Dict[str, int]) -> Dict[str, int]:
         return {
             "prompt_tokens": int(a.get("prompt_tokens", 0)) + int(b.get("prompt_tokens", 0)),
-            "completion_tokens": int(a.get("completion_tokens", 0)) + int(b.get("completion_tokens", 0)),
+            "completion_tokens": int(a.get("completion_tokens", 0))
+            + int(b.get("completion_tokens", 0)),
             "total_tokens": int(a.get("total_tokens", 0)) + int(b.get("total_tokens", 0)),
         }
 
@@ -181,7 +197,10 @@ def generate_report_insights(
     if isinstance(out, dict) and out.get("error"):
         repair_messages = [
             {"role": "system", "content": system},
-            {"role": "user", "content": "你上一次輸出不是合法 JSON。請只輸出『單一 JSON object』，不要任何多餘字元。"},
+            {
+                "role": "user",
+                "content": "你上一次輸出不是合法 JSON。請只輸出『單一 JSON object』，不要任何多餘字元。",
+            },
             {"role": "user", "content": content},
         ]
         content2, usage_repair = _openrouter_chat_completion(

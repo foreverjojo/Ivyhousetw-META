@@ -37,13 +37,16 @@ SCHEMAS = ROOT / "schemas"
 # Helpers
 # ---------------------------
 
+
 def load_json(path: Path) -> Dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def must_exist(path: Path) -> None:
     if not path.exists():
         raise FileNotFoundError(f"Missing required file: {path}")
+
 
 def validate_instance(instance: Any, schema: Dict[str, Any]) -> List[str]:
     v = Draft202012Validator(schema)
@@ -56,6 +59,7 @@ def validate_instance(instance: Any, schema: Dict[str, Any]) -> List[str]:
         out.append(f"{p}: {e.message}")
     return out
 
+
 def expect_pass(name: str, instance: Any, schema_path: Path) -> None:
     schema = load_json(schema_path)
     errs = validate_instance(instance, schema)
@@ -63,16 +67,21 @@ def expect_pass(name: str, instance: Any, schema_path: Path) -> None:
         raise AssertionError(f"[FAIL] {name} should PASS but got errors:\n- " + "\n- ".join(errs))
     print(f"[PASS] {name}")
 
-def expect_fail(name: str, instance: Any, schema_path: Path, must_contain: str | None = None) -> None:
+
+def expect_fail(
+    name: str, instance: Any, schema_path: Path, must_contain: str | None = None
+) -> None:
     schema = load_json(schema_path)
     errs = validate_instance(instance, schema)
     if not errs:
         raise AssertionError(f"[FAIL] {name} should FAIL but passed")
     if must_contain and not any(must_contain in e for e in errs):
         raise AssertionError(
-            f"[FAIL] {name} failed but error did not contain '{must_contain}'.\nErrors:\n- " + "\n- ".join(errs)
+            f"[FAIL] {name} failed but error did not contain '{must_contain}'.\nErrors:\n- "
+            + "\n- ".join(errs)
         )
     print(f"[PASS] {name} (expected fail)")
+
 
 def assert_schema_const(schema: Dict[str, Any], prop: str, expected: str) -> None:
     props = schema.get("properties", {})
@@ -80,7 +89,10 @@ def assert_schema_const(schema: Dict[str, Any], prop: str, expected: str) -> Non
         raise AssertionError(f"Schema missing property: {prop}")
     const = props[prop].get("const")
     if const != expected:
-        raise AssertionError(f"Schema property {prop}.const mismatch: expected '{expected}', got '{const}'")
+        raise AssertionError(
+            f"Schema property {prop}.const mismatch: expected '{expected}', got '{const}'"
+        )
+
 
 def assert_schema_required(schema: Dict[str, Any], field: str) -> None:
     req = schema.get("required", [])
@@ -93,21 +105,71 @@ def assert_schema_required(schema: Dict[str, Any], field: str) -> None:
 # ---------------------------
 
 META_REQUIRED_ZH_ADSET = [
-    "分析報告開始", "分析報告結束", "廣告組合名稱", "廣告組合投遞", "廣告組合預算", "廣告組合預算類型",
-    "花費金額 (TWD)", "觸及人數", "頻率", "歸因設定", "結束時間", "開始", "曝光次數",
-    "CPM（每千次廣告曝光成本） (TWD)", "連結點擊次數", "CPC（單次連結點擊成本） (TWD)", "CTR（連結點閱率）",
-    "連結頁面瀏覽次數", "每次連結頁面瀏覽成本 (TWD)", "購買次數", "每次購買的成本 (TWD)",
-    "加到購物車次數", "帳號名稱", "行銷活動名稱", "購買轉換值", "網站直接購買次數", "網站直接購買轉換值", "開始結帳次數"
+    "分析報告開始",
+    "分析報告結束",
+    "廣告組合名稱",
+    "廣告組合投遞",
+    "廣告組合預算",
+    "廣告組合預算類型",
+    "花費金額 (TWD)",
+    "觸及人數",
+    "頻率",
+    "歸因設定",
+    "結束時間",
+    "開始",
+    "曝光次數",
+    "CPM（每千次廣告曝光成本） (TWD)",
+    "連結點擊次數",
+    "CPC（單次連結點擊成本） (TWD)",
+    "CTR（連結點閱率）",
+    "連結頁面瀏覽次數",
+    "每次連結頁面瀏覽成本 (TWD)",
+    "購買次數",
+    "每次購買的成本 (TWD)",
+    "加到購物車次數",
+    "帳號名稱",
+    "行銷活動名稱",
+    "購買轉換值",
+    "網站直接購買次數",
+    "網站直接購買轉換值",
+    "開始結帳次數",
 ]
 
 META_REQUIRED_ZH_AD = [
-    "分析報告開始", "分析報告結束", "廣告名稱", "廣告投遞", "廣告組合預算", "廣告組合預算類型",
-    "花費金額 (TWD)", "觸及人數", "頻率", "歸因設定", "結束時間", "品質排名", "互動率排名", "轉換率排名",
-    "曝光次數", "CPM（每千次廣告曝光成本） (TWD)", "連結點擊次數", "CPC（單次連結點擊成本） (TWD)",
-    "CTR（連結點閱率）", "連結頁面瀏覽次數", "每次連結頁面瀏覽成本 (TWD)", "購買次數", "每次購買的成本 (TWD)",
-    "加到購物車次數", "帳號名稱", "目標", "行銷活動名稱", "購買轉換值", "網站直接購買次數", "網站直接購買轉換值",
-    "開始結帳次數", "廣告組合名稱"
+    "分析報告開始",
+    "分析報告結束",
+    "廣告名稱",
+    "廣告投遞",
+    "廣告組合預算",
+    "廣告組合預算類型",
+    "花費金額 (TWD)",
+    "觸及人數",
+    "頻率",
+    "歸因設定",
+    "結束時間",
+    "品質排名",
+    "互動率排名",
+    "轉換率排名",
+    "曝光次數",
+    "CPM（每千次廣告曝光成本） (TWD)",
+    "連結點擊次數",
+    "CPC（單次連結點擊成本） (TWD)",
+    "CTR（連結點閱率）",
+    "連結頁面瀏覽次數",
+    "每次連結頁面瀏覽成本 (TWD)",
+    "購買次數",
+    "每次購買的成本 (TWD)",
+    "加到購物車次數",
+    "帳號名稱",
+    "目標",
+    "行銷活動名稱",
+    "購買轉換值",
+    "網站直接購買次數",
+    "網站直接購買轉換值",
+    "開始結帳次數",
+    "廣告組合名稱",
 ]
+
 
 def detect_lang_drift(headers: List[str], required_zh: List[str]) -> Tuple[bool, List[str]]:
     missing = [c for c in required_zh if c not in headers]
@@ -119,6 +181,7 @@ def detect_lang_drift(headers: List[str], required_zh: List[str]) -> Tuple[bool,
 # ---------------------------
 
 ATTR_CONST = "點擊後 7 天、瀏覽後 1 天或互動觀看後 1 天"
+
 
 def fixture_inputs_snapshot_adset() -> Dict[str, Any]:
     return {
@@ -161,6 +224,7 @@ def fixture_inputs_snapshot_adset() -> Dict[str, Any]:
             }
         ],
     }
+
 
 def fixture_inputs_snapshot_ad() -> Dict[str, Any]:
     return {
@@ -224,9 +288,9 @@ def fixture_inputs_snapshot_v3() -> Dict[str, Any]:
             "generated_at": "2025-12-10T10:00:00+08:00",
             "config": {"detail_level": "adset+ads"},
             "files": {
-                "meta_adset": {"name": "a.csv", "size": 1, "sha256": "0"*64},
-                "meta_ads": {"name": "b.csv", "size": 1, "sha256": "1"*64},
-                "web_excel": {"name": "c.xlsx", "size": 1, "sha256": "2"*64},
+                "meta_adset": {"name": "a.csv", "size": 1, "sha256": "0" * 64},
+                "meta_ads": {"name": "b.csv", "size": 1, "sha256": "1" * 64},
+                "web_excel": {"name": "c.xlsx", "size": 1, "sha256": "2" * 64},
             },
         },
         "fp_short": "abcdef12",
@@ -256,12 +320,13 @@ def fixture_report_insights() -> Dict[str, Any]:
             "website_purchase_value": 800.0,
             "roas": 5.3333,
             "purchases": 2,
-            "purchase_value": 800.0
+            "purchase_value": 800.0,
         },
         "creative_diagnostics": {"top_ads": [], "bottom_ads": []},
         "anomalies": [],
-        "next_actions": [{"owner": "Marketing", "action": "Test", "kpi": "ROAS"}]
+        "next_actions": [{"owner": "Marketing", "action": "Test", "kpi": "ROAS"}],
     }
+
 
 def fixture_consultant_notes() -> Dict[str, Any]:
     return {
@@ -274,9 +339,10 @@ def fixture_consultant_notes() -> Dict[str, Any]:
             "ecommerce": ["B"],
             "finance": ["C"],
             "fulfillment": ["D"],
-            "gm_coo": ["E"]
-        }
+            "gm_coo": ["E"],
+        },
     }
+
 
 def fixture_workflow_state() -> Dict[str, Any]:
     return {
@@ -288,7 +354,7 @@ def fixture_workflow_state() -> Dict[str, Any]:
             "meta_spend": 150.0,
             "meta_website_purchases": 2,
             "meta_website_purchase_value": 800.0,
-            "meta_roas": 5.3333
+            "meta_roas": 5.3333,
         },
         "guardrail_check": {"tier1": {}, "tier2": {}},
         "department_actions": {
@@ -296,16 +362,17 @@ def fixture_workflow_state() -> Dict[str, Any]:
             "finance": [{"task": "t"}],
             "ecommerce": [{"task": "t"}],
             "marketing": [{"task": "t"}],
-            "fulfillment": [{"task": "t"}]
+            "fulfillment": [{"task": "t"}],
         },
         "risks": [{"risk": "r"}],
-        "validation_plan": {"day3": {}, "day7": {}, "day14": {}}
+        "validation_plan": {"day3": {}, "day7": {}, "day14": {}},
     }
 
 
 # ---------------------------
 # Tests
 # ---------------------------
+
 
 def test_report_summary_schema_locks() -> None:
     schema_path = SCHEMAS / "report_summary.v1.json"
@@ -320,6 +387,7 @@ def test_report_summary_schema_locks() -> None:
     assert_schema_required(schema, "generated_at")
 
     print("[PASS] report_summary.v1 schema locks (const + required)")
+
 
 def test_step2_schemas_pass_fail() -> None:
     # Step-2 schemas we validate in the MVP pipeline
@@ -356,7 +424,9 @@ def test_step2_schemas_pass_fail() -> None:
         # FAIL: attribution const mismatch
         bad3 = fixture_inputs_snapshot_adset()
         bad3["rows"][0]["attribution_setting"] = "點擊後 1 天"
-        expect_fail("inputs_snapshot adset attribution const FAIL", bad3, p_adset, must_contain="expected")
+        expect_fail(
+            "inputs_snapshot adset attribution const FAIL", bad3, p_adset, must_contain="expected"
+        )
 
         # FAIL: total row not dropped (name empty after drop)
         bad4 = fixture_inputs_snapshot_ad()
@@ -373,8 +443,11 @@ def test_language_drift_guard() -> None:
     if not drift:
         raise AssertionError("[FAIL] language drift guard should detect missing Chinese headers")
     if len(missing) < 10:
-        raise AssertionError("[FAIL] language drift guard missing list too small; required list may be wrong")
+        raise AssertionError(
+            "[FAIL] language drift guard missing list too small; required list may be wrong"
+        )
     print("[PASS] language drift guard detects missing Chinese headers")
+
 
 def main() -> int:
     try:
@@ -387,6 +460,7 @@ def main() -> int:
 
     print("\nALL SELF-TESTS PASSED ✅")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

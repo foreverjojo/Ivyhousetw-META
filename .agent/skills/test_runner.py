@@ -20,6 +20,34 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 
+def validate_output_schema(result: Dict[str, Any], skill_name: str) -> Dict[str, Any]:
+    """可選 JSON Schema 驗證（graceful degradation）"""
+    try:
+        import jsonschema
+    except ImportError:
+        return result
+
+    schema_path = Path(__file__).resolve().parent / "schemas" / f"{skill_name}_output.schema.json"
+    if not schema_path.exists():
+        return result
+
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(result, schema)
+        return result
+    except jsonschema.ValidationError as exc:
+        result["validation_errors"] = [
+            {"message": exc.message, "path": list(exc.path), "schema_path": list(exc.schema_path)}
+        ]
+        result.setdefault(
+            "suggestion",
+            f"輸出格式不符合 schema 規範。請檢查 {skill_name}_output.schema.json 並確認欄位正確性。",
+        )
+        return result
+    except Exception:
+        return result
+
+
 def find_project_root() -> Path:
     """從當前腳本位置往上找專案根目錄 (含有 pyproject.toml 或 requirements.txt)"""
     current = Path(__file__).resolve().parent
@@ -66,6 +94,8 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
         return {
             "status": "error",
             "message": "測試執行超時 (超過 5 分鐘)",
+            "suggestion": "請縮小測試範圍（指定 test_path），或檢查是否有卡住的測試。",
+            "usage": "python .agent/skills/test_runner.py [test_path]",
             "project_root": str(project_root),
             "passed": 0,
             "failed": 0,
@@ -76,6 +106,8 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
         return {
             "status": "error",
             "message": "找不到 pytest，請確認已安裝：pip install pytest",
+            "suggestion": "若使用 uv/poetry，請確認虛擬環境已啟用並安裝 pytest。",
+            "usage": "python .agent/skills/test_runner.py [test_path]",
             "project_root": str(project_root),
             "passed": 0,
             "failed": 0,
@@ -86,6 +118,8 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
         return {
             "status": "error",
             "message": f"執行失敗：{str(e)}",
+            "suggestion": "請確認專案依賴已安裝，或嘗試先執行：python -m pytest -q",
+            "usage": "python .agent/skills/test_runner.py [test_path]",
             "project_root": str(project_root),
             "passed": 0,
             "failed": 0,
@@ -95,6 +129,20 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
 
     # 解析輸出
     output = result.stdout + result.stderr
+    if "No module named pytest" in output or "No module named 'pytest'" in output:
+        return {
+            "status": "error",
+            "message": "找不到 pytest，請確認已安裝（python -m pytest 失敗）",
+            "suggestion": "請先安裝 pytest，例如：pip install pytest",
+            "usage": "python .agent/skills/test_runner.py [test_path]",
+            "project_root": str(project_root),
+            "passed": 0,
+            "failed": 0,
+            "errors": 0,
+            "exit_code": result.returncode,
+            "output": output[:2000] if len(output) > 2000 else output,
+            "details": [],
+        }
     lines = output.strip().split("\n")
 
     # 嘗試解析最後一行的摘要 (如 "5 passed, 2 failed")
@@ -118,7 +166,9 @@ def run_pytest(test_path: Optional[str] = None) -> Dict[str, Any]:
             break
 
     # 判定狀態
-    if failed > 0 or errors > 0:
+    if result.returncode == 5 and passed == 0 and failed == 0 and errors == 0:
+        status = "no_tests"
+    elif failed > 0 or errors > 0:
         status = "fail"
     elif passed > 0:
         status = "pass"
@@ -141,6 +191,7 @@ def main():
     """主程式入口"""
     test_path = sys.argv[1] if len(sys.argv) > 1 else None
     result = run_pytest(test_path)
+    result = validate_output_schema(result, "test_runner")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
     # 根據狀態設定退出碼

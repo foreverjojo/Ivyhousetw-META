@@ -80,7 +80,7 @@
 - **決策日期**：2026-01-09
 - **相關檔案**：
   - `doc/workflow_process_analysis.md`
-  - `doc/implementation_plan_index.md`
+  - `doc/Implementation_Plan_index.md`
   - `.agent/roles/`
   - `scripts/validate_state_gate.py`
   - `scripts/check_active_task.py`

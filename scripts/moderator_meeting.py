@@ -48,11 +48,11 @@ def _strategy_snapshot_md(report_summary: dict) -> str:
     optimization_goal = v("optimization_goal")
     billing_event = v("billing_event")
     weekly_changes = mi.get("weekly_changes", "")
-    weekly_changes = (str(weekly_changes).strip() if weekly_changes is not None else "")
+    weekly_changes = str(weekly_changes).strip() if weekly_changes is not None else ""
     weekly_changes_md = weekly_changes if weekly_changes else "（未填）"
 
     note = mi.get("note_for_consultants", "")
-    note = (str(note).strip() if note is not None else "")
+    note = str(note).strip() if note is not None else ""
     note_md = note if note else "（未填）"
 
     updated_at = v("updated_at")
@@ -91,7 +91,9 @@ def build_meeting_markdown(
     """
     week_id = workflow_state.get("week_id", "")
     date_range = workflow_state.get("date_range", "")
-    guardrail_check = workflow_state.get("guardrail_check", workflow_state.get("guardrails", {})) or {}
+    guardrail_check = (
+        workflow_state.get("guardrail_check", workflow_state.get("guardrails", {})) or {}
+    )
     if isinstance(guardrail_check, dict):
         guardrail = guardrail_check.get("guardrails", guardrail_check) or {}
     else:
@@ -131,7 +133,9 @@ def build_meeting_markdown(
     t1 = guardrail.get("tier1", {})
     if isinstance(t1, dict) and t1:
         for k, v in t1.items():
-            lines.append(f"- {k}: {v.get('status')}（值={v.get('value')}｜門檻={v.get('threshold')}｜依據={v.get('basis')}）")
+            lines.append(
+                f"- {k}: {v.get('status')}（值={v.get('value')}｜門檻={v.get('threshold')}｜依據={v.get('basis')}）"
+            )
     else:
         lines.append("- （待補）")
     lines.append("")
@@ -140,7 +144,9 @@ def build_meeting_markdown(
     t2 = guardrail.get("tier2", {})
     if isinstance(t2, dict) and t2:
         for k, v in t2.items():
-            lines.append(f"- {k}: {v.get('status')}（值={v.get('value')}｜門檻={v.get('threshold')}｜依據={v.get('basis')}）")
+            lines.append(
+                f"- {k}: {v.get('status')}（值={v.get('value')}｜門檻={v.get('threshold')}｜依據={v.get('basis')}）"
+            )
     else:
         lines.append("- （待補）")
     lines.append("")
@@ -190,7 +196,13 @@ def build_meeting_markdown(
         elif isinstance(consensus, list) and consensus:
             for it in consensus[:10]:
                 if isinstance(it, dict):
-                    point = it.get("point") or it.get("summary") or it.get("item") or it.get("text") or ""
+                    point = (
+                        it.get("point")
+                        or it.get("summary")
+                        or it.get("item")
+                        or it.get("text")
+                        or ""
+                    )
                     if isinstance(point, str) and point.strip():
                         lines.append(f"- {idx}. {point.strip()}")
                         idx += 1
@@ -200,7 +212,15 @@ def build_meeting_markdown(
                     idx += 1
                     added = True
 
-        divergence = cs.get("divergence") or cs.get("disagreements") or cs.get("differences") or cs.get("分歧") or cs.get("分歧點") or cs.get("分歧点") or []
+        divergence = (
+            cs.get("divergence")
+            or cs.get("disagreements")
+            or cs.get("differences")
+            or cs.get("分歧")
+            or cs.get("分歧點")
+            or cs.get("分歧点")
+            or []
+        )
         if isinstance(divergence, str) and divergence.strip():
             lines.append(f"- {idx}. 分歧：{divergence.strip()}")
             idx += 1
@@ -208,7 +228,13 @@ def build_meeting_markdown(
         elif isinstance(divergence, list) and divergence:
             for it in divergence[:10]:
                 if isinstance(it, dict):
-                    point = it.get("point") or it.get("summary") or it.get("item") or it.get("text") or ""
+                    point = (
+                        it.get("point")
+                        or it.get("summary")
+                        or it.get("item")
+                        or it.get("text")
+                        or ""
+                    )
                     if isinstance(point, str) and point.strip():
                         lines.append(f"- {idx}. 分歧：{point.strip()}")
                         idx += 1
@@ -225,7 +251,15 @@ def build_meeting_markdown(
                     item = it.get("item") or it.get("task") or it.get("title") or ""
                     owner = it.get("owner") or it.get("owner_role") or ""
                     due = it.get("due_by") or it.get("due") or ""
-                    parts = [str(p).strip() for p in [item, f"負責：{owner}" if owner else None, f"期限：{due}" if due else None] if p]
+                    parts = [
+                        str(p).strip()
+                        for p in [
+                            item,
+                            f"負責：{owner}" if owner else None,
+                            f"期限：{due}" if due else None,
+                        ]
+                        if p
+                    ]
                     if parts:
                         lines.append(f"- {idx}. " + "｜".join(parts))
                         idx += 1
@@ -306,6 +340,7 @@ def build_meeting_markdown(
 
     lines.append("## Validation Plan（3天 / 7天 / 14天）")
     if isinstance(validation, dict) and validation:
+
         def pick_validation(day_key: str):
             day = str(day_key).replace("天", "").strip()
             candidates = [
@@ -334,7 +369,9 @@ def build_meeting_markdown(
                         threshold = vv.get("threshold", "")
                         ok = vv.get("達標") or vv.get("pass") or vv.get("達成") or ""
                         ng = vv.get("未達") or vv.get("fail") or vv.get("止損") or ""
-                        lines.append(f"- 指標：{indicator}｜門檻：{threshold}｜達標：{ok}｜未達：{ng}")
+                        lines.append(
+                            f"- 指標：{indicator}｜門檻：{threshold}｜達標：{ok}｜未達：{ng}"
+                        )
                     else:
                         lines.append(f"- {vv}")
             elif isinstance(v, dict):

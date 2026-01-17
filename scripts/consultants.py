@@ -33,7 +33,11 @@ def _openrouter_chat_completion(
     messages, model: str, temperature: float = 0.2, max_tokens: int = 8000
 ) -> Tuple[str, Dict[str, int]]:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") or "https://openrouter.ai/api/v1"
+    base_url = (
+        os.getenv("OPENAI_BASE_URL")
+        or os.getenv("OPENAI_API_BASE")
+        or "https://openrouter.ai/api/v1"
+    )
     url = base_url.rstrip("/") + "/chat/completions"
 
     if not api_key:
@@ -67,7 +71,9 @@ def _openrouter_chat_completion(
         raise RuntimeError(f"OpenRouter API Error: {json.dumps(data['error'])}")
 
     if not data.get("choices"):
-        raise RuntimeError(f"OpenRouter returned no choices. Model: {model}. Response: {json.dumps(data)}")
+        raise RuntimeError(
+            f"OpenRouter returned no choices. Model: {model}. Response: {json.dumps(data)}"
+        )
 
     content = data["choices"][0]["message"].get("content")
     if content is None:
@@ -80,7 +86,11 @@ def _openrouter_chat_completion(
 
     return (
         str(content),
-        {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": total_tokens},
+        {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        },
     )
 
 
@@ -90,7 +100,7 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
     s = s.strip()
     first, last = s.find("{"), s.rfind("}")
     if first != -1 and last != -1 and last > first:
-        s = s[first:last + 1]
+        s = s[first : last + 1]
 
     try:
         # 使用 raw_decode 容忍「多個 JSON object 串接」或尾端雜訊（常見於 LLM 輸出）
@@ -100,7 +110,7 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
     except Exception as e:
         return {
             "error": f"JSON parse error: {str(e)}",
-            "raw_content": s[:4000] + "..." if len(s) > 4000 else s
+            "raw_content": s[:4000] + "..." if len(s) > 4000 else s,
         }
 
 
@@ -114,7 +124,9 @@ def _days_in_range(date_range: str) -> int:
         return 1
 
 
-def _compact_inputs(report_summary: Dict[str, Any], report_insights: Dict[str, Any]) -> Dict[str, Any]:
+def _compact_inputs(
+    report_summary: Dict[str, Any], report_insights: Dict[str, Any]
+) -> Dict[str, Any]:
     meta = report_summary.get("kpi", {}).get("meta", {})
     web = report_summary.get("kpi", {}).get("web", {})
     date_range = report_summary.get("date_range", "")
@@ -134,13 +146,13 @@ def _compact_inputs(report_summary: Dict[str, Any], report_insights: Dict[str, A
         "meta_avg_daily_spend_twd_calc": avg_daily_spend,
         "budget_definition": {
             "overall_daily_budget_meaning": "本週/本區間『全帳戶平均每日花費節奏』= Meta Spend ÷ 天數（不是單一 adset）",
-            "adset_budget_actions": "若要落地執行，需列出要加碼/降碼的 adset/ads（依 tables 的 top/bottom）"
+            "adset_budget_actions": "若要落地執行，需列出要加碼/降碼的 adset/ads（依 tables 的 top/bottom）",
         },
         "hard_rules": {
             "no_recalc_numbers": True,
             "language": "zh-TW",
-            "must_output_valid_json": True
-        }
+            "must_output_valid_json": True,
+        },
     }
     skills_ctx = (report_summary.get("_context") or {}).get("skills") or {}
     if isinstance(skills_ctx, dict) and skills_ctx:
@@ -188,7 +200,9 @@ def _prepare_context(report_summary: Dict[str, Any], report_insights: Dict[str, 
     return json.dumps(payload, ensure_ascii=False)
 
 
-def _parse_or_repair(content: str, usage: Dict[str, int], model: str, system: str) -> Tuple[Dict[str, Any], Dict[str, int]]:
+def _parse_or_repair(
+    content: str, usage: Dict[str, int], model: str, system: str
+) -> Tuple[Dict[str, Any], Dict[str, int]]:
     """
     用途：解析模型輸出；若不是合法 JSON，會自動做一次「修復重試」。
     注意：_try_parse_json 解析失敗時會回傳含 error 的 dict（不會丟例外），因此需同時檢查 error key。
@@ -201,7 +215,9 @@ def _parse_or_repair(content: str, usage: Dict[str, int], model: str, system: st
     if isinstance(parsed, dict) and "error" not in parsed:
         return parsed, usage
 
-    content_snippet = content if len(content) <= 12000 else (content[:12000] + "\n...[TRUNCATED]...")
+    content_snippet = (
+        content if len(content) <= 12000 else (content[:12000] + "\n...[TRUNCATED]...")
+    )
     repair, usage_repair = _openrouter_chat_completion(
         [
             {"role": "system", "content": system},
@@ -222,9 +238,12 @@ def _parse_or_repair(content: str, usage: Dict[str, int], model: str, system: st
         max_tokens=8000,
     )
     total_usage = {
-        "prompt_tokens": int(usage.get("prompt_tokens", 0) or 0) + int(usage_repair.get("prompt_tokens", 0) or 0),
-        "completion_tokens": int(usage.get("completion_tokens", 0) or 0) + int(usage_repair.get("completion_tokens", 0) or 0),
-        "total_tokens": int(usage.get("total_tokens", 0) or 0) + int(usage_repair.get("total_tokens", 0) or 0),
+        "prompt_tokens": int(usage.get("prompt_tokens", 0) or 0)
+        + int(usage_repair.get("prompt_tokens", 0) or 0),
+        "completion_tokens": int(usage.get("completion_tokens", 0) or 0)
+        + int(usage_repair.get("completion_tokens", 0) or 0),
+        "total_tokens": int(usage.get("total_tokens", 0) or 0)
+        + int(usage_repair.get("total_tokens", 0) or 0),
     }
     return _try_parse_json(repair), total_usage
 
@@ -295,7 +314,9 @@ def generate_consultant_notes(
 
     if status_callback:
         status_callback("A", model_a)
-    out_a, usage_a = _openrouter_chat_completion(msgs_a, model=model_a, temperature=0.2, max_tokens=8000)
+    out_a, usage_a = _openrouter_chat_completion(
+        msgs_a, model=model_a, temperature=0.2, max_tokens=8000
+    )
     j_a, usage_a_total = _parse_or_repair(out_a, usage_a, model_a, sys_a)
     try:
         week_id = str(report_summary.get("week_id") or "").strip() or None
@@ -313,7 +334,9 @@ def generate_consultant_notes(
                 ),
                 function="generate_consultant_notes",
                 week_id=week_id,
-                extra={"step": "E", "consultant": "A", "version_fp": version_fp} if version_fp else {"step": "E", "consultant": "A"},
+                extra={"step": "E", "consultant": "A", "version_fp": version_fp}
+                if version_fp
+                else {"step": "E", "consultant": "A"},
             )
         )
     except Exception:
@@ -323,7 +346,9 @@ def generate_consultant_notes(
 
     if status_callback:
         status_callback("B", model_b)
-    out_b, usage_b = _openrouter_chat_completion(msgs_b, model=model_b, temperature=0.2, max_tokens=8000)
+    out_b, usage_b = _openrouter_chat_completion(
+        msgs_b, model=model_b, temperature=0.2, max_tokens=8000
+    )
     j_b, usage_b_total = _parse_or_repair(out_b, usage_b, model_b, sys_b)
     try:
         week_id = str(report_summary.get("week_id") or "").strip() or None
@@ -341,7 +366,9 @@ def generate_consultant_notes(
                 ),
                 function="generate_consultant_notes",
                 week_id=week_id,
-                extra={"step": "E", "consultant": "B", "version_fp": version_fp} if version_fp else {"step": "E", "consultant": "B"},
+                extra={"step": "E", "consultant": "B", "version_fp": version_fp}
+                if version_fp
+                else {"step": "E", "consultant": "B"},
             )
         )
     except Exception:
@@ -351,7 +378,9 @@ def generate_consultant_notes(
 
     if status_callback:
         status_callback("C", model_c)
-    out_c, usage_c = _openrouter_chat_completion(msgs_c, model=model_c, temperature=0.2, max_tokens=8000)
+    out_c, usage_c = _openrouter_chat_completion(
+        msgs_c, model=model_c, temperature=0.2, max_tokens=8000
+    )
     j_c, usage_c_total = _parse_or_repair(out_c, usage_c, model_c, sys_c)
     try:
         week_id = str(report_summary.get("week_id") or "").strip() or None
@@ -369,7 +398,9 @@ def generate_consultant_notes(
                 ),
                 function="generate_consultant_notes",
                 week_id=week_id,
-                extra={"step": "E", "consultant": "C", "version_fp": version_fp} if version_fp else {"step": "E", "consultant": "C"},
+                extra={"step": "E", "consultant": "C", "version_fp": version_fp}
+                if version_fp
+                else {"step": "E", "consultant": "C"},
             )
         )
     except Exception:
@@ -445,7 +476,9 @@ def run_visual_consultant(
         max_tokens=1800,
     )
 
-    parsed, _ = _parse_or_repair(raw, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}, model, system)
+    parsed, _ = _parse_or_repair(
+        raw, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}, model, system
+    )
     return {
         "visual_consultant_version": "visual_consultant.v1",
         "model": model,

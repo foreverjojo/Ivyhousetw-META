@@ -22,6 +22,8 @@
 | Idx-008 | 實現 Plan Summary + 完成後刪除 plan.md | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v5 | `doc/logs/Idx-008_log.md` | log template 加入 summary 區段 |
 | Idx-009 | Terminal 管理完整方案 | P0 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 2026-01-12-v1 | `doc/logs/Idx-009_log.md` | Terminal Manager + Codex CLI 整合 + Role Selection Gate |
 | Idx-010 | Agent Architecture Enhancement - Research/Reviewer/UI-UX Gates | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.3 | `doc/logs/Idx-010_log.md` | 三個條件式 Gate + 機械化判定規則 |
+| Idx-011 | Skills System Enhancement - 9 builtin skills + graceful degradation | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-011_log.md` | 9 個 builtin skills 完成 + manifest_updater + plan_validator |
+| Idx-012 | JSON Schema Validation & VSCode System Config | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-012_log.md` | 7 個 JSON schemas + graceful degradation + VSCode system files |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)

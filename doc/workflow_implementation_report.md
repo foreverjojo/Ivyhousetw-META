@@ -44,7 +44,7 @@ python scripts/check_active_task.py release Idx-001
 
 **功能**:
 - 驗證 Commit Message 格式（`feat(Idx-NNN): ...`）
-- 檢查 Index 是否存在於 `implementation_plan_index.md`
+- 檢查 Index 是否存在於 `Implementation_Plan_index.md`
 - 驗證任務鎖一致性
 - 豁免規則：`chore:`, `docs:`, `style:`, `ci:`, `build:`, `revert:`
 
@@ -167,7 +167,7 @@ pre-commit install
 **檔案**: `scripts/check_verification_due.py`
 
 **功能**:
-- 掃描所有 `implementation_plan_index.md` 中的 Verification Due Date
+- 掃描所有 `Implementation_Plan_index.md` 中的 Verification Due Date
 - 提前 3 天提醒
 - 過期項目標記為 🔴
 
@@ -243,7 +243,7 @@ python scripts/check_verification_due.py
 **備份內容**:
 - `doc/logs/` → `backups/logs_<timestamp>.tar.gz`
 - `doc/plans/` → `backups/plans_<timestamp>.tar.gz`
-- `implementation_plan_index.md` → 單獨備份
+- `Implementation_Plan_index.md` → 單獨備份
 
 ---
 
@@ -300,7 +300,7 @@ python scripts/check_verification_due.py
 
 ### 啟動新任務
 
-- [ ] 檢查 Index 已存在於 `implementation_plan_index.md`
+- [ ] 檢查 Index 已存在於 `Implementation_Plan_index.md`
 - [ ] 建立 Plan：`doc/plans/Idx-NNN_plan.md`
 - [ ] 建立分支：`python scripts/task_branch.py create Idx-NNN`
 - [ ] 取得鎖：`python scripts/check_active_task.py acquire Idx-NNN`
@@ -438,7 +438,7 @@ scripts/debug_pipeline.py             # P0-6 Docstring 修正
 5. **Log Binding** - Log Schema + 備份機制
 
 **工件為真值**已落實：
-- **Index** - `implementation_plan_index.md` 為唯一任務清單
+- **Index** - `Implementation_Plan_index.md` 為唯一任務清單
 - **Plan** - `doc/plans/` 中的版本化 Plan
 - **Log** - 結構化、可驗證的執行記錄
 - **Commit** - State Gate 確保一致性

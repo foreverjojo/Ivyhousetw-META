@@ -13,6 +13,7 @@ from typing import Optional
 # 嘗試使用專案的 logger，若不存在則使用標準 logger
 try:
     from core.logging_config import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     logger = logging.getLogger(__name__)

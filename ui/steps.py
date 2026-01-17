@@ -9,6 +9,7 @@
 
 import json
 import shutil
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -512,45 +513,91 @@ def run_step_c(
 
         # Optional: project skills (deterministic) - driven by manual command
         # Execute Agent Skills (Top 1/2/3)
-        try:
-            mi = st.session_state.get("manual_inputs") or {}
-            skills_ctx = {}
+        mi = st.session_state.get("manual_inputs") or {}
+        skills_ctx: Dict[str, Any] = {}
+        skills_errors: list[dict] = []
 
-            # Skill 1: Metric Tree Diagnostic (Top 1)
-            # 診斷 KPI 樹狀結構與異常歸因
+        # Skill 1: Metric Tree Diagnostic (Top 1)
+        # 診斷 KPI 樹狀結構與異常歸因
+        try:
             from scripts.skills.metric_tree_diagnostic import run_metric_tree_diagnostic
+
             skill_t1 = run_metric_tree_diagnostic(rs)
             skills_ctx["metric_tree_diagnostic"] = skill_t1
             write_json(vdir / "skill_metric_tree_diagnostic.json", skill_t1)
+        except Exception as e:
+            logger.error(f"Skill metric_tree_diagnostic failed: {e}")
+            skills_errors.append(
+                {
+                    "skill": "metric_tree_diagnostic",
+                    "error_type": type(e).__name__,
+                    "message": str(e),
+                    "traceback": traceback.format_exc(),
+                }
+            )
 
-            # Skill 2: Creative Fatigue (Top 2)
-            # 偵測素材疲乏與高潛力素材
-            # 注意：因架構限制，我們使用 report_summary 中的 top/worst tables 作為樣本
-            # 這可能漏掉中間層廣告，但在 MVP 階段可接受
+        # Skill 2: Creative Fatigue (Top 2)
+        # 偵測素材疲乏與高潛力素材
+        # 注意：因架構限制，我們使用 report_summary 中的 top/worst tables 作為樣本
+        # 這可能漏掉中間層廣告，但在 MVP 階段可接受
+        try:
             from scripts.skills.creative_fatigue import run_creative_fatigue_diagnostic
+
             ads_samples = []
             if "tables" in rs:
-               ads_samples.extend(rs["tables"].get("top_ads_by_roas", []))
-               ads_samples.extend(rs["tables"].get("worst_ads_by_roas", []))
+                ads_samples.extend(rs["tables"].get("top_ads_by_roas", []))
+                ads_samples.extend(rs["tables"].get("worst_ads_by_roas", []))
 
             skill_t2 = run_creative_fatigue_diagnostic(rs, ads_samples)
             skills_ctx["creative_fatigue"] = skill_t2
             write_json(vdir / "skill_creative_fatigue.json", skill_t2)
+        except Exception as e:
+            logger.error(f"Skill creative_fatigue failed: {e}")
+            skills_errors.append(
+                {
+                    "skill": "creative_fatigue",
+                    "error_type": type(e).__name__,
+                    "message": str(e),
+                    "traceback": traceback.format_exc(),
+                }
+            )
 
-            # Skill 3: Budget Rules (Top 3)
-            # 預算配置規則與建議
+        # Skill 3: Budget Rules (Top 3)
+        # 預算配置規則與建議
+        try:
             from scripts.skills.budget_rules import run_budget_rules
+
             skill_t3 = run_budget_rules(rs, mi)
             skills_ctx["budget_rules"] = skill_t3
             write_json(vdir / "skill_budget_rules.json", skill_t3)
-
-            # Store in session for subsequent steps
-            st.session_state["skills_context"] = skills_ctx
-
         except Exception as e:
-            logger.error(f"Skills execution failed: {e}")
-            # skill failure must not block pipeline
-            pass
+            logger.error(f"Skill budget_rules failed: {e}")
+            skills_errors.append(
+                {
+                    "skill": "budget_rules",
+                    "error_type": type(e).__name__,
+                    "message": str(e),
+                    "traceback": traceback.format_exc(),
+                }
+            )
+
+        if skills_errors:
+            try:
+                write_json(
+                    vdir / "skill_execution_error.json",
+                    {
+                        "schema_version": "skill_execution_error.v1",
+                        "generated_at": now_iso(),
+                        "week_id": week_id,
+                        "version_fp": vdir.name,
+                        "errors": skills_errors,
+                    },
+                )
+            except Exception:
+                pass
+
+        # Store in session for subsequent steps
+        st.session_state["skills_context"] = skills_ctx
 
         status.write("🤖 LLM 正在生成洞察...")
         insights = generate_report_insights(

@@ -2,6 +2,7 @@
 Flask wrapper for Streamlit app - Google Cloud Run compatible
 Listens on PORT environment variable
 """
+
 import os
 import subprocess
 import signal
@@ -24,12 +25,18 @@ def start_streamlit():
         "streamlit",
         "run",
         "app.py",
-        "--server.port", str(port),
-        "--server.address", "0.0.0.0",
-        "--server.headless", "true",
-        "--server.enableCORS", "false",
-        "--server.enableXsrfProtection", "false",
-        "--browser.gatherUsageStats", "false"
+        "--server.port",
+        str(port),
+        "--server.address",
+        "0.0.0.0",
+        "--server.headless",
+        "true",
+        "--server.enableCORS",
+        "false",
+        "--server.enableXsrfProtection",
+        "false",
+        "--browser.gatherUsageStats",
+        "false",
     ]
 
     streamlit_process = subprocess.Popen(streamlit_cmd)
@@ -41,7 +48,7 @@ def start_streamlit():
 
 def signal_handler(sig, frame):
     """Handle shutdown signals"""
-    print('Shutting down gracefully...')
+    print("Shutting down gracefully...")
     if streamlit_process:
         streamlit_process.terminate()
         streamlit_process.wait()
@@ -53,17 +60,13 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-@app.route('/')
+@app.route("/")
 def root():
     """Health check endpoint"""
-    return {
-        "status": "ok",
-        "app": "Ivy House Meta Weekly MVP",
-        "message": "Streamlit is running"
-    }
+    return {"status": "ok", "app": "Ivy House Meta Weekly MVP", "message": "Streamlit is running"}
 
 
-@app.route('/health')
+@app.route("/health")
 def health():
     """Health check for Cloud Run"""
     return {"status": "healthy"}, 200

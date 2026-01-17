@@ -203,3 +203,4 @@
 
 
 I will first locate the `terminal_manager.py` file to ensure I apply the changes to the correct path.
+"""

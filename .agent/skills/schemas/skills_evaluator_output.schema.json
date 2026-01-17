@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["status", "log_path", "statistics", "summary"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pass"] },
+        "log_path": { "type": "string" },
+        "statistics": { "type": "object" },
+        "summary": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "required": ["status", "log_path", "statistics", "message", "usage"],
+      "properties": {
+        "status": { "type": "string", "enum": ["warning"] },
+        "log_path": { "type": "string" },
+        "statistics": { "type": "object" },
+        "message": { "type": "string" },
+        "usage": { "type": "string" },
+        "suggestion": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "required": ["status", "log_path", "statistics", "message", "usage"],
+      "properties": {
+        "status": { "type": "string", "enum": ["error"] },
+        "log_path": { "type": "string" },
+        "statistics": { "type": "object" },
+        "message": { "type": "string" },
+        "usage": { "type": "string" },
+        "suggestion": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

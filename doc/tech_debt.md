@@ -77,7 +77,7 @@
 ## 🔗 相關文件
 
 - [QA 角色定義](/.agent/roles/qa.md)
-- [Implementation Plan Index](/doc/implementation_plan_index.md)
+- [Implementation Plan Index](/doc/Implementation_Plan_index.md)
 - [Workflow 流程分析](/doc/workflow_process_analysis.md)
 
 ---

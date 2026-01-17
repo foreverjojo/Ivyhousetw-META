@@ -3,7 +3,7 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
 ---
 # 🤖 艾薇虛擬開發團隊工作流程
 
-當使用者輸入 `/dev-team` 或請求「啟動開發團隊」時，請依照以下步驟執行。
+當使用者輸入 `/dev`（或相容別名 `/dev-team`）或請求「啟動開發團隊」時，請依照以下步驟執行。
 
 ---
 
@@ -95,6 +95,13 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
   - 必須先補齊 Plan 的 `RESEARCH & ASSUMPTIONS`（Link-required；無來源則標 `RISK: unverified`）
   - 未完成不得進入 Engineer 執行
 
+**Plan Validator Gate（必先完成）**：
+- 在進入 Engineer 執行前，必須先用 `plan_validator` 驗證 Plan（由 Project terminal 執行）：
+  ```bash
+  python .agent/skills/plan_validator.py <plan_file_path>
+  ```
+- 若回傳 `status: fail|error` → 退回 Planner 修正 Plan，未通過不得進入 Engineer
+
 **決策選項**:
 1. **Codex CLI（VS Code Terminal）**: 執行 / QA
 2. **OpenCode CLI（VS Code Terminal）**: 執行 / QA
@@ -182,6 +189,28 @@ rollback_files: [N/A|檔案清單]
 - 單檔不超過 500 行
 - 無 Hard-code API Key
 - 遵循 `ivy_house_rules.md` 核心守則
+
+**Skill Execution Gate（每次變更必執行，且需留證據）**：
+- 對每個新建/修改的 `.py` 檔案執行：
+  ```bash
+  python .agent/skills/code_reviewer.py <file_path>
+  ```
+- 若專案有測試，執行：
+  ```bash
+  python .agent/skills/test_runner.py [test_path]
+  ```
+- **Coordinator 收集流程（VS Code 原生模式）**：
+  - Copilot Chat 透過 `terminal.sendText()` 對已啟動的 Codex/OpenCode 終端注入指令
+  - 使用 VS Code Proposed API 監測終端輸出
+  - 從 stdout 擷取 JSON 結果
+  - 將結果寫入 Log 的 `## 🛠️ SKILLS_EXECUTION_REPORT` 段落
+- **Skills Evaluation（建議每回合一次，產生可追溯統計）**：
+  - 若 Log 已包含 `SKILLS_EXECUTION_REPORT`，執行：
+    ```bash
+    python .agent/skills/skills_evaluator.py <log_file_path>
+    ```
+  - 將輸出摘要/統計寫入 Log 的 `## 📈 SKILLS_EVALUATION` 段落
+- 若 `code_reviewer.py` 回傳 `status: fail`（例如 API key 洩漏）→ 立即停止並回報 user
 
 **產出格式** (若為模式 A)：
 ```markdown

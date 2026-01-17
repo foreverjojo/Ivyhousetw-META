@@ -36,7 +36,12 @@ def write_pipeline_state(
     state["last_completed_step"] = last_completed_step
     state["last_mode"] = mode
 
-    ev: Dict[str, Any] = {"at": now_iso(), "mode": mode, "step": last_completed_step, "status": status}
+    ev: Dict[str, Any] = {
+        "at": now_iso(),
+        "mode": mode,
+        "step": last_completed_step,
+        "status": status,
+    }
     if error:
         ev["error"] = error
 

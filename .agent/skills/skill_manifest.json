@@ -1,4 +1,87 @@
 {
-    "version": "1.0",
-    "skills": []
+  "version": "1.0",
+  "last_updated": "2026-01-17T21:29:37Z",
+  "skills": [
+    {
+      "name": "code_reviewer",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/code_reviewer.py",
+      "description": "代碼品質審查工具",
+      "schema": ".agent/skills/schemas/code_reviewer_output.schema.json",
+      "last_updated": "2026-01-17T21:29:37Z"
+    },
+    {
+      "name": "doc_generator",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/doc_generator.py",
+      "description": "Python 文件自動生成工具",
+      "schema": null,
+      "last_updated": "2026-01-17T21:29:37Z"
+    },
+    {
+      "name": "git_stats_reporter",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/git_stats_reporter.py",
+      "description": "Git 變更統計工具（numstat 解析）",
+      "schema": ".agent/skills/schemas/git_stats_reporter_output.schema.json",
+      "last_updated": "2026-01-17T21:29:37Z"
+    },
+    {
+      "name": "github_explorer",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/github_explorer.py",
+      "description": "GitHub 技能搜尋與下載工具",
+      "schema": ".agent/skills/schemas/github_explorer_output.schema.json",
+      "last_updated": "2026-01-17T21:29:37Z"
+    },
+    {
+      "name": "manifest_updater",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/manifest_updater.py",
+      "description": "Skills Manifest 自動同步工具",
+      "schema": ".agent/skills/schemas/manifest_updater_output.schema.json",
+      "last_updated": "2026-01-17T21:29:37Z"
+    },
+    {
+      "name": "plan_validator",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/plan_validator.py",
+      "description": "Plan 格式驗證工具",
+      "schema": ".agent/skills/schemas/plan_validator_output.schema.json",
+      "last_updated": "2026-01-17T21:29:37Z"
+    },
+    {
+      "name": "skill_converter",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/skill_converter.py",
+      "description": "技能轉換流水線模組",
+      "schema": null,
+      "last_updated": "2026-01-17T21:29:37Z"
+    },
+    {
+      "name": "skills_evaluator",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/skills_evaluator.py",
+      "description": "解析 Log 中的 SKILLS_EXECUTION_REPORT，產生統計報告",
+      "schema": ".agent/skills/schemas/skills_evaluator_output.schema.json",
+      "last_updated": "2026-01-17T21:29:37Z"
+    },
+    {
+      "name": "test_runner",
+      "type": "builtin",
+      "version": "1.0.0",
+      "path": ".agent/skills/test_runner.py",
+      "description": "自動化測試執行工具",
+      "schema": ".agent/skills/schemas/test_runner_output.schema.json",
+      "last_updated": "2026-01-17T21:29:37Z"
+    }
+  ]
 }

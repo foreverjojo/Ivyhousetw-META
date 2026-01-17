@@ -13,6 +13,10 @@
 | `test_runner` | 測試執行器 | `python .agent/skills/test_runner.py [test_path]` |
 | `github_explorer` | GitHub 技能搜尋與下載 | `python .agent/skills/github_explorer.py <command>` |
 | `skill_converter` | 技能轉換流水線 | 由 github_explorer 內部調用 |
+| `plan_validator` | Plan 格式驗證 | `python .agent/skills/plan_validator.py <plan_file_path>` |
+| `git_stats_reporter` | Git 變更統計與 Gate 觸發 | `python .agent/skills/git_stats_reporter.py <diff_file_path>` |
+| `manifest_updater` | Skills manifest 同步 | `python .agent/skills/manifest_updater.py --check` / `--sync` |
+| `skills_evaluator` | Skills 執行統計與回饋 | `python .agent/skills/skills_evaluator.py <log_file_path> [--format json|markdown]` |
 
 ---
 
@@ -118,6 +122,100 @@ python .agent/skills/github_explorer.py list
   "results": []
 }
 ```
+
+---
+
+### 5. plan_validator.py
+
+**功能**：驗證 Plan 文件是否包含必要段落與 `EXECUTION_BLOCK` 關鍵欄位。
+
+**調用方式**：
+```bash
+python .agent/skills/plan_validator.py doc/plans/Idx-XXX_*.md
+```
+
+**輸出格式**：JSON（status 小寫）
+```json
+{
+  "status": "pass | fail | error",
+  "plan_path": "doc/plans/Idx-XXX_*.md",
+  "missing_sections": [],
+  "format_errors": [],
+  "summary": "Plan 驗證通過"
+}
+```
+
+---
+
+### 6. git_stats_reporter.py
+
+**功能**：解析 `git diff --numstat` 輸出，產生變更統計並輸出 Gate 觸發建議（Maintainability / UI/UX）。
+
+**調用方式**：
+```bash
+git diff --numstat > /tmp/diff_stats.txt
+python .agent/skills/git_stats_reporter.py /tmp/diff_stats.txt
+```
+
+**輸出格式**：JSON（status 小寫）
+```json
+{
+  "status": "pass | error",
+  "total_files_changed": 3,
+  "total_lines_added": 10,
+  "total_lines_deleted": 2,
+  "total_lines_changed": 12,
+  "affected_paths": ["app.py", "ui/foo.py"],
+  "triggers": { "maintainability_gate": false, "ui_ux_gate": true },
+  "summary": "3 files, +10/-2 lines"
+}
+```
+
+---
+
+### 7. manifest_updater.py
+
+**功能**：同步 `.agent/skills/skill_manifest.json` 的 builtin skills 清單，並保留 external/legacy 記錄（向後相容）。
+
+**調用方式**：
+```bash
+# 僅檢查（不寫入）
+python .agent/skills/manifest_updater.py --check
+
+# 寫入更新
+python .agent/skills/manifest_updater.py --sync
+```
+
+**輸出格式**：JSON（status 小寫）
+
+---
+
+### 8. skills_evaluator.py
+
+**功能**：解析 Log 的 `## 🛠️ SKILLS_EXECUTION_REPORT` 表格，產生統計報告（執行次數、狀態分布、失敗清單、成功率）。
+
+**調用方式**：
+```bash
+# JSON（預設）
+python .agent/skills/skills_evaluator.py doc/logs/Idx-XXX_log.md
+
+# Markdown
+python .agent/skills/skills_evaluator.py doc/logs/Idx-XXX_log.md --format markdown
+```
+
+**輸出格式**：JSON（預設）或 Markdown（--format markdown）
+
+---
+
+## 🔒 Output Schema Validation（Phase 2）
+
+本 repo 會在 `.agent/skills/schemas/` 內提供 JSON Schema 檔案，供對 skills 輸出做機械化驗證。
+
+- Phase 1：建立 schema 檔案（不強制驗證）
+- Phase 2：skills 會在輸出 JSON 前嘗試執行 **optional** schema 驗證（graceful degradation）
+  - 若 `jsonschema` 不可用 → 跳過驗證（不影響執行）
+  - 若 schema 檔案不存在 → 跳過驗證（不影響執行）
+  - 若 schema 驗證失敗 → 在輸出 JSON 加上 `validation_errors` + `suggestion`（**不強制改動原本 status/exit code**）
 
 ---
 

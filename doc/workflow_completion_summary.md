@@ -193,7 +193,7 @@ python scripts/check_verification_due.py
 ```
 
 **預期結果**:
-- ✅ 可掃描 implementation_plan_index.md
+- ✅ 可掃描 Implementation_Plan_index.md
 - ✅ 正確計算到期日
 
 ---

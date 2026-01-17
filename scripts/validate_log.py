@@ -119,7 +119,7 @@ def parse_changed_files(content: str) -> list[dict[str, str]]:
     # 尋找變更清單區塊
     patterns = [
         r"[-*]\s*\[.\]\s*`([^`]+)`:\s*(.+)",  # - [x] `file.py`: 說明
-        r"[-*]\s*`([^`]+)`\s*[:\-]\s*(.+)",    # - `file.py`: 說明
+        r"[-*]\s*`([^`]+)`\s*[:\-]\s*(.+)",  # - `file.py`: 說明
         r"\|\s*([^|]+\.py)\s*\|\s*(NEW|MODIFY|DELETE)",  # | file.py | MODIFY |
     ]
 
@@ -207,9 +207,7 @@ def validate_simple(log_data: dict[str, Any], content: str) -> list[str]:
 
         # PASS WITH RISK 需要風險描述
         if result == "PASS WITH RISK":
-            has_risk_desc = any(
-                log_data.get(f) for f in ["risk_description", "風險描述", "risk"]
-            )
+            has_risk_desc = any(log_data.get(f) for f in ["risk_description", "風險描述", "risk"])
             if not has_risk_desc:
                 # 檢查內容中是否有風險描述區塊
                 if "風險" not in content and "risk" not in content.lower():
@@ -346,17 +344,20 @@ def main() -> int:
         help="要驗證的 Log 檔案路徑",
     )
     parser.add_argument(
-        "--all", "-a",
+        "--all",
+        "-a",
         action="store_true",
         help="驗證所有 Log 檔案",
     )
     parser.add_argument(
-        "--simple", "-s",
+        "--simple",
+        "-s",
         action="store_true",
         help="簡易模式（只檢查必填欄位，不使用 Schema）",
     )
     parser.add_argument(
-        "--quiet", "-q",
+        "--quiet",
+        "-q",
         action="store_true",
         help="安靜模式",
     )

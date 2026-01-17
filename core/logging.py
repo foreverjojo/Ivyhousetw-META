@@ -108,12 +108,7 @@ class StructuredLogger:
         filtered_extra = self._filter_sensitive_data(extra)
 
         # 使用 extra 參數傳遞額外資訊
-        self.logger.log(
-            level,
-            message,
-            extra={"extra_data": filtered_extra},
-            exc_info=exc_info
-        )
+        self.logger.log(level, message, extra={"extra_data": filtered_extra}, exc_info=exc_info)
 
     def _filter_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """過濾敏感資訊（API Key, Token, Password）"""

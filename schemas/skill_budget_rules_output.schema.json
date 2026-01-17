@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ivyhouse.local/schemas/skill_budget_rules_output.v1.json",
+  "title": "Ivy House Skills - Budget Rules Output (v1)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "skill_version",
+    "inputs",
+    "thresholds",
+    "results",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "skill_budget_rules_output.v1" },
+    "generated_at": { "type": "string" },
+    "skill_version": { "type": "string" },
+    "inputs": { "type": "object", "additionalProperties": true },
+    "thresholds": { "type": "object", "additionalProperties": true },
+    "results": { "type": "object", "additionalProperties": true },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+
+    "summary": { "type": "object", "additionalProperties": true },
+    "actions": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "recommendations": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

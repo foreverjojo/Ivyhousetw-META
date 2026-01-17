@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ivyhouse.local/schemas/skill_creative_fatigue_output.v1.json",
+  "title": "Ivy House Skills - Creative Fatigue Output (v1)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "skill_version",
+    "inputs",
+    "thresholds",
+    "results",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "skill_creative_fatigue_output.v1" },
+    "generated_at": { "type": "string" },
+    "skill_version": { "type": "string" },
+    "inputs": { "type": "object", "additionalProperties": true },
+    "thresholds": { "type": "object", "additionalProperties": true },
+    "results": { "type": "object", "additionalProperties": true },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+
+    "triggered": { "type": "boolean" },
+    "ads_analyzed": { "type": "integer", "minimum": 0 },
+    "avg_ctr_pct": { "type": ["number", "null"] },
+    "fatigue_ads": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "high_potential_ads": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "recommendations": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

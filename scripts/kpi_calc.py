@@ -54,7 +54,6 @@ def calc_meta_kpis(adset_df: pd.DataFrame, ads_df: pd.DataFrame) -> Dict[str, An
     lpv = _sum_col(adset_df, "lpv")
     link_clicks = _sum_col(adset_df, "link_clicks")
 
-
     # 真值 ROAS/CPA
     roas_truth = (website_value / spend) if spend > 0 else 0.0
     cpa_truth = (spend / website_purchases) if website_purchases > 0 else 0.0
@@ -78,33 +77,28 @@ def calc_meta_kpis(adset_df: pd.DataFrame, ads_df: pd.DataFrame) -> Dict[str, An
     return {
         # ✅ 相容舊鍵（目前指向真值，避免下游 schema 破壞）
         "spend_twd": round(spend, 2),
-        "purchase_value_twd": round(website_value, 2),   # legacy key, now truth
-        "purchases": int(round(website_purchases)),      # legacy key, now truth
-        "roas_calc": round(roas_truth, 4),               # legacy key, now truth
-        "cpa_calc_twd": round(cpa_truth, 2),             # legacy key, now truth
-
+        "purchase_value_twd": round(website_value, 2),  # legacy key, now truth
+        "purchases": int(round(website_purchases)),  # legacy key, now truth
+        "roas_calc": round(roas_truth, 4),  # legacy key, now truth
+        "cpa_calc_twd": round(cpa_truth, 2),  # legacy key, now truth
         # ✅ explicit truth keys
         "website_purchases": int(round(website_purchases)),
         "website_purchase_value_twd": round(website_value, 2),
         "aov_twd_calc": round(aov_truth, 2),
-
         # ✅ 平台參考鍵（漂移監控）
         "platform_purchases": int(round(platform_purchases)),
         "platform_purchase_value_twd": round(platform_value, 2),
         "roas_platform_calc": round(roas_platform, 4),
         "cpa_platform_calc_twd": round(cpa_platform, 2),
         "aov_platform_twd_calc": round(aov_platform, 2),
-
         # ✅ drift metrics
         "delta_purchase_value_twd": round(delta_value, 2),
         "delta_purchase_value_rate": round(delta_rate, 4),
-
         # ✅ traffic diagnostics (derived)
         "impressions": int(round(impressions)),
         "cpm_calc_twd": round(cpm_twd, 2),
         "ctr_link_pct_calc": round(ctr_link_pct, 4),
         "cpc_calc_twd": round(cpc_twd, 2),
-
         "funnel": {
             "link_clicks": int(round(link_clicks)),
             "landing_page_views": int(round(lpv)),
@@ -117,7 +111,6 @@ def calc_meta_kpis(adset_df: pd.DataFrame, ads_df: pd.DataFrame) -> Dict[str, An
             for k in ["quality_ranking", "engagement_ranking", "conversion_ranking"]
         ),
     }
-
 
 
 def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5) -> Dict[str, Any]:
@@ -141,8 +134,12 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
         frequency_col = _resolve_col_name(d, _get_alias("frequency"))
 
         d["__spend"] = d[spend_col].apply(_to_num) if spend_col in d.columns else 0
-        d["__impressions"] = d[impressions_col].apply(_to_num) if impressions_col in d.columns else 0
-        d["__link_clicks"] = d[link_clicks_col].apply(_to_num) if link_clicks_col in d.columns else 0
+        d["__impressions"] = (
+            d[impressions_col].apply(_to_num) if impressions_col in d.columns else 0
+        )
+        d["__link_clicks"] = (
+            d[link_clicks_col].apply(_to_num) if link_clicks_col in d.columns else 0
+        )
         d["__lpv"] = d[lpv_col].apply(_to_num) if lpv_col in d.columns else 0
         d["__frequency"] = d[frequency_col].apply(_to_num) if frequency_col in d.columns else 0
 
@@ -167,26 +164,43 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
             d["__purchases_truth"] = 0
 
         # 平台參考（漂移監控）
-        d["__value_platform"] = d[value_platform_col].apply(_to_num) if value_platform_col in d.columns else 0
-        d["__purchases_platform"] = d[purchases_platform_col].apply(_to_num) if purchases_platform_col in d.columns else 0
-
+        d["__value_platform"] = (
+            d[value_platform_col].apply(_to_num) if value_platform_col in d.columns else 0
+        )
+        d["__purchases_platform"] = (
+            d[purchases_platform_col].apply(_to_num) if purchases_platform_col in d.columns else 0
+        )
 
         # truth metrics
-        d["__roas_truth"] = d.apply(lambda r: (r["__value_truth"] / r["__spend"]) if r["__spend"] > 0 else 0.0, axis=1)
-        d["__cpa_truth"] = d.apply(lambda r: (r["__spend"] / r["__purchases_truth"]) if r["__purchases_truth"] > 0 else 0.0, axis=1)
+        d["__roas_truth"] = d.apply(
+            lambda r: (r["__value_truth"] / r["__spend"]) if r["__spend"] > 0 else 0.0, axis=1
+        )
+        d["__cpa_truth"] = d.apply(
+            lambda r: (r["__spend"] / r["__purchases_truth"])
+            if r["__purchases_truth"] > 0
+            else 0.0,
+            axis=1,
+        )
 
         # platform metrics
-        d["__roas_platform"] = d.apply(lambda r: (r["__value_platform"] / r["__spend"]) if r["__spend"] > 0 else 0.0, axis=1)
+        d["__roas_platform"] = d.apply(
+            lambda r: (r["__value_platform"] / r["__spend"]) if r["__spend"] > 0 else 0.0, axis=1
+        )
 
         # traffic diagnostics
         d["__ctr_link_pct_calc"] = d.apply(
-            lambda r: ((r["__link_clicks"] / r["__impressions"]) * 100.0) if r["__impressions"] > 0 else 0.0,
+            lambda r: ((r["__link_clicks"] / r["__impressions"]) * 100.0)
+            if r["__impressions"] > 0
+            else 0.0,
             axis=1,
         )
 
         # drift
         d["__delta_value"] = d["__value_platform"] - d["__value_truth"]
-        d["__delta_rate"] = d.apply(lambda r: (r["__delta_value"] / r["__value_truth"]) if r["__value_truth"] > 0 else 0.0, axis=1)
+        d["__delta_rate"] = d.apply(
+            lambda r: (r["__delta_value"] / r["__value_truth"]) if r["__value_truth"] > 0 else 0.0,
+            axis=1,
+        )
 
         keep = [
             "__name",
@@ -212,7 +226,6 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
 
     adset_name_col = _resolve_col_name(adset_df, _get_alias("adset_name"))
     ads_name_col = _resolve_col_name(ads_df, _get_alias("ad_name"))
-
 
     adset = add_roas(adset_df, adset_name_col)
     ads = add_roas(ads_df, ads_name_col)
@@ -244,30 +257,30 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
 
         out = []
         for _, r in df.iterrows():
-            out.append({
-                "name": str(r.get("__name", "")).strip(),
-
-                "impressions": _si(r.get("__impressions", 0)),
-                "link_clicks": _si(r.get("__link_clicks", 0)),
-                "ctr_link_pct_calc": round(_sf(r.get("__ctr_link_pct_calc", 0)), 4),
-                "landing_page_views": _si(r.get("__lpv", 0)),
-
-                # truth (aligned with KPI)
-                "spend_twd": round(_sf(r.get("__spend", 0)), 2),
-                "purchase_value_twd": round(_sf(r.get("__value_truth", 0)), 2),
-                "purchases": _si(r.get("__purchases_truth", 0)),
-                "roas": round(_sf(r.get("__roas_truth", 0)), 4),
-                "cpa_twd": round(_sf(r.get("__cpa_truth", 0)), 2),
-
-                # 平台參考 + 漂移
-                "platform_purchase_value_twd": round(_sf(r.get("__value_platform", 0)), 2),
-                "platform_purchases": _si(r.get("__purchases_platform", 0)),
-                "roas_platform": round(_sf(r.get("__roas_platform", 0)), 4),
-                "delta_purchase_value_twd": round(_sf(r.get("__delta_value", 0)), 2),
-                "delta_purchase_value_rate": round(_sf(r.get("__delta_rate", 0)), 4),
-
-                "frequency": round(_sf(r.get("__frequency", 0)), 2) if "__frequency" in df.columns else None
-            })
+            out.append(
+                {
+                    "name": str(r.get("__name", "")).strip(),
+                    "impressions": _si(r.get("__impressions", 0)),
+                    "link_clicks": _si(r.get("__link_clicks", 0)),
+                    "ctr_link_pct_calc": round(_sf(r.get("__ctr_link_pct_calc", 0)), 4),
+                    "landing_page_views": _si(r.get("__lpv", 0)),
+                    # truth (aligned with KPI)
+                    "spend_twd": round(_sf(r.get("__spend", 0)), 2),
+                    "purchase_value_twd": round(_sf(r.get("__value_truth", 0)), 2),
+                    "purchases": _si(r.get("__purchases_truth", 0)),
+                    "roas": round(_sf(r.get("__roas_truth", 0)), 4),
+                    "cpa_twd": round(_sf(r.get("__cpa_truth", 0)), 2),
+                    # 平台參考 + 漂移
+                    "platform_purchase_value_twd": round(_sf(r.get("__value_platform", 0)), 2),
+                    "platform_purchases": _si(r.get("__purchases_platform", 0)),
+                    "roas_platform": round(_sf(r.get("__roas_platform", 0)), 4),
+                    "delta_purchase_value_twd": round(_sf(r.get("__delta_value", 0)), 2),
+                    "delta_purchase_value_rate": round(_sf(r.get("__delta_rate", 0)), 4),
+                    "frequency": round(_sf(r.get("__frequency", 0)), 2)
+                    if "__frequency" in df.columns
+                    else None,
+                }
+            )
 
         return out
 
@@ -300,9 +313,11 @@ def calc_web_kpis(web_df: pd.DataFrame) -> Dict[str, Any]:
         "columns": list(d.columns),
     }
 
+
 # =========================
 # 產生 report_summary（v1）
 # =========================
+
 
 def build_report_summary(
     meta_adset_bytes: bytes,
@@ -335,7 +350,9 @@ def build_report_summary(
         ads_df, ads_agg_methods = _aggregate_daily_to_weekly(ads_df, ads_name_col)
         aggregation_methods = adset_agg_methods or ads_agg_methods
 
-    date_start, date_end = parse_date_range_from_meta(adset_daily_df if adset_daily_df is not None else adset_df)
+    date_start, date_end = parse_date_range_from_meta(
+        adset_daily_df if adset_daily_df is not None else adset_df
+    )
     week_id_raw = iso_week_id(date_start)
     week_id = normalize_week_id(week_id_raw) or week_id_raw  # 確保格式為 YYYY-Www
 
@@ -348,17 +365,14 @@ def build_report_summary(
         "generated_at": datetime.now(ZoneInfo("Asia/Taipei")).isoformat(timespec="seconds"),
         "week_id": week_id,
         "date_range": f"{date_start}~{date_end}",
-
         # schema 固定欄位
         "kpi_truth_source": "meta_adset_csv",
         "ad_diagnostics_source": "meta_ad_csv",
-
         "kpi": {
             "meta": meta_kpi,
             "web": web_kpi,
         },
         "tables": tables,
-
         # 非必要但實用：可追溯清洗/彙總規則是否生效
         "data_cleaning": {
             "dropped_total_rows": {
@@ -368,14 +382,15 @@ def build_report_summary(
             "daily_aggregation": {
                 "is_daily_data": is_daily,
                 "aggregation_methods": aggregation_methods,
-            } if is_daily else None,
+            }
+            if is_daily
+            else None,
         },
-
         # 這些欄位已透過 UI manual inputs 補充，不再視為缺失
         "missing_data": {
             "meta_unavailable_fields": [],
             "note": "optimization_goal, billing_event, buying_type 由使用者在 UI 輸入，存於 inputs.json",
-        }
+        },
     }
 
     return result

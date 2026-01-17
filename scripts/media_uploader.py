@@ -48,7 +48,7 @@ class UploadResult:
 def get_gdrive_access_token(cfg: CloudConfig) -> str:
     """取得 Google Drive Access Token (優先使用 SA JSON，其次為運作環境變數)。"""
     if cfg.google_application_credentials:
-        scopes = ['https://www.googleapis.com/auth/drive.file']
+        scopes = ["https://www.googleapis.com/auth/drive.file"]
         creds = service_account.Credentials.from_service_account_file(
             cfg.google_application_credentials, scopes=scopes
         )
@@ -61,11 +61,15 @@ def get_gdrive_access_token(cfg: CloudConfig) -> str:
     raise RuntimeError("缺少 Google Drive 認證方式 (需提供 SA JSON 或 Access Token)。")
 
 
-def ensure_gdrive_folder(token: str, folder_name: str, parent_id: Optional[str] = None, timeout: int = 60) -> str:
+def ensure_gdrive_folder(
+    token: str, folder_name: str, parent_id: Optional[str] = None, timeout: int = 60
+) -> str:
     """在 Google Drive 確保資料夾存在，回傳其 ID。"""
     # 處理資料夾名稱中的單引號 (Drive API query 語法需跳脫)
     safe_name = folder_name.replace("'", "\\'")
-    query = f"name='{safe_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    query = (
+        f"name='{safe_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    )
     if parent_id:
         query += f" and '{parent_id}' in parents"
 
@@ -81,10 +85,7 @@ def ensure_gdrive_folder(token: str, folder_name: str, parent_id: Optional[str] 
     # 不存在則建立
     print(f"📁 雲端資料夾 '{folder_name}' 不存在，正在建立...")
     create_url = "https://www.googleapis.com/drive/v3/files"
-    metadata = {
-        "name": folder_name,
-        "mimeType": "application/vnd.google-apps.folder"
-    }
+    metadata = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
     if parent_id:
         metadata["parents"] = [parent_id]
 
@@ -99,14 +100,14 @@ def get_target_folder_id_by_type(token: str, root_id: str, file_path: Path) -> s
     """根據檔案類型決定目標子資料夾 ID。"""
     ext = file_path.suffix.lower()
 
-    if ext in ('.json', '.csv', '.xlsx'):
+    if ext in (".json", ".csv", ".xlsx"):
         return ensure_gdrive_folder(token, "reports", parent_id=root_id)
 
-    if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
+    if ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
         assets_id = ensure_gdrive_folder(token, "assets", parent_id=root_id)
         return ensure_gdrive_folder(token, "images", parent_id=assets_id)
 
-    if ext in ('.mp4', '.mov', '.avi'):
+    if ext in (".mp4", ".mov", ".avi"):
         assets_id = ensure_gdrive_folder(token, "assets", parent_id=root_id)
         return ensure_gdrive_folder(token, "videos", parent_id=assets_id)
 
@@ -137,7 +138,11 @@ def _drive_upload_file(
 
     with file_path.open("rb") as f:
         files = {
-            "metadata": ("metadata", json.dumps(metadata, ensure_ascii=False), "application/json; charset=utf-8"),
+            "metadata": (
+                "metadata",
+                json.dumps(metadata, ensure_ascii=False),
+                "application/json; charset=utf-8",
+            ),
             "file": (upload_name, f, "application/octet-stream"),
         }
         resp = requests.post(url, headers=headers, files=files, timeout=timeout)
@@ -210,7 +215,7 @@ def upload_media_assets(
                     target_folder_id=target_id,
                     file_path=p,
                     upload_name=upload_name,
-                    timeout=cfg.http_timeout_s
+                    timeout=cfg.http_timeout_s,
                 )
                 results.append(
                     UploadResult(
@@ -274,16 +279,18 @@ def write_upload_manifest(
 
     timestamp = datetime.now().isoformat(timespec="seconds")
     for r in results:
-        existing.append({
-            "timestamp": timestamp,
-            "local_path": r.local_path,
-            "upload_name": r.upload_name,
-            "sha256_8": r.sha256_8,
-            "remote_id": r.remote_id,
-            "remote_url": r.remote_url,
-            "status": r.status,
-            "error": r.error if r.error else None
-        })
+        existing.append(
+            {
+                "timestamp": timestamp,
+                "local_path": r.local_path,
+                "upload_name": r.upload_name,
+                "sha256_8": r.sha256_8,
+                "remote_id": r.remote_id,
+                "remote_url": r.remote_url,
+                "status": r.status,
+                "error": r.error if r.error else None,
+            }
+        )
 
     with manifest_path.open("w", encoding="utf-8") as f:
         json.dump(existing, f, ensure_ascii=False, indent=2)

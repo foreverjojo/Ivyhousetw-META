@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["success"] },
+        "message": { "type": "string" },
+        "results": { "type": ["array", "object"] },
+        "skills": { "type": ["array", "object"] },
+        "usage": { "type": ["string", "object"] },
+        "help": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "required": ["status", "message"],
+      "properties": {
+        "status": { "type": "string", "enum": ["warning", "blocked", "error"] },
+        "message": { "type": "string" },
+        "results": { "type": ["array", "object"] },
+        "available_commands": { "type": "array", "items": { "type": "string" } },
+        "usage": { "type": ["string", "object"] },
+        "suggestion": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

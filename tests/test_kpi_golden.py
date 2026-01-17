@@ -18,7 +18,9 @@ def test_roas_calculation():
 
     # 基本公式驗證
     calculated_roas = revenue / spend if spend > 0 else 0
-    assert calculated_roas == expected_roas, f"ROAS 計算錯誤：預期 {expected_roas}，實際 {calculated_roas}"
+    assert calculated_roas == expected_roas, (
+        f"ROAS 計算錯誤：預期 {expected_roas}，實際 {calculated_roas}"
+    )
 
 
 def test_roas_zero_spend():

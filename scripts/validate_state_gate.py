@@ -4,7 +4,7 @@ State Gate 驗證腳本
 
 功能：
 1. 驗證 Commit Message 格式（feat(Idx-NNN): ...）
-2. 檢查 Index 是否存在於 implementation_plan_index.md
+2. 檢查 Index 是否存在於 Implementation_Plan_index.md
 3. 驗證任務鎖一致性
 4. 豁免規則：chore:, docs:, style:, ci:, build:, revert:
 
@@ -41,7 +41,7 @@ def is_exempt_commit(message):
 def extract_index(commit_message):
     """從 commit message 中提取 Index"""
     # 匹配格式：<type>(Idx-NNN): <description>
-    pattern = r'\(Idx-(\d+)\):'
+    pattern = r"\(Idx-(\d+)\):"
     match = re.search(pattern, commit_message)
 
     if match:
@@ -50,12 +50,12 @@ def extract_index(commit_message):
 
 
 def check_index_exists(index):
-    """檢查 Index 是否存在於 implementation_plan_index.md"""
+    """檢查 Index 是否存在於 Implementation_Plan_index.md"""
     if not INDEX_FILE.exists():
         print(f"❌ 錯誤: {INDEX_FILE} 不存在")
         return False
 
-    with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+    with open(INDEX_FILE, "r", encoding="utf-8") as f:
         content = f.read()
 
     # 檢查是否包含 Index（例如：| Idx-001 |）
@@ -73,11 +73,12 @@ def check_lock_consistency(index):
         return None  # 警告但不阻擋
 
     import json
+
     try:
-        with open(LOCK_FILE, 'r', encoding='utf-8') as f:
+        with open(LOCK_FILE, "r", encoding="utf-8") as f:
             lock_data = json.load(f)
 
-        if lock_data['index'] != index:
+        if lock_data["index"] != index:
             print(f"❌ 錯誤: 任務鎖不一致")
             print(f"   Commit Index: {index}")
             print(f"   鎖定 Index: {lock_data['index']}")
@@ -124,7 +125,7 @@ def validate_commit_message(message):
     if not check_index_exists(index):
         print(f"❌ 錯誤: {index} 不存在於 {INDEX_FILE}")
         print()
-        print("請先在 implementation_plan_index.md 中註冊此 Index")
+        print("請先在 doc/Implementation_Plan_index.md 中註冊此 Index")
         return False
 
     print(f"✅ Index 存在於 {INDEX_FILE.name}")

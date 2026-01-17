@@ -31,7 +31,9 @@ def _iter_files(root: Path, *, recursive: bool) -> Iterable[Path]:
         yield from root.glob("*")
 
 
-def scan_media_assets(media_dir: Optional[Path] = None, *, recursive: bool = True) -> MediaScanResult:
+def scan_media_assets(
+    media_dir: Optional[Path] = None, *, recursive: bool = True
+) -> MediaScanResult:
     """
     掃描素材目錄，回傳圖片與影片清單（以副檔名判斷）。
     """

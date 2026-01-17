@@ -27,7 +27,7 @@ def load_lock():
         return None
 
     try:
-        with open(LOCK_FILE, 'r', encoding='utf-8') as f:
+        with open(LOCK_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
         return None
@@ -36,7 +36,7 @@ def load_lock():
 def save_lock(lock_data):
     """儲存任務鎖"""
     LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(LOCK_FILE, 'w', encoding='utf-8') as f:
+    with open(LOCK_FILE, "w", encoding="utf-8") as f:
         json.dump(lock_data, f, indent=2, ensure_ascii=False)
 
 
@@ -45,8 +45,8 @@ def is_expired(lock_data):
     if not lock_data:
         return True
 
-    started_at = datetime.fromisoformat(lock_data['started_at'])
-    ttl_hours = lock_data.get('ttl_hours', DEFAULT_TTL_HOURS)
+    started_at = datetime.fromisoformat(lock_data["started_at"])
+    ttl_hours = lock_data.get("ttl_hours", DEFAULT_TTL_HOURS)
     expiry = started_at + timedelta(hours=ttl_hours)
 
     return datetime.now() > expiry
@@ -69,7 +69,7 @@ def acquire_lock(index):
         "index": index,
         "started_at": datetime.now().isoformat(),
         "ttl_hours": DEFAULT_TTL_HOURS,
-        "status": "IN_PROGRESS"
+        "status": "IN_PROGRESS",
     }
 
     save_lock(new_lock)
@@ -87,7 +87,7 @@ def release_lock(index):
         print("❌ 錯誤: 沒有活動的任務鎖")
         return False
 
-    if lock['index'] != index:
+    if lock["index"] != index:
         print(f"❌ 錯誤: 當前鎖是 {lock['index']}，不是 {index}")
         return False
 
@@ -115,7 +115,7 @@ def force_release():
         print(f"   開始時間: {lock['started_at']}")
 
         response = input("\n確定要強制釋放？(yes/no): ")
-        if response.lower() == 'yes':
+        if response.lower() == "yes":
             LOCK_FILE.unlink()
             print(f"✅ 已強制釋放鎖: {lock['index']}")
             return True
@@ -144,8 +144,8 @@ def show_status():
         print(f"   ⚠️  狀態: 已過期")
         print(f"\n   建議執行: python scripts/check_active_task.py force-release")
     else:
-        started_at = datetime.fromisoformat(lock['started_at'])
-        ttl_hours = lock.get('ttl_hours', DEFAULT_TTL_HOURS)
+        started_at = datetime.fromisoformat(lock["started_at"])
+        ttl_hours = lock.get("ttl_hours", DEFAULT_TTL_HOURS)
         expiry = started_at + timedelta(hours=ttl_hours)
         remaining = expiry - datetime.now()
 

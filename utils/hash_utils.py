@@ -29,7 +29,9 @@ def compute_file_fp(uploaded_file) -> dict:
     return {"sha256": sha256_bytes(b), "size": len(b)}
 
 
-def compute_inputs_fingerprint(meta_adset_file, meta_ads_file, web_excel_file, detail_level: str) -> dict:
+def compute_inputs_fingerprint(
+    meta_adset_file, meta_ads_file, web_excel_file, detail_level: str
+) -> dict:
     """
     計算輸入檔案的整體指紋碼
     包含：3個檔案的 sha256、size，以及 detail_level
@@ -47,6 +49,7 @@ def fingerprint_key_for_version(current_fp: dict) -> str:
     從 fingerprint dict 產生版本用的 key（deterministic）
     只取 sha256 + size + detail_level，不含 generated_at
     """
+
     def fget(k: str) -> Any:
         return current_fp.get(k, {})
 

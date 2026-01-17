@@ -104,8 +104,10 @@ def _drop_total_rows(df: pd.DataFrame, name_col: str) -> Tuple[pd.DataFrame, int
     return d, before - len(d)
 
 
-def _stable_fallback_id(*, platform: str, level: str, name: str, time_range: Dict[str, str], salt: str = "") -> str:
-    raw = f"{platform}|{level}|{name}|{time_range.get('start','')}|{time_range.get('end','')}|{salt}"
+def _stable_fallback_id(
+    *, platform: str, level: str, name: str, time_range: Dict[str, str], salt: str = ""
+) -> str:
+    raw = f"{platform}|{level}|{name}|{time_range.get('start', '')}|{time_range.get('end', '')}|{salt}"
     h = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
     return f"{platform}_{level}_{h}"
 
@@ -193,7 +195,10 @@ def _build_record(
             "clicks": int(clicks),
             "conversions": {
                 "truth": {"count": int(truth_count), "value": round(float(truth_value), 6)},
-                "platform": {"count": int(platform_count), "value": round(float(platform_value), 6)},
+                "platform": {
+                    "count": int(platform_count),
+                    "value": round(float(platform_value), 6),
+                },
             },
             "funnel": {"atc": int(atc), "ic": int(ic), "lpv": int(lpv)},
         },
@@ -238,7 +243,9 @@ def adapt_meta_ad_csv(path: Path) -> Dict[str, Any]:
     return adapt_meta_csv(path, spec=META_AD_SPEC)
 
 
-def adapt_meta_adset_and_ad_csv(*, adset_csv: Optional[Path], ad_csv: Optional[Path]) -> Dict[str, Any]:
+def adapt_meta_adset_and_ad_csv(
+    *, adset_csv: Optional[Path], ad_csv: Optional[Path]
+) -> Dict[str, Any]:
     chunks: List[Dict[str, Any]] = []
     if adset_csv:
         chunks.append(adapt_meta_adset_csv(adset_csv))
@@ -263,7 +270,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--adset", type=Path, help="Meta Adset CSV 檔案路徑")
     p.add_argument("--ad", type=Path, help="Meta Ad CSV 檔案路徑")
     p.add_argument("--out", type=Path, required=True, help="輸出 unified JSON 檔案路徑")
-    p.add_argument("--validate", action="store_true", help="輸出後用 schemas/unified_ad_data.json 驗證")
+    p.add_argument(
+        "--validate", action="store_true", help="輸出後用 schemas/unified_ad_data.json 驗證"
+    )
     args = p.parse_args(argv)
 
     payload = adapt_meta_adset_and_ad_csv(adset_csv=args.adset, ad_csv=args.ad)

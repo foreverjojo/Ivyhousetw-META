@@ -86,7 +86,7 @@ cp "$SOURCE/doc/plans/Idx-000_plan.template.md" "$TARGET/doc/plans/" 2>/dev/null
 ## 1) 必讀檔案
 1. `./.agent/workflows/dev-team.md`
 2. `./project_rules.md`              ← 改為專案規則檔
-3. `./doc/implementation_plan_index.md`
+3. `./doc/Implementation_Plan_index.md`
 ```
 
 ### Step 4: 客製化領域專家角色
@@ -102,7 +102,7 @@ cp "$SOURCE/doc/plans/Idx-000_plan.template.md" "$TARGET/doc/plans/" 2>/dev/null
 
 ### Step 5: 初始化 Index
 
-建立空的 `doc/implementation_plan_index.md`：
+建立空的 `doc/Implementation_Plan_index.md`：
 
 ```markdown
 # Implementation Plan Index
@@ -156,7 +156,7 @@ cp "$SOURCE/.agent/templates/handoff_template.md" "$TARGET/.agent/templates/"
 echo '{"sessions": []}' > "$TARGET/.agent/active_sessions.json"
 
 # 建立空的 Index
-cat > "$TARGET/doc/implementation_plan_index.md" << 'EOF'
+cat > "$TARGET/doc/Implementation_Plan_index.md" << 'EOF'
 # Implementation Plan Index
 
 | Task ID | 名稱 | 狀態 | 建立日期 | 完成日期 |
@@ -179,9 +179,9 @@ echo "   3. 客製化領域專家角色"
 - [ ] 建立 `project_rules.md`（專案規則）
 - [ ] 更新 `AGENT_ENTRY.md` 必讀清單
 - [ ] 客製化領域專家角色
-- [ ] 建立 `doc/implementation_plan_index.md`
+- [ ] 建立 `doc/Implementation_Plan_index.md`
 - [ ] 建立 `doc/plans/` 目錄
-- [ ] 測試：執行 `/dev-team` 確認流程正常
+- [ ] 測試：執行 `/dev`（或 `/dev-team`）確認流程正常
 
 ---
 

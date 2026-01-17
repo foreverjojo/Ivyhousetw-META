@@ -34,6 +34,52 @@ MAX_FILE_LINES = 500
 MIN_CHINESE_LINES = 5
 
 
+def validate_output_schema(result: Dict[str, Any], skill_name: str) -> Dict[str, Any]:
+    """可選 JSON Schema 驗證（graceful degradation）"""
+    try:
+        import jsonschema
+    except ImportError:
+        return result
+
+    schema_path = Path(__file__).resolve().parent / "schemas" / f"{skill_name}_output.schema.json"
+    if not schema_path.exists():
+        return result
+
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(result, schema)
+        return result
+    except jsonschema.ValidationError as exc:
+        result["validation_errors"] = [
+            {
+                "message": exc.message,
+                "path": list(exc.path),
+                "schema_path": list(exc.schema_path),
+            }
+        ]
+        result.setdefault(
+            "suggestion",
+            f"輸出格式不符合 schema 規範。請檢查 {skill_name}_output.schema.json 並確認欄位正確性。",
+        )
+        return result
+    except Exception:
+        return result
+
+
+def find_similar_files(target_path: str, project_root: str = ".") -> List[str]:
+    """找出與目標檔名相似的檔案（用於錯誤建議）"""
+    import difflib
+
+    target_name = Path(target_path).name
+    root = Path(project_root)
+    all_py_files = [str(p) for p in root.rglob("*.py")]
+    all_file_names = [Path(p).name for p in all_py_files]
+
+    similar = difflib.get_close_matches(target_name, all_file_names, n=5, cutoff=0.6)
+    similar_paths = [p for p in all_py_files if Path(p).name in similar]
+    return similar_paths[:5]
+
+
 def check_api_key_leak(content: str, lines: List[str]) -> List[Dict[str, Any]]:
     """檢查是否有 API Key 洩漏"""
     issues = []
@@ -92,10 +138,16 @@ def review_file(file_path: str) -> Dict[str, Any]:
 
     # 檢查檔案是否存在
     if not path.exists():
+        similar = find_similar_files(file_path)
+        suggestion = "請確認路徑是否正確。"
+        if similar:
+            suggestion += "\n可能是以下檔案：\n- " + "\n- ".join(similar)
         return {
             "status": "error",
             "file": file_path,
             "message": f"檔案不存在：{file_path}",
+            "suggestion": suggestion,
+            "usage": "python .agent/skills/code_reviewer.py <file_path>",
             "issues": []
         }
 
@@ -108,6 +160,8 @@ def review_file(file_path: str) -> Dict[str, Any]:
             "status": "error",
             "file": file_path,
             "message": f"讀取檔案失敗：{str(e)}",
+            "suggestion": "請確認檔案是否為 UTF-8 編碼，且具有讀取權限。",
+            "usage": "python .agent/skills/code_reviewer.py <file_path>",
             "issues": []
         }
 
@@ -137,14 +191,21 @@ def review_file(file_path: str) -> Dict[str, Any]:
 def main():
     """主程式入口"""
     if len(sys.argv) < 2:
-        print(json.dumps({
+        result = {
             "status": "error",
-            "message": "使用方式：python code_reviewer.py <file_path>"
-        }, ensure_ascii=False, indent=2))
+            "file": "",
+            "message": "缺少檔案路徑參數",
+            "issues": [],
+            "usage": "python .agent/skills/code_reviewer.py <file_path>",
+            "suggestion": "請提供欲審查的檔案路徑，例如：python .agent/skills/code_reviewer.py app.py",
+        }
+        result = validate_output_schema(result, "code_reviewer")
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         sys.exit(1)
 
     file_path = sys.argv[1]
     result = review_file(file_path)
+    result = validate_output_schema(result, "code_reviewer")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
     # 根據狀態設定退出碼

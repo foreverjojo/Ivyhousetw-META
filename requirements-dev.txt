@@ -1,0 +1,7 @@
+# 檔案用途：開發/測試用額外依賴（不含正式執行所需套件）
+# 安裝指令：
+#   pip install -r requirements.txt -r requirements-dev.txt
+
+pytest>=7.4.0
+pytest-cov>=4.1.0
+ruff>=0.1.0

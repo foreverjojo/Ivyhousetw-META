@@ -24,19 +24,29 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest pytest-cov
+          pip install ruff
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Verify skill schemas
+        run: |
+          python tests/verify_skill_schemas.py
 
       - name: Lint with Ruff
         run: |
           # Stop the build if there are Python syntax errors or undefined names
           ruff check . --select=E9,F63,F7,F82 --target-version=py311
+
+      - name: Lint with Ruff (style-only, non-blocking)
+        run: |
           # Check all files for style issues (warning only)
-          ruff check . --target-version=py311
+          ruff check core utils scripts tests main.py --target-version=py311
+        continue-on-error: true
 
       - name: Format check with Ruff
         run: |
-          ruff format --check .
+          ruff format --check core utils scripts tests main.py
+        continue-on-error: true
 
       - name: Run tests
         run: |

@@ -19,6 +19,7 @@ def now_iso() -> str:
     """
     try:
         from zoneinfo import ZoneInfo
+
         taipei_tz = ZoneInfo("Asia/Taipei")
         return datetime.now(taipei_tz).isoformat(timespec="seconds")
     except Exception:
@@ -48,6 +49,7 @@ def latest_ptr_path(week_id: str, history_root: Path) -> Path:
 def read_latest_ptr(week_id: str, history_root: Path) -> Optional[dict]:
     """讀取 latest.json"""
     from utils.file_io import read_json_if_exists
+
     return read_json_if_exists(latest_ptr_path(week_id, history_root))
 
 

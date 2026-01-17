@@ -13,6 +13,7 @@ from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 import requests
 
+
 def test_gdrive_connection(json_path: str):
     print(f"🔍 正在測試金鑰：{json_path}")
 
@@ -21,7 +22,7 @@ def test_gdrive_connection(json_path: str):
         return
 
     # 1. 載入認證
-    scopes = ['https://www.googleapis.com/auth/drive.readonly']
+    scopes = ["https://www.googleapis.com/auth/drive.readonly"]
     creds = service_account.Credentials.from_service_account_file(json_path, scopes=scopes)
 
     # 2. 取得 Access Token
@@ -40,12 +41,13 @@ def test_gdrive_connection(json_path: str):
     if resp.status_code == 200:
         data = resp.json()
         print("🟢 連線成功！以下是最近的 5 個檔案：")
-        for f in data.get('files', []):
+        for f in data.get("files", []):
             print(f" - {f['name']} ({f['id']})")
-        if not data.get('files'):
+        if not data.get("files"):
             print(" (資料夾為空，但連線正常)")
     else:
         print(f"🔴 API 呼叫失敗 ({resp.status_code})：{resp.text}")
+
 
 if __name__ == "__main__":
     # 使用使用者提供的路徑

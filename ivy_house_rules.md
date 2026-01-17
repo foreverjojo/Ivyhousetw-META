@@ -7,8 +7,8 @@
 - **確認機制：** 在執行任何程式碼撰寫或架構變更前，**必須先複述一次需求**，並詢問使用者：「請問我的理解是否正確，可以開始執行嗎？」
 - **遇到困難時的應對：**
   - 若連續 2 次修正錯誤失敗，**禁止**盲目嘗試。
-  - **必須**使用搜尋工具，搜尋「截至目前最新的解決方案」或相關 GitHub Issue。
-  - 回報時請說：「我嘗試修復但失敗了，根據最新的網路資訊，問題可能出在...，建議我們改用...方法。」
+  - **必須**先使用 repo 內可用的方式定位問題：全文搜尋（例如 `rg`）、讀取現有文件、檢查 git history（`git log`/`git blame`）。
+  - 若需要外部資訊（例如官方文件或 GitHub Issue），必須先向使用者說明「需要哪個連結/文件」並請使用者提供或允許查詢；禁止憑空宣稱「最新網路資訊」。
 
 ## 2. 系統藍圖與開發策略 (Architecture Strategy)
 
@@ -58,10 +58,12 @@
 
 ## 6. Agent 自動化規範 (Agentic Workflow)
 
-為確保跨 Session 開發的連續性，避免重複開啟終端機：
+本專案採 **VS Code Native** 的多工具協作流程（GitHub Copilot Chat 作為 Coordinator + VS Code Terminals 執行 Codex/OpenCode）：
 
-- **連線持久化 (Session Persistence)：**
-    - ✅ **強制紀錄**：啟動長效型程序（如 `codex`, `npm run dev`, `streamlit`）時，Agent 必須將其 `Command ID` 與 `Process Name` 寫入 `.agent/active_sessions.json`。
-    - ✅ **優先重用**：在執行指令前，先檢查 `.agent/active_sessions.json`，若有可用的 `Command ID` 則優先使用 `send_command_input` 進行操作。
-- **QA 自動化標準：**
-    - 雖然可以重用終端，但 QA 驗證邏輯仍須封裝為獨立腳本（如 `tests/verify_xxx.py`），以確保測試的可重複性與非互動式執行。
+- **終端持久化（以 VS Code 為準）**：
+  - Codex/OpenCode 會在 VS Code 內維持各自 terminal session；Coordinator 透過 VS Code 內建 `terminal.sendText` 注入指令/Plan 文字。
+  - ❌ 禁止使用任何 bridge/server 或自建「代送指令」機制（避免工具/TUI 退出或狀態重置）。
+  - ✅ git/diff 類操作只能在獨立的 Project terminal 或 VS Code SCM 執行（不可注入到 Codex/OpenCode terminal）。
+
+- **可重複的 QA（建議）**：
+  - 鼓勵將可自動化的驗證寫成可重跑腳本（例如 `tests/verify_xxx.py`），但若專案尚無測試基礎，至少需提供明確的可驗收步驟與風險說明。

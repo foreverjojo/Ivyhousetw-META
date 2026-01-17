@@ -126,7 +126,9 @@ def render_legacy_migration_ui(
             "掃描 history/ 下舊命名資料夾（如 2025-W49_2025-12-04_2025-12-09），"
             "複製到新結構的 legacy/ 與 versions/。不刪原資料夾。"
         )
-        legacy_candidates = [p for p in HISTORY_ROOT.iterdir() if p.is_dir() and is_legacy_folder(p.name)]
+        legacy_candidates = [
+            p for p in HISTORY_ROOT.iterdir() if p.is_dir() and is_legacy_folder(p.name)
+        ]
         st.write("偵測到 legacy 目錄數：", len(legacy_candidates))
 
         if legacy_candidates:

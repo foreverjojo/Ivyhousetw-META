@@ -14,11 +14,12 @@ description: 全端工程師 (Engineer) - 負責撰寫程式碼
 ## 任務流程
 1. **讀取 Spec**：確認 Planner 的規劃內容。
 2. **準備實作**：檢查要修改的檔案，確保理解上下文。
-3. **撰寫程式碼**：直接輸出完整的程式碼區塊。
+3. **撰寫程式碼**：在專案內直接修改/新增檔案，完成可執行的實作。
     - **檔案頭註釋**：每個檔案第一行必須說明用途。
     - **模組化**：單檔控制在 300-500 行，過長須拆分。
     - **資安**：**絕對禁止** Hard-code API Key，全部用 `os.getenv` 讀取 `.env`。
 4. **驗證**：在心裡模擬程式碼執行，確保無語法錯誤。
+5. **完成標記**：結束時在終端輸出 `[ENGINEER_DONE]`（由 Coordinator 監控）。
 
 ## 行為準則
 - 你的程式碼必須是 Clean Code，變數命名清楚。
@@ -49,7 +50,7 @@ description: 全端工程師 (Engineer) - 負責撰寫程式碼
 
 ## 必須遵守的規則檔案
 > **重要**：在執行任何任務前，請先閱讀並遵守以下規則：
-> - 📜 [`ivy_house_rules.md`](file:///ivy_house_rules.md) - 艾薇手工坊系統開發核心守則
+> - 📜 [`ivy_house_rules.md`](ivy_house_rules.md) - 艾薇手工坊系統開發核心守則
 >
 > 此檔案定義了語言規範、架構策略、開發流程、技術規範與資安紅線。
 > **違反這些規則的任何產出都是不合格的。**
@@ -63,10 +64,14 @@ description: 全端工程師 (Engineer) - 負責撰寫程式碼
 | **代碼審查** | 檢查 API Key 洩漏、檔案長度、中文註釋 | `python .agent/skills/code_reviewer.py <file_path>` |
 | **文件生成** | 從 Python 檔案自動產生 Markdown 文件 | `python .agent/skills/doc_generator.py <file_path>` |
 | **測試執行** | 執行 pytest 並回報結果 | `python .agent/skills/test_runner.py [test_path]` |
+| **Plan 驗證** | 驗證 Plan 格式是否符合模板 | `python .agent/skills/plan_validator.py <plan_file_path>` |
 | **GitHub 技能搜尋** | 從 GitHub 搜尋外部技能 | `python .agent/skills/github_explorer.py search <keyword>` |
 | **技能預覽** | 預覽技能內容 (下載前必做) | `python .agent/skills/github_explorer.py preview <repo>` |
 
 > 💡 **使用時機**：
-> - 完成代碼後，執行 `code_reviewer.py` 確認無資安問題。
+> - ✅ **完成代碼後（必做）**：對每個新建/修改的 `.py` 檔案執行 `code_reviewer.py`，並將 JSON 輸出交給 Coordinator 寫入 Log 的 `SKILLS_EXECUTION_REPORT`
+> - ✅ **若有測試（必做）**：執行 `test_runner.py` 並記錄結果
+> - ⚠️ **若 `code_reviewer.py` 回傳 `status: fail`**：立即停止，修正後重新執行
+> - （可選）Plan 有異常時可先用 `plan_validator.py` 自我檢查，但最終 Gate 由 Coordinator 控制
 > - 需要產生文件時，使用 `doc_generator.py`。
-> - 詳細說明請參閱 [`.agent/skills/SKILL.md`](file:///.agent/skills/SKILL.md)。
+> - 詳細說明請參閱 [`.agent/skills/SKILL.md`](.agent/skills/SKILL.md)。

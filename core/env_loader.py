@@ -36,6 +36,7 @@ def load_environment_variables() -> None:
     # 2. 從 Secret Manager 載入敏感資料（若啟用）
     try:
         from core.secret_manager import load_secrets_to_env
+
         load_secrets_to_env()
     except ImportError:
         # 如果 secret_manager 模組不存在，忽略

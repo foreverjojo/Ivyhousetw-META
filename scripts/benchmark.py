@@ -36,18 +36,19 @@ from typing import Any, Callable
 # === 設定 ===
 # 性能閾值（秒）
 THRESHOLDS = {
-    "kpi_calc": 5.0,          # KPI 計算應在 5 秒內完成
-    "json_parse": 1.0,        # JSON 解析應在 1 秒內
-    "file_io": 0.5,           # 檔案讀寫應在 0.5 秒內
-    "adapter_meta": 2.0,      # Meta 適配器應在 2 秒內
-    "adapter_shopee": 2.0,    # Shopee 適配器應在 2 秒內
-    "adapter_momo": 2.0,      # Momo 適配器應在 2 秒內
+    "kpi_calc": 5.0,  # KPI 計算應在 5 秒內完成
+    "json_parse": 1.0,  # JSON 解析應在 1 秒內
+    "file_io": 0.5,  # 檔案讀寫應在 0.5 秒內
+    "adapter_meta": 2.0,  # Meta 適配器應在 2 秒內
+    "adapter_shopee": 2.0,  # Shopee 適配器應在 2 秒內
+    "adapter_momo": 2.0,  # Momo 適配器應在 2 秒內
 }
 
 
 @dataclass
 class BenchmarkResult:
     """Benchmark 結果"""
+
     name: str
     elapsed: float
     threshold: float
@@ -373,7 +374,9 @@ def print_report(results: list[BenchmarkResult], as_json: bool = False) -> None:
     print("=" * 60)
 
     passed = sum(1 for r in results if r.passed)
-    failed = sum(1 for r in results if not r.passed and not (r.error and "skipped" in r.error.lower()))
+    failed = sum(
+        1 for r in results if not r.passed and not (r.error and "skipped" in r.error.lower())
+    )
     skipped = sum(1 for r in results if r.error and "skipped" in r.error.lower())
 
     print(f"\n結果：✅ {passed} 通過 | ❌ {failed} 失敗 | ⏭️  {skipped} 跳過\n")
@@ -417,18 +420,21 @@ def main() -> int:
     )
 
     parser.add_argument(
-        "--only", "-o",
+        "--only",
+        "-o",
         choices=["json", "file", "kpi", "meta", "shopee", "momo"],
         help="只執行特定 benchmark",
     )
     parser.add_argument(
-        "--iterations", "-n",
+        "--iterations",
+        "-n",
         type=int,
         default=1,
         help="迭代次數（預設 1）",
     )
     parser.add_argument(
-        "--json", "-j",
+        "--json",
+        "-j",
         action="store_true",
         help="輸出 JSON 格式",
     )

@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["status", "file", "line_count", "issues", "summary"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pass", "warning", "fail"] },
+        "file": { "type": "string" },
+        "line_count": { "type": "integer", "minimum": 0 },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "message"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["api_key_leak", "file_too_long", "missing_chinese_comment", "other"]
+              },
+              "line": { "type": "integer", "minimum": 1 },
+              "message": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "summary": {
+          "type": "object",
+          "required": ["api_key_leak", "file_too_long", "missing_chinese_comment"],
+          "properties": {
+            "api_key_leak": { "type": "integer", "minimum": 0 },
+            "file_too_long": { "type": "integer", "minimum": 0 },
+            "missing_chinese_comment": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "required": ["status", "file", "message", "issues"],
+      "properties": {
+        "status": { "type": "string", "enum": ["error"] },
+        "file": { "type": "string" },
+        "message": { "type": "string" },
+        "issues": { "type": "array" }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

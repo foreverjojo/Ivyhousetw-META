@@ -52,6 +52,7 @@ SHOPEE_COL_MAP = {
 
 # === 工具函式 ===
 
+
 def _read_shopee_csv(path: Path) -> pd.DataFrame:
     """讀取蝦皮 CSV，自動跳過 metadata 行。"""
     for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
@@ -137,7 +138,9 @@ def _get_str(row: pd.Series, col: str) -> str:
     return str(v).strip()
 
 
-def _stable_fallback_id(*, platform: str, level: str, name: str, time_range: Dict[str, str], salt: str = "") -> str:
+def _stable_fallback_id(
+    *, platform: str, level: str, name: str, time_range: Dict[str, str], salt: str = ""
+) -> str:
     """產生穩定的 fallback ID（當無原生 ID 時使用）。"""
     raw = f"{platform}|{level}|{name}|{time_range.get('start', '')}|{time_range.get('end', '')}|{salt}"
     h = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
@@ -186,8 +189,14 @@ def _build_shopee_record(
             "impressions": int(impressions),
             "clicks": int(clicks),
             "conversions": {
-                "truth": {"count": int(conv_truth_count), "value": round(float(conv_truth_value), 2)},
-                "platform": {"count": int(conv_platform_count), "value": round(float(conv_platform_value), 2)},
+                "truth": {
+                    "count": int(conv_truth_count),
+                    "value": round(float(conv_truth_value), 2),
+                },
+                "platform": {
+                    "count": int(conv_platform_count),
+                    "value": round(float(conv_platform_value), 2),
+                },
             },
             "funnel": {"atc": 0, "ic": 0, "lpv": 0},  # 蝦皮無漏斗欄位
         },
@@ -213,6 +222,7 @@ def _drop_empty_rows(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # === 主要轉換函式 ===
+
 
 def adapt_shopee_ad_csv(path: Path) -> Dict[str, Any]:
     """將蝦皮廣告 CSV 轉換為 Unified Ad Data 格式。"""
@@ -242,11 +252,14 @@ def adapt_shopee_ad_csv(path: Path) -> Dict[str, Any]:
 
 # === CLI 入口 ===
 
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="蝦皮廣告 CSV -> Unified Ad Data")
     p.add_argument("--input", type=Path, required=True, help="蝦皮廣告 CSV 檔案路徑")
     p.add_argument("--out", type=Path, required=True, help="輸出 unified JSON 檔案路徑")
-    p.add_argument("--validate", action="store_true", help="輸出後用 schemas/unified_ad_data.json 驗證")
+    p.add_argument(
+        "--validate", action="store_true", help="輸出後用 schemas/unified_ad_data.json 驗證"
+    )
     args = p.parse_args(argv)
 
     payload = adapt_shopee_ad_csv(args.input)
@@ -258,6 +271,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.validate:
         from scripts.validator import validate_file
+
         validate_file(payload, schema_filename="unified_ad_data.json", label="unified_ad_data")
 
     return 0

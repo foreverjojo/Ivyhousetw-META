@@ -11,6 +11,7 @@ MAPPING = [
     ("AI_Assistant.py", "pages/04_ai_assistant.py"),
 ]
 
+
 def rename_files():
     files = glob.glob("pages/*.py")
     print(f"Found {len(files)} files in pages/:")
@@ -25,11 +26,12 @@ def rename_files():
                 try:
                     os.rename(f, new_name)
                     found = True
-                    break # Assuming 1-to-1 match
+                    break  # Assuming 1-to-1 match
                 except Exception as e:
                     print(f"Error renaming {f}: {e}")
         if not found:
             print(f"Warning: Could not find file matching '{substring}'")
+
 
 if __name__ == "__main__":
     rename_files()

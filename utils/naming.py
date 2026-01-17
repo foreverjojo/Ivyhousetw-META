@@ -25,6 +25,7 @@ from utils.week_utils import normalize_week_id
 # 報告自動命名 (Report Naming)
 # =========================
 
+
 def _normalize_date_str(s: str) -> Optional[str]:
     """
     將日期字串正規化為 YYYY-MM-DD 格式。
@@ -113,11 +114,9 @@ def generate_report_filename(
     return f"{normalized}_{safe_type}_report_summary{suffix}"
 
 
-
 # =========================
 # 素材命名 (Media Naming)
 # =========================
-
 
 
 # Windows 不允許的檔名字元：<>:"/\|?*，同時避免控制字元

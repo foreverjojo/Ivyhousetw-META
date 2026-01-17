@@ -224,15 +224,8 @@ copy_script() {
     fi
 }
 
-copy_script "$SOURCE/scripts/run_codex_template.sh" "$TARGET/.agent/scripts/"
-copy_script "$SOURCE/scripts/start_terminal_bridge.sh" "$TARGET/.agent/scripts/"
-copy_script "$SOURCE/scripts/stop_terminal_bridge.sh" "$TARGET/.agent/scripts/"
-copy_script "$SOURCE/scripts/test_terminal_bridge.sh" "$TARGET/.agent/scripts/"
-
-if [ -f "$SOURCE/scripts/terminal_bridge_server.py" ]; then
-    cp "$SOURCE/scripts/terminal_bridge_server.py" "$TARGET/.agent/scripts/"
-    chmod +x "$TARGET/.agent/scripts/terminal_bridge_server.py" 2>/dev/null || true
-fi
+	copy_script "$SOURCE/scripts/run_codex_template.sh" "$TARGET/.agent/scripts/"
+	# Note: Terminal Bridge Server 已移除；終端注入與監控改由 VS Code 內建 terminal.sendText + Proposed API 處理。
 
 echo -e "${GREEN}  ✅ 執行腳本複製完成${NC}"
 
@@ -296,19 +289,18 @@ echo -e "${GREEN}✅ Agent Workflow 初始化完成！${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo -e "${YELLOW}📝 後續步驟：${NC}"
-echo "  1. 編輯 $TARGET/project_rules.md 填入專案資訊"
-echo "  2. 編輯 $TARGET/.agent/roles/domain_expert.md 客製化領域專家"
-echo "  3. 在 VS Code 開啟專案，測試輸入 /dev-team"
-echo "  4. （可選）啟動 Terminal Bridge Server：.agent/scripts/start_terminal_bridge.sh"
-echo ""
+	echo "  1. 編輯 $TARGET/project_rules.md 填入專案資訊"
+	echo "  2. 編輯 $TARGET/.agent/roles/domain_expert.md 客製化領域專家"
+	echo "  3. 在 VS Code 開啟專案，測試輸入 /dev-team"
+	echo ""
 echo -e "${BLUE}📁 已建立的結構：${NC}"
 echo "  $TARGET/"
 echo "  ├── .agent/"
-echo "  │   ├── workflows/ (AGENT_ENTRY.md, dev-team.md)"
-echo "  │   ├── roles/ (planner, engineer, qa, domain_expert)"
-echo "  │   ├── scripts/ (run_codex_template.sh, start_terminal_bridge.sh, stop_terminal_bridge.sh, test_terminal_bridge.sh, terminal_bridge_server.py)"
-echo "  │   ├── state/ (runtime state; tokens/pid/log)"
-echo "  │   └── templates/"
+	echo "  │   ├── workflows/ (AGENT_ENTRY.md, dev-team.md)"
+	echo "  │   ├── roles/ (planner, engineer, qa, domain_expert)"
+	echo "  │   ├── scripts/ (run_codex_template.sh)"
+	echo "  │   ├── state/ (runtime state; tokens/log)"
+	echo "  │   └── templates/"
 echo "  ├── tools/"
 echo "  │   └── (reserved)"
 echo "  │   └── templates/"

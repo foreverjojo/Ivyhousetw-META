@@ -219,7 +219,7 @@
 ## 1) 必讀檔案（必須逐檔「開啟並閱讀」）
 1. ./.agent/workflows/dev-team.md
 2. ./ivy_house_rules.md
-3. ./docs/implementation_plan_index.md
+3. ./doc/Implementation_Plan_index.md
 
 > 「提到」不等於「已讀」。你必須實際打開檔案並萃取重點。
 ```

@@ -20,13 +20,16 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from scripts.skills import build_standard_skill_contract
+
 
 class BudgetAction(str, Enum):
     """預算行動類型"""
-    KILL = "KILL"             # 立即停止
+
+    KILL = "KILL"  # 立即停止
     SCALE_DOWN = "SCALE_DOWN"  # 降低預算
-    SCALE_UP = "SCALE_UP"      # 增加預算
-    HOLD = "HOLD"              # 維持觀察
+    SCALE_UP = "SCALE_UP"  # 增加預算
+    HOLD = "HOLD"  # 維持觀察
 
 
 def _to_float(x: Any) -> float:
@@ -49,17 +52,19 @@ def _safe_div(num: float, den: float) -> Optional[float]:
 @dataclass(frozen=True)
 class BudgetThresholds:
     """預算規則門檻值"""
-    target_cpa: float = 500.0           # 目標 CPA（預設 500 TWD）
-    breakeven_roas: float = 2.0         # 損益平衡 ROAS
+
+    target_cpa: float = 500.0  # 目標 CPA（預設 500 TWD）
+    breakeven_roas: float = 2.0  # 損益平衡 ROAS
     kill_spend_multiplier: float = 1.5  # KILL 門檻：花費 > target_cpa × 此倍數且無單
     scale_up_roas_multiplier: float = 1.2  # SCALE_UP 門檻：ROAS > breakeven × 此倍數
     min_spend_for_decision: float = 100.0  # 最低花費金額（避免樣本過小）
-    min_purchases_for_stable: int = 3      # 穩定判定最低購買數
+    min_purchases_for_stable: int = 3  # 穩定判定最低購買數
 
 
 @dataclass
 class AdSetBudgetAnalysis:
     """單一廣告組合的預算分析結果"""
+
     name: str
     id: str = ""
     spend: float = 0.0
@@ -98,7 +103,10 @@ def _determine_action(
 
     # 花費過少，無法判定
     if spend < thresholds.min_spend_for_decision:
-        return BudgetAction.HOLD, f"花費 {spend:.0f} < {thresholds.min_spend_for_decision:.0f}，樣本不足，維持觀察"
+        return (
+            BudgetAction.HOLD,
+            f"花費 {spend:.0f} < {thresholds.min_spend_for_decision:.0f}，樣本不足，維持觀察",
+        )
 
     kill_threshold = thresholds.target_cpa * thresholds.kill_spend_multiplier
 
@@ -131,7 +139,10 @@ def _determine_action(
 
     # 其他情況：HOLD
     if roas is not None and roas >= thresholds.breakeven_roas:
-        return BudgetAction.HOLD, f"ROAS {roas:.2f} >= 損益平衡 {thresholds.breakeven_roas:.2f}，維持觀察（購買數尚未達穩定標準）"
+        return (
+            BudgetAction.HOLD,
+            f"ROAS {roas:.2f} >= 損益平衡 {thresholds.breakeven_roas:.2f}，維持觀察（購買數尚未達穩定標準）",
+        )
 
     return BudgetAction.HOLD, "未符合任何決策規則，維持觀察"
 
@@ -193,17 +204,19 @@ def run_budget_rules(
     )
 
     actions: List[Dict[str, Any]] = []
-    actions.append({
-        "level": "overall",
-        "name": "整體帳戶",
-        "spend_twd": round(total_spend, 2),
-        "purchases": int(total_purchases),
-        "purchase_value_twd": round(purchase_value, 2),
-        "roas": round(overall_roas, 4) if overall_roas else None,
-        "cpa_twd": round(overall_cpa, 2) if overall_cpa else None,
-        "action": overall_action.value,
-        "reason": overall_reason,
-    })
+    actions.append(
+        {
+            "level": "overall",
+            "name": "整體帳戶",
+            "spend_twd": round(total_spend, 2),
+            "purchases": int(total_purchases),
+            "purchase_value_twd": round(purchase_value, 2),
+            "roas": round(overall_roas, 4) if overall_roas else None,
+            "cpa_twd": round(overall_cpa, 2) if overall_cpa else None,
+            "action": overall_action.value,
+            "reason": overall_reason,
+        }
+    )
 
     # 生成建議
     recommendations: List[str] = []
@@ -224,9 +237,7 @@ def run_budget_rules(
         )
         recommendations.append("可複製成功廣告組合到新受眾，避免單一組合過度飽和。")
     else:
-        recommendations.append(
-            "目前處於觀察階段，建議累積更多數據後再做預算調整決策。"
-        )
+        recommendations.append("目前處於觀察階段，建議累積更多數據後再做預算調整決策。")
 
     # 補充建議
     if total_spend < thresholds.min_spend_for_decision:
@@ -241,7 +252,7 @@ def run_budget_rules(
             "建議重新檢視受眾精準度與素材吸引力。"
         )
 
-    return {
+    output: Dict[str, Any] = {
         "skill_version": "budget_rules.v1",
         "thresholds": {
             "target_cpa_twd": thresholds.target_cpa,
@@ -262,3 +273,20 @@ def run_budget_rules(
         "recommendations": recommendations[:8],
         "warnings": warnings,
     }
+
+    contract = build_standard_skill_contract(
+        schema_version="skill_budget_rules_output.v1",
+        inputs={
+            "week_id": report_summary.get("week_id"),
+            "manual_inputs_keys": sorted(list(manual_inputs.keys())) if isinstance(manual_inputs, dict) else [],
+        },
+        thresholds=output.get("thresholds") or {},
+        results={
+            "summary": output.get("summary"),
+            "actions": output.get("actions"),
+            "recommendations": output.get("recommendations"),
+        },
+        warnings=warnings,
+    )
+    output.update(contract)
+    return output

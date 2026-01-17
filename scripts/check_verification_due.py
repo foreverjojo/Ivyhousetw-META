@@ -5,7 +5,7 @@
 對應 P1 改進：PASS WITH RISK 的驗證計畫追蹤
 
 功能：
-1. 從 implementation_plan_index.md 讀取待驗證項目
+1. 從 Implementation_Plan_index.md 讀取待驗證項目
 2. 檢查是否有到期或即將到期的驗證計畫
 3. 輸出提醒訊息
 
@@ -36,6 +36,7 @@ TECH_DEBT_FILE = Path("doc/tech_debt.md")
 
 class VerificationItem(NamedTuple):
     """待驗證項目"""
+
     index: str
     title: str
     qa_result: str
@@ -110,14 +111,16 @@ def parse_index_for_verifications() -> list[VerificationItem]:
                     break
 
         if idx and (qa_result or "待驗證" in line):
-            items.append(VerificationItem(
-                index=idx,
-                title=title or "",
-                qa_result=qa_result or "PASS WITH RISK",
-                verification_plan=verification_plan,
-                due_date=due_date,
-                status=status,
-            ))
+            items.append(
+                VerificationItem(
+                    index=idx,
+                    title=title or "",
+                    qa_result=qa_result or "PASS WITH RISK",
+                    verification_plan=verification_plan,
+                    due_date=due_date,
+                    status=status,
+                )
+            )
 
     return items
 

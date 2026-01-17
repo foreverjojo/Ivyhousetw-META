@@ -23,12 +23,8 @@ agent-workflow-template/
 │   │   └── skill_whitelist.json (empty template)
 │   ├── scripts/
 │   │   ├── run_codex_template.sh ⭐
-│   │   ├── start_terminal_bridge.sh ⭐
-│   │   ├── stop_terminal_bridge.sh ⭐
-│   │   ├── test_terminal_bridge.sh ⭐
-│   │   └── terminal_bridge_server.py ⭐
 │   │   └── setup_workflow.sh
-│   ├── state/ (runtime state; tokens/pid/log)
+│   ├── state/ (runtime state; tokens/log)
 │   └── templates/
 │       └── handoff_template.md
 ├── tools/
@@ -48,17 +44,12 @@ agent-workflow-template/
 
 ### 2. 新增的核心功能 ⭐
 
-#### Terminal Bridge Server
-- **目的**：在 Dev Container/遠端環境中提供可重現的「終端機控制 + 完成偵測」能力
-- **功能**：
-   - 以 tmux 對 Codex CLI 終端送出文字/Enter
-   - 以 `git status` 穩定性作為完成偵測（`/wait`）
-   - Bearer token 驗證
+#### VS Code 內建終端協作（Coordinator）
+- **目的**：以 GitHub Copilot Chat 作為 Coordinator，透過 VS Code 內建 `terminal.sendText` 注入指令，並以 Proposed API 監控終端輸出。
+- **限制**：不使用任何外部 Bridge/Server，不以 bash 腳本「代送」指令到 Codex/OpenCode（避免 TUI/程序中斷）。
 
 #### 自動化執行腳本
 - `run_codex_template.sh`：批次執行 Codex CLI（JSONL 審計）
-- `start_terminal_bridge.sh` / `stop_terminal_bridge.sh`：終端橋接伺服器 daemon 管理
-- `test_terminal_bridge.sh`：整合測試（驗證 `/health`、`/capture`、`/wait`、auth）
 
 ### 3. 文件需求
 
@@ -73,7 +64,6 @@ agent-workflow-template/
 - ✅ 多代理角色定義（Planner / Engineer / QA / Expert）
 - ✅ 自動化執行流程（Codex CLI 整合）
 - ✅ Cross-QA 規則
-- ✅ Terminal Bridge Server（可選；自動監控/終端控制）
 - ✅ JSONL 審計記錄
 - ✅ L2 自動回滾
 
@@ -87,7 +77,6 @@ agent-workflow-template/
    ```bash
    ./.agent/scripts/setup_workflow.sh .
    ```
-4. （可選）啟動 Terminal Bridge Server（若需要自動監控/終端控制）
 
 ### 方式 2：手動複製
 
@@ -108,7 +97,7 @@ cd agent-workflow-template
 在 VS Code 中：
 
 ```
-/dev-team
+/dev
 ```
 
 ### 3. Codex CLI 自動化
@@ -122,7 +111,6 @@ cd agent-workflow-template
 
 - [Dev Team Workflow](.agent/workflows/dev-team.md)
 - [Agent Entry](.agent/workflows/AGENT_ENTRY.md)
-- [Terminal Bridge Server](.agent/docs/TERMINAL_BRIDGE_SERVER.md)
 
 ## 需求
 
@@ -148,9 +136,6 @@ cd agent-workflow-template
 ```bash
 # 測試 setup script
 ./test_setup.sh
-
-# 測試 Terminal Bridge Server
-./.agent/scripts/test_terminal_bridge.sh
 ```
 
 ## 版本發佈
@@ -201,7 +186,6 @@ cd agent-workflow-template
 
 1. [ ] 使用 Template 建立測試專案
 2. [ ] 執行完整流程（Plan → Execute → QA）
-3. [ ] 確認 Terminal Bridge Server 正常運作（若專案需要）
 4. [ ] 收集反饋改進
 
 ---
@@ -222,7 +206,6 @@ Features automated execution and Cross-QA rules for collaborative workflows.
 ✅ Codex CLI automation with monitoring
 ✅ JSONL audit logging
 ✅ L2 auto-rollback
-✅ Optional Terminal Bridge Server (tmux + HTTP)
 ```
 
 ---
