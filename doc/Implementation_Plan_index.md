@@ -25,6 +25,8 @@
 | Idx-011 | Skills System Enhancement - 9 builtin skills + graceful degradation | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-011_log.md` | 9 個 builtin skills 完成 + manifest_updater + plan_validator |
 | Idx-012 | JSON Schema Validation & VSCode System Config | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-012_log.md` | 7 個 JSON schemas + graceful degradation + VSCode system files |
 | Idx-013 | One-Click Restore Hardening - Env vars + Extensions Sync | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/plans/Idx-013_one_click_restore_hardening.md` | 移除硬編碼 token + extensions 三方一致性檢查 + CI workflow |
+| Idx-014 | One-Click Restore Reproducibility Hardening | P1 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `doc/plans/Idx-014_one_click_restore_reproducibility_hardening.md` | 可重現性補強：base image digest pin + restore verify 工具鏈 |
+| Idx-015 | Full-Fidelity Restore via Pinned Devcontainer Image (GHCR) | P1 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `doc/plans/Idx-015_full_fidelity_restore_via_pinned_devcontainer_image.md` | GHCR 發佈 pinned image + 新機器 digest pin 流程 |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)

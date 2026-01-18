@@ -54,7 +54,6 @@ def main(argv: List[str]) -> int:
         REPO_ROOT / "uv.lock",
         REPO_ROOT / ".devcontainer" / "Dockerfile",
         REPO_ROOT / ".devcontainer" / "devcontainer.json",
-        REPO_ROOT / ".devcontainer" / "devcontainer.ghcr.json",
         REPO_ROOT / ".vscode" / "extensions.json",
         REPO_ROOT / ".vscode" / "settings.json",
         REPO_ROOT / ".idx" / "dev.nix",
@@ -64,18 +63,26 @@ def main(argv: List[str]) -> int:
         REPO_ROOT / "scripts" / "portable" / "pin_devcontainer_image.py",
     ]
 
-    file_checks = [check_file(p) for p in required_files]
+    optional_files = [
+        # Full-fidelity restore (GHCR pinned image) uses this as template
+        REPO_ROOT / ".devcontainer" / "devcontainer.ghcr.json",
+    ]
+
+    file_checks = [check_file(p) for p in (required_files + optional_files)]
     missing = [c for c in file_checks if not c["exists"]]
 
     extensions_check = run_extensions_check()
 
     devcontainer_mode = "unknown"
     devcontainer_image = None
+    devcontainer_is_digest = False
     try:
         dc = json.loads((REPO_ROOT / ".devcontainer" / "devcontainer.json").read_text(encoding="utf-8"))
         if "image" in dc:
             devcontainer_mode = "image"
             devcontainer_image = dc.get("image")
+            if isinstance(devcontainer_image, str) and "@sha256:" in devcontainer_image:
+                devcontainer_is_digest = True
         elif "build" in dc:
             devcontainer_mode = "build"
         else:
@@ -86,9 +93,12 @@ def main(argv: List[str]) -> int:
     status = "pass"
     problems: List[str] = []
     warnings: List[str] = []
-    if missing:
+    missing_required = [c for c in missing if (REPO_ROOT / c["path"]) in required_files]
+    missing_optional = [c for c in missing if (REPO_ROOT / c["path"]) in optional_files]
+
+    if missing_required:
         status = "fail"
-        problems.append(f"缺少必要檔案：{len(missing)} 個")
+        problems.append(f"缺少必要檔案：{len(missing_required)} 個")
     if extensions_check.get("status") != "pass":
         status = "fail"
         problems.append("extensions 清單不一致（devcontainer / .vscode / idx）")
@@ -100,6 +110,10 @@ def main(argv: List[str]) -> int:
             problems.append(msg)
         else:
             warnings.append(msg)
+    elif not devcontainer_is_digest:
+        warnings.append("devcontainer.json 為 image 模式但未 pin digest（@sha256）；仍可能因 tag 漂移而不完全一致")
+    if missing_optional:
+        warnings.append("缺少 GHCR template（.devcontainer/devcontainer.ghcr.json）；將無法自動切換到 pinned image")
 
     result = {
         "status": status,
@@ -110,12 +124,13 @@ def main(argv: List[str]) -> int:
         "devcontainer": {
             "mode": devcontainer_mode,
             "image": devcontainer_image,
+            "digest_pinned": devcontainer_is_digest,
         },
         "extensions_consistency": extensions_check,
         "next_steps": [
             "若 extensions 不一致：執行 python scripts/portable/check_extensions_consistency.py --verbose",
             "若 uv.lock 不存在：請先在原機器產生並 commit uv.lock，再於新機器 pull",
-            "若要 full-fidelity（容器層一致）：執行 python scripts/portable/pin_devcontainer_image.py，再 Reopen in Container",
+            "若要 full-fidelity（容器層一致）：執行 python scripts/portable/pin_devcontainer_image.py（會盡量 pin digest），再 Reopen in Container",
             "新機器建議：VS Code -> Dev Containers: Reopen in Container",
         ],
     }
@@ -131,8 +146,12 @@ def main(argv: List[str]) -> int:
                 print(f"- {p}")
         if missing:
             print("\nMissing files:")
-            for c in missing:
+            for c in missing_required:
                 print(f"- {c['path']}")
+            if missing_optional:
+                print("\nOptional (recommended) missing files:")
+                for c in missing_optional:
+                    print(f"- {c['path']}")
         print("\nExtensions consistency:")
         print(extensions_check.get("stdout_tail", "").strip())
 

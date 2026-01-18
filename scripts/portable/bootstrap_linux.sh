@@ -7,6 +7,7 @@ BRANCH="${BRANCH:-main}"
 DEST_ROOT="${DEST_ROOT:-$HOME/src}"
 WITH_DOCKER="${WITH_DOCKER:-0}"
 WITH_VSCODE="${WITH_VSCODE:-0}"
+WITH_GHCR_PINNED="${WITH_GHCR_PINNED:-0}"
 
 repo_path="$DEST_ROOT/$REPO"
 
@@ -87,9 +88,12 @@ apt_install_docker_optional
 install_vscode_optional
 clone_or_update_repo
 
-if [[ -f "$repo_path/scripts/portable/pin_devcontainer_image.py" ]]; then
-  echo "Pinning Dev Container image (GHCR)..."
+if [[ "$WITH_GHCR_PINNED" == "1" && -f "$repo_path/scripts/portable/pin_devcontainer_image.py" ]]; then
+  echo "Pinning Dev Container image (GHCR; best-effort digest)..."
   python3 "$repo_path/scripts/portable/pin_devcontainer_image.py" || true
+else
+  echo "[INFO] GHCR pinned devcontainer is opt-in. To enable:"
+  echo "       WITH_GHCR_PINNED=1 $0"
 fi
 install_extensions
 

@@ -22,7 +22,6 @@
       "bierner.color-info"
       "chouzz.vscode-better-align"
       "christian-kohler.path-intellisense"
-      "continue.continue"
       "dbaeumer.vscode-eslint"
       "eamodio.gitlens"
       "emanuelebartolesi.vscode-copilot-insights"
@@ -50,6 +49,7 @@
       "usernamehw.errorlens"
       "vscode-icons-team.vscode-icons"
       "yzhang.markdown-all-in-one"
+      "sst-dev.opencode"
     ];
 
     # Workspace settings

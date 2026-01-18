@@ -129,14 +129,18 @@ $repoPath = Get-RepoPath
 Ensure-Repo $repoPath
 
 $pinScript = Join-Path $repoPath "scripts\portable\pin_devcontainer_image.py"
-if (Test-Path $pinScript) {
+if (($env:WITH_GHCR_PINNED -eq "1") -and (Test-Path $pinScript)) {
   try {
-    Write-Host "Pinning Dev Container image (GHCR)..."
+    Write-Host "Pinning Dev Container image (GHCR; best-effort digest)..."
     python $pinScript
   } catch {
     Write-Host "[WARN] Failed to pin devcontainer image. You can run later:"
     Write-Host "       python scripts\\portable\\pin_devcontainer_image.py"
   }
+} elseif (Test-Path $pinScript) {
+  Write-Host "[INFO] GHCR pinned devcontainer is opt-in. To enable for this run:"
+  Write-Host "       setx WITH_GHCR_PINNED 1"
+  Write-Host "       (restart PowerShell) then re-run bootstrap_windows.ps1"
 }
 
 $extInstaller = Join-Path $repoPath "scripts\portable\install_extensions.ps1"
