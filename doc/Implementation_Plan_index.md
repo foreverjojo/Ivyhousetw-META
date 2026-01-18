@@ -28,6 +28,7 @@
 | Idx-014 | One-Click Restore Reproducibility Hardening | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-014_log.md` | Plan: `doc/plans/Idx-014_one_click_restore_reproducibility_hardening.md` |
 | Idx-015 | Full-Fidelity Restore via Pinned Devcontainer Image (GHCR) | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-015_log.md` | Plan: `doc/plans/Idx-015_full_fidelity_restore_via_pinned_devcontainer_image.md` |
 | Idx-016 | Trace ID 追蹤（Correlation ID） | P1 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `doc/logs/Idx-016_log.md` | core.tracing + logger trace_id |
+| Idx-017 | Implementation Plan 移除 MCP Roadmap | P2 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `doc/logs/Idx-017_log.md` | Plan 不再以 MCP 作為 roadmap 概念 |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
@@ -212,8 +213,9 @@
   - [X] 在 `app.py` 增加素材上傳 Step A+ (含 Sanitization)
   - [X] 實作素材自動命名機制 (Material_Type_Timestamp)
   - [X] 素材同步備份至 Google Drive 與本機
-- [X] **Google Drive 整合 (主儲存) - MCP 優先策略** ✅ 完成
-  - [X] 🔄 **方案**：採用直連 API + SA JSON 認證 (因 MCP 搜尋無果)
+- [X] **Google Drive 整合 (主儲存)** ✅ 完成
+  - [X] 🔄 **方案**：採用直連 API + SA JSON 認證
+
   - [X] **自動子資料夾分類**：
     - [X] `reports/`：存通 CSV/JSON 報表
     - [X] `assets/images/`：存放圖片素材
@@ -260,18 +262,16 @@
   - [X] `pages/04_ai_assistant.py` - AI 助手對話（299 行）
 - [X] **QA 審查通過** ✅
 
-### Stage 2 - MCP 架構整合 ✅ 完成 (2026-01-05)
+### Stage 2 - 工具整合（GitHub Explorer）✅ 完成 (2026-01-05)
 
-- [X] **GitHub Explorer MCP 轉型** ✅
-  - [X] 將 `github_explorer.py` 封裝為 MCP Server（使用 FastMCP 高階 API）
-  - [X] 實現 5 個 MCP Tools：search、preview、download、list、rollback
-  - [X] 成功整合 Codex CLI：`codex mcp add ivy-github-explorer`
-- [ ] **Database MCP**（移至後續規劃）
-  - [ ] 實作或整合 Database MCP 以提供 Schema 查詢能力
-- [X] **MCP 標準化部署** ✅
-  - [X] 建立 `.agent/mcp/` 資料夾結構
-  - [X] 文件化 MCP 使用規範（`doc/MCP_USAGE.md`）
-  - [X] 安裝 MCP SDK 依賴（`mcp[cli]` v1.25.0）
+- [X] **GitHub Explorer 工具鏈整合** ✅
+  - [X] 將 `github_explorer.py` 封裝為可被工具調用的服務
+  - [X] 實現 5 個工具操作：search、preview、download、list、rollback
+  - [X] 成功整合 Codex CLI（透過工具註冊機制）
+- [X] **工具部署與使用規範** ✅
+  - [X] 建立 `.agent/mcp/` 資料夾結構（保留既有實作）
+  - [X] 文件化工具使用規範（`doc/MCP_USAGE.md`，保留既有文件）
+
 
 ---
 
@@ -395,7 +395,7 @@ Moderator 針對每個「爭議點」必須輸出：
 | 日期       | 變更內容                                          | 狀態 |
 | ---------- | ------------------------------------------------- | ---- |
 | 2026-01-06 | **Meta V2 核心整合完成**：雙語別名、日資料聚合、模組拆分達標 | ✅ |
-| 2026-01-05 | **Phase 4 Stage 2 完成**：MCP 架構整合，GitHub Explorer MCP Server 上線 | ✅ |
+| 2026-01-05 | **Phase 4 Stage 2 完成**：工具整合（GitHub Explorer）上線 | ✅ |
 | 2026-01-04 | **Phase 4 Stage 1 完成**：4 頁面 + 3 UI 模組 + 品牌主題 | ✅ |
 | 2026-01-04 | P0 QA 修正完成：ivy_house_rules.md 分級制 + 語言合規 100% | ✅ |
 | 2026-01-04 | P2 完成：結構化 Logging + LLM 監控 + 版本管理（CHANGELOG.md 繁中） | ✅ |
@@ -406,7 +406,7 @@ Moderator 針對每個「爭議點」必須輸出：
 | 2026-01-04 | Phase 2.3 全階段完成：GDrive 整合、UI 串接、Codex QA 通過 | ✅ |
 | 2026-01-04 | Phase 2.3 Stage 1+2 完成：核心工具與文件同步實作 | ✅ |
 | 2026-01-04 | 建立「總司令模式」與「交叉審核鐵律」(Commander Mode) | ✅ |
-| 2026-01-04 | 整合 MCP 戰略建議於 Phase 2.3 與 Phase 4          | 🆕   |
+| 2026-01-04 | 整合工具整合戰略建議於 Phase 2.3 與 Phase 4        | 🆕   |
 | 2026-01-04 | Stage 3 規劃：Step C/E 產物即時可讀顯示（不中斷流程、token 成本不變） | 🆕   |
 | 2026-01-05 | 新增 Headless Debug Pipeline：`scripts/debug_pipeline.py` | 🆕 |
 | 2026-01-04 | Phase 2.1 完成：GitHub Explorer + Skill Converter | ✅ |
