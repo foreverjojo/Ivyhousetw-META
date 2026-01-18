@@ -76,6 +76,9 @@ def main(argv: List[str]) -> int:
     devcontainer_mode = "unknown"
     devcontainer_image = None
     devcontainer_is_digest = False
+    ghcr_template_exists = False
+    ghcr_template_image = None
+    ghcr_template_is_digest = False
     try:
         dc = json.loads((REPO_ROOT / ".devcontainer" / "devcontainer.json").read_text(encoding="utf-8"))
         if "image" in dc:
@@ -90,6 +93,18 @@ def main(argv: List[str]) -> int:
     except Exception:
         devcontainer_mode = "unknown"
 
+    ghcr_template_path = REPO_ROOT / ".devcontainer" / "devcontainer.ghcr.json"
+    if ghcr_template_path.exists():
+        ghcr_template_exists = True
+        try:
+            gh = json.loads(ghcr_template_path.read_text(encoding="utf-8"))
+            ghcr_template_image = gh.get("image")
+            if isinstance(ghcr_template_image, str) and "@sha256:" in ghcr_template_image:
+                ghcr_template_is_digest = True
+        except Exception:
+            ghcr_template_image = None
+            ghcr_template_is_digest = False
+
     status = "pass"
     problems: List[str] = []
     warnings: List[str] = []
@@ -103,17 +118,34 @@ def main(argv: List[str]) -> int:
         status = "fail"
         problems.append("extensions 清單不一致（devcontainer / .vscode / idx）")
 
+    full_fidelity_ready = bool(ghcr_template_exists and ghcr_template_is_digest) or bool(
+        devcontainer_mode == "image" and devcontainer_is_digest
+    )
+
     if devcontainer_mode != "image":
-        msg = "devcontainer.json 目前不是 image 模式（GHCR pinned）；無法保證容器層完全一致"
-        if strict:
+        msg = "devcontainer.json 目前不是 image 模式（GHCR pinned）；容器層完全一致需切換到 pinned image"
+        if strict and not full_fidelity_ready:
             status = "fail"
             problems.append(msg)
         else:
             warnings.append(msg)
     elif not devcontainer_is_digest:
-        warnings.append("devcontainer.json 為 image 模式但未 pin digest（@sha256）；仍可能因 tag 漂移而不完全一致")
+        msg = "devcontainer.json 為 image 模式但未 pin digest（@sha256）；仍可能因 tag 漂移而不完全一致"
+        if strict:
+            status = "fail"
+            problems.append(msg)
+        else:
+            warnings.append(msg)
+
     if missing_optional:
         warnings.append("缺少 GHCR template（.devcontainer/devcontainer.ghcr.json）；將無法自動切換到 pinned image")
+    elif ghcr_template_exists and not ghcr_template_is_digest:
+        msg = "GHCR template 存在但未 pin digest（@sha256）；full-fidelity 仍可能因 tag 漂移而不完全一致"
+        if strict:
+            status = "fail"
+            problems.append(msg)
+        else:
+            warnings.append(msg)
 
     result = {
         "status": status,
@@ -125,6 +157,12 @@ def main(argv: List[str]) -> int:
             "mode": devcontainer_mode,
             "image": devcontainer_image,
             "digest_pinned": devcontainer_is_digest,
+        },
+        "ghcr_template": {
+            "exists": ghcr_template_exists,
+            "image": ghcr_template_image,
+            "digest_pinned": ghcr_template_is_digest,
+            "full_fidelity_ready": full_fidelity_ready,
         },
         "extensions_consistency": extensions_check,
         "next_steps": [

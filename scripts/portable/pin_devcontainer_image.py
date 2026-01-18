@@ -15,8 +15,11 @@ Pin Dev Container image for full-fidelity restore (GHCR).
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import urllib.request
+import base64
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -28,6 +31,74 @@ TEMPLATE = DEVCONTAINER_DIR / "devcontainer.ghcr.json"
 BACKUP_BUILD = DEVCONTAINER_DIR / "devcontainer.build.json"
 
 IMAGE_REPO = "ghcr.io/foreverjojo/ivyhousetw-meta-devcontainer"
+
+
+def resolve_digest_via_ghcr(image_repo: str, tag: str) -> Optional[str]:
+    """Resolve manifest digest from GHCR using GHCR_TOKEN (PAT), best-effort.
+
+    This avoids requiring Docker/buildx on the target machine.
+
+    Env:
+      - GHCR_TOKEN: GitHub PAT with read:packages
+      - GHCR_USERNAME (optional): username for Basic auth; defaults to org/owner name
+    """
+
+    pat = os.getenv("GHCR_TOKEN")
+    if not pat:
+        return None
+
+    # image_repo: ghcr.io/<owner>/<image>
+    parts = image_repo.split("/")
+    if len(parts) < 3 or parts[0] != "ghcr.io":
+        return None
+
+    owner = parts[1]
+    image = "/".join(parts[2:])
+    repo = f"{owner}/{image}"
+
+    username = os.getenv("GHCR_USERNAME") or os.getenv("GITHUB_ACTOR") or owner
+
+    # Exchange PAT for registry bearer token
+    scope = f"repository:{repo}:pull"
+    token_url = f"https://ghcr.io/token?scope={scope}"
+    basic = base64.b64encode(f"{username}:{pat}".encode()).decode()
+    req = urllib.request.Request(token_url)
+    req.add_header("Authorization", f"Basic {basic}")
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            payload = json.load(r)
+            reg_token = payload.get("token")
+    except Exception:
+        return None
+
+    if not reg_token:
+        return None
+
+    manifest_url = f"https://ghcr.io/v2/{repo}/manifests/{tag}"
+    req = urllib.request.Request(manifest_url)
+    req.add_header("Authorization", f"Bearer {reg_token}")
+    req.add_header(
+        "Accept",
+        ", ".join(
+            [
+                "application/vnd.oci.image.index.v1+json",
+                "application/vnd.docker.distribution.manifest.list.v2+json",
+                "application/vnd.oci.image.manifest.v1+json",
+                "application/vnd.docker.distribution.manifest.v2+json",
+            ]
+        ),
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            digest = r.headers.get("Docker-Content-Digest")
+    except Exception:
+        return None
+
+    if isinstance(digest, str) and digest.startswith("sha256:") and len(digest) > 20:
+        return digest
+    return None
 
 
 def resolve_digest(image_ref: str) -> Optional[str]:
@@ -109,6 +180,12 @@ def main(argv: list[str]) -> int:
     except Exception:
         pinned_ref = None
 
+    if not pinned_ref:
+        # Registry-based digest resolution (no Docker required)
+        digest = resolve_digest_via_ghcr(IMAGE_REPO, tag)
+        if digest:
+            pinned_ref = f"{IMAGE_REPO}@{digest}"
+
     if TARGET.exists() and not BACKUP_BUILD.exists():
         try:
             BACKUP_BUILD.write_text(TARGET.read_text(encoding="utf-8"), encoding="utf-8")
@@ -128,7 +205,9 @@ def main(argv: list[str]) -> int:
         print("[WARN] Git SHA unavailable (zip download?). Using devcontainer-main tag.")
     if not pinned_ref:
         print("[WARN] Digest pin unavailable; using tag pin.")
-        print("       Tips: ensure image exists (CI built), run `docker login ghcr.io`, then re-run.")
+        print("       Tips: ensure image exists (CI built).")
+        print("       - Option A: set GHCR_TOKEN (PAT with read:packages) then re-run.")
+        print("       - Option B: run `docker login ghcr.io` (and ensure docker/buildx ready) then re-run.")
     print(f"[INFO] Backup (build-mode) saved at: {BACKUP_BUILD}")
     return 0
 
