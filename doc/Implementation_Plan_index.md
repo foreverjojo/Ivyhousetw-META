@@ -27,6 +27,7 @@
 | Idx-013 | One-Click Restore Hardening - Env vars + Extensions Sync | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/plans/Idx-013_one_click_restore_hardening.md` | 移除硬編碼 token + extensions 三方一致性檢查 + CI workflow |
 | Idx-014 | One-Click Restore Reproducibility Hardening | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-014_log.md` | Plan: `doc/plans/Idx-014_one_click_restore_reproducibility_hardening.md` |
 | Idx-015 | Full-Fidelity Restore via Pinned Devcontainer Image (GHCR) | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-015_log.md` | Plan: `doc/plans/Idx-015_full_fidelity_restore_via_pinned_devcontainer_image.md` |
+| Idx-016 | Trace ID 追蹤（Correlation ID） | P1 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `doc/logs/Idx-016_log.md` | core.tracing + logger trace_id |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
