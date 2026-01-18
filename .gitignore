@@ -135,7 +135,7 @@ cython_debug/
 # ---- runtime artifacts ----
 history/
 *.log
-doc/logs/
+!doc/logs/
 
 # ---- workflow governance ----
 # Task locks

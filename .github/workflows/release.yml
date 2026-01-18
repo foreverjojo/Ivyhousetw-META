@@ -1,0 +1,111 @@
+# 用途：從 git tag（v*）自動建立 GitHub Release，並以 CHANGELOG.md 生成 release notes。
+name: Release
+
+'on':
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.3.0). Leave empty to use VERSION."
+        required: false
+        type: string
+      dry_run:
+        description: "If true, do not create the GitHub Release."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine release tag
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG=""
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+
+          if [ -z "${TAG}" ]; then
+            if [ -f VERSION ]; then
+              TAG="v$(cat VERSION | tr -d '\r\n')"
+            else
+              echo "VERSION file not found and no tag provided." >&2
+              exit 1
+            fi
+          fi
+
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "Using tag: ${TAG}"
+
+      - name: Generate release notes (from CHANGELOG.md)
+        shell: bash
+        env:
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          tag = os.environ.get("TAG", "").strip()
+          if not tag:
+            raise SystemExit("TAG is empty")
+
+          version = tag[1:] if tag.startswith("v") else tag
+
+          changelog = Path("CHANGELOG.md")
+          if not changelog.exists():
+            body = f"Release {tag}\n\nCHANGELOG.md not found."
+          else:
+            text = changelog.read_text(encoding="utf-8")
+
+            # Find a section like: ## [0.3.0] - 2026-01-04
+            header = re.compile(rf"^## \\[{re.escape(version)}\\].*$", re.M)
+            m = header.search(text)
+            if not m:
+              body = f"Release {tag}\n\n未在 CHANGELOG.md 找到對應版本段落（[{version}]）。"
+            else:
+              start = m.start()
+              next_header = re.search(r"^## \\[", text[m.end() :], re.M)
+              end = m.end() + next_header.start() if next_header else len(text)
+              body = text[start:end].strip() + "\n"
+
+          Path("release_notes.md").write_text(body, encoding="utf-8")
+          print(body)
+          PY
+
+      - name: Dry run
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          echo "Dry run enabled; not creating a GitHub Release."
+          echo "--- release_notes.md ---"
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        if: ${{ inputs.dry_run != true }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: ${{ steps.vars.outputs.tag }}
+          body_path: release_notes.md
+          generate_release_notes: false

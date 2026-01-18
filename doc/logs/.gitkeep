@@ -1,0 +1,13 @@
+# Keep this directory in Git
+
+This directory stores execution logs for all tasks.
+
+## Naming Convention
+
+`Idx-NNN_log.md`
+
+Example: `Idx-001_log.md`
+
+## Template
+
+See: `Idx-000_log.template.md`
