@@ -53,7 +53,11 @@ from scripts.consultants import generate_consultant_notes
 from scripts.moderator import build_workflow_state, build_meeting_markdown, write_artifacts
 from scripts.adapters.shopee_adapter import adapt_shopee_ad_csv
 from scripts.adapters.momo_adapter import adapt_momo_ad_report
-from scripts.json_to_readable import render_report_insights, render_consultant_note, render_skeleton_insight
+from scripts.json_to_readable import (
+    render_report_insights,
+    render_consultant_note,
+    render_skeleton_insight,
+)
 
 logger = get_logger(__name__)
 
@@ -61,6 +65,7 @@ logger = get_logger(__name__)
 # =========================
 # 包裝函式（自動傳入 HISTORY_ROOT 等參數）
 # =========================
+
 
 def week_meta_dir(week_id: str) -> Path:
     """包裝函式：自動傳入 HISTORY_ROOT"""
@@ -110,6 +115,7 @@ def get_prev_week_id(current_week_id: str) -> Optional[str]:
 # =========================
 # 輔助函式
 # =========================
+
 
 def safe_stamp() -> str:
     """檔名安全時間戳（用於 staging 資料夾）"""
@@ -250,7 +256,9 @@ def choose_version_dir_for_run(
         if auto_new_version:
             fp_vdir.mkdir(parents=True, exist_ok=True)
             return (fp_code_, fp_vdir)
-        raise RuntimeError("偵測到與本週 latest.fp 不一致，且未啟用 Auto new version / Force，已停止以避免用錯資料。")
+        raise RuntimeError(
+            "偵測到與本週 latest.fp 不一致，且未啟用 Auto new version / Force，已停止以避免用錯資料。"
+        )
 
     fp_vdir.mkdir(parents=True, exist_ok=True)
     return (fp_code_, fp_vdir)
@@ -299,6 +307,7 @@ def rs_with_context(rs: dict, current_fp_: dict, fp_code_: str, prev_ctx: dict) 
 # Step Handlers
 # =========================
 
+
 def run_step_b(
     mode_label: str,
     can_run: bool,
@@ -325,7 +334,16 @@ def run_step_b(
     if not can_run:
         return None, None, None, None
 
-    logger.info(f"[{mode_label}] Starting Step B... (Platform: {platform})")
+    from core.tracing import ensure_trace_id
+
+    # Step B 是整個流程的起點：若尚未有 trace_id，這裡建立一個，並延續到後續步驟
+    ensure_trace_id(prefix="ui")
+    logger.info(
+        f"[{mode_label}] Starting Step B... (Platform: {platform})",
+        step="B",
+        mode=mode_label,
+        platform=platform,
+    )
 
     # === 第一步：生成 report_summary（需要先有 week_id 才能建立版本目錄） ===
 
@@ -349,6 +367,7 @@ def run_step_b(
         total_rev = sum(d["metrics"]["conversions"]["platform"]["value"] for d in unified_data)
 
         from datetime import datetime
+
         now_iso = datetime.now().isoformat()
 
         report_summary = {
@@ -358,16 +377,34 @@ def run_step_b(
             "schema_version": "report_summary.v1",
             "generated_at": now_iso,
             "kpi": {
-                "meta": {"spend_twd": total_spend, "purchase_value_twd": total_rev, "purchases": 0, "roas_calc": 0, "cpa_calc_twd": 0, "funnel": {"link_clicks": 0, "landing_page_views": 0, "add_to_cart": 0, "initiate_checkout": 0}, "ads_has_rankings": False},
-                "web": {"orders": 0, "revenue_twd": 0, "aov_twd_calc": 0, "columns": []}
+                "meta": {
+                    "spend_twd": total_spend,
+                    "purchase_value_twd": total_rev,
+                    "purchases": 0,
+                    "roas_calc": 0,
+                    "cpa_calc_twd": 0,
+                    "funnel": {
+                        "link_clicks": 0,
+                        "landing_page_views": 0,
+                        "add_to_cart": 0,
+                        "initiate_checkout": 0,
+                    },
+                    "ads_has_rankings": False,
+                },
+                "web": {"orders": 0, "revenue_twd": 0, "aov_twd_calc": 0, "columns": []},
             },
-            "tables": {"top_adsets_by_roas": [], "worst_adsets_by_roas": [], "top_ads_by_roas": [], "worst_ads_by_roas": []},
+            "tables": {
+                "top_adsets_by_roas": [],
+                "worst_adsets_by_roas": [],
+                "top_ads_by_roas": [],
+                "worst_ads_by_roas": [],
+            },
             "missing_data": {"meta_unavailable_fields": [], "note": ""},
             "kpi_truth_source": "shopee_adapter",
             "ad_diagnostics_source": "shopee_adapter",
             "roas": total_rev / total_spend if total_spend > 0 else 0,
             "unified_data_count": len(unified_data),
-            "week_id": f"Shopee_{now_iso[:10]}"
+            "week_id": f"Shopee_{now_iso[:10]}",
         }
         st.write(f"Parsed {len(unified_data)} records from Shopee.")
 
@@ -389,6 +426,7 @@ def run_step_b(
         total_rev = sum(d["metrics"]["conversions"]["platform"]["value"] for d in unified_data)
 
         from datetime import datetime
+
         now_iso = datetime.now().isoformat()
 
         report_summary = {
@@ -398,16 +436,34 @@ def run_step_b(
             "schema_version": "report_summary.v1",
             "generated_at": now_iso,
             "kpi": {
-                "meta": {"spend_twd": total_spend, "purchase_value_twd": total_rev, "purchases": 0, "roas_calc": 0, "cpa_calc_twd": 0, "funnel": {"link_clicks": 0, "landing_page_views": 0, "add_to_cart": 0, "initiate_checkout": 0}, "ads_has_rankings": False},
-                "web": {"orders": 0, "revenue_twd": 0, "aov_twd_calc": 0, "columns": []}
+                "meta": {
+                    "spend_twd": total_spend,
+                    "purchase_value_twd": total_rev,
+                    "purchases": 0,
+                    "roas_calc": 0,
+                    "cpa_calc_twd": 0,
+                    "funnel": {
+                        "link_clicks": 0,
+                        "landing_page_views": 0,
+                        "add_to_cart": 0,
+                        "initiate_checkout": 0,
+                    },
+                    "ads_has_rankings": False,
+                },
+                "web": {"orders": 0, "revenue_twd": 0, "aov_twd_calc": 0, "columns": []},
             },
-            "tables": {"top_adsets_by_roas": [], "worst_adsets_by_roas": [], "top_ads_by_roas": [], "worst_ads_by_roas": []},
+            "tables": {
+                "top_adsets_by_roas": [],
+                "worst_adsets_by_roas": [],
+                "top_ads_by_roas": [],
+                "worst_ads_by_roas": [],
+            },
             "missing_data": {"meta_unavailable_fields": [], "note": ""},
             "kpi_truth_source": "momo_adapter",
             "ad_diagnostics_source": "momo_adapter",
             "roas": total_rev / total_spend if total_spend > 0 else 0,
             "unified_data_count": len(unified_data),
-            "week_id": f"Momo_{now_iso[:10]}"
+            "week_id": f"Momo_{now_iso[:10]}",
         }
         st.write(f"Parsed {len(unified_data)} records from Momo.")
 
@@ -426,14 +482,10 @@ def run_step_b(
 
         report_summary = build_report_summary(meta_adset_bytes, meta_ads_bytes, web_excel_bytes)
 
-
     # === 第二步：有了 report_summary，現在可以取得/建立版本目錄 ===
 
     resolved_fp_code, vdir = choose_version_dir_for_run(
-        report_summary,
-        fp_code,
-        force_rerun,
-        auto_new_version
+        report_summary, fp_code, force_rerun, auto_new_version
     )
 
     # 確保目錄存在
@@ -442,7 +494,9 @@ def run_step_b(
     # === 第三步：儲存產出物 ===
 
     # 儲存 Report Summary
-    (vdir / "report_summary.json").write_text(json.dumps(report_summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    (vdir / "report_summary.json").write_text(
+        json.dumps(report_summary, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     # 載入前一週 Context
     week_id = report_summary.get("week_id", "Unknown")
@@ -455,16 +509,24 @@ def run_step_b(
         "files": {
             "meta_adset": meta_adset_file.name if meta_adset_file else None,
             "shopee": shopee_file.name if shopee_file else None,
-            "momo": momo_file.name if momo_file else None
-        }
+            "momo": momo_file.name if momo_file else None,
+        },
     }
-    (vdir / "inputs.json").write_text(json.dumps(snapshot_inputs, indent=2, ensure_ascii=False), encoding="utf-8")
+    (vdir / "inputs.json").write_text(
+        json.dumps(snapshot_inputs, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     # 更新 Sidebar
     if render_sidebar_status_fn:
         render_sidebar_status_fn(week_id, vdir)
 
-    logger.info(f"[{mode_label}] Step B Done. WeekID: {week_id}, VDir: {vdir}")
+    logger.info(
+        f"[{mode_label}] Step B Done. WeekID: {week_id}, VDir: {vdir}",
+        step="B",
+        week_id=week_id,
+        mode=mode_label,
+        vdir=str(vdir),
+    )
     return week_id, resolved_fp_code, vdir, prev_ctx
 
 
@@ -636,7 +698,11 @@ def run_step_d_draft(
     logger.info("Step D (draft) 開始", week_id=week_id, mode=mode_label)
     sync_manual_inputs_to_inputs_json(vdir)
 
-    if (not force_rerun) and step_exists(vdir, "meeting_draft.md") and step_exists(vdir, "workflow_state_draft.json"):
+    if (
+        (not force_rerun)
+        and step_exists(vdir, "meeting_draft.md")
+        and step_exists(vdir, "workflow_state_draft.json")
+    ):
         wsd = read_json_if_exists(vdir / "workflow_state_draft.json")
         if wsd:
             st.session_state["workflow_state_draft"] = wsd
@@ -647,7 +713,9 @@ def run_step_d_draft(
             render_sidebar_status_fn(week_id, vdir)
             return
 
-    with st.spinner(f"{mode_label}｜Step D：Moderator draft -> meeting_draft/workflow_state_draft..."):
+    with st.spinner(
+        f"{mode_label}｜Step D：Moderator draft -> meeting_draft/workflow_state_draft..."
+    ):
         rs = load_or_session("report_summary", vdir / "report_summary.json")
         ri = load_or_session("report_insights", vdir / "report_insights.json")
         if not rs or not ri:
@@ -706,7 +774,9 @@ def run_step_e(
                     p = vdir / f"consultant_{role}.md"
                     if p.exists():
                         continue
-                    readable = render_consultant_note(role, note if isinstance(note, dict) else {"error": "invalid_note_type"})
+                    readable = render_consultant_note(
+                        role, note if isinstance(note, dict) else {"error": "invalid_note_type"}
+                    )
                     write_text(p, readable)
             except Exception as e:
                 logger.warning("補寫顧問自然語句失敗", error=str(e))
@@ -723,7 +793,8 @@ def run_step_e(
 
         rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]
         cn = generate_consultant_notes(
-            rs_ctx, ri,
+            rs_ctx,
+            ri,
             status_callback=status_callback,
             on_consultant_done=None,  # Step E 移除即時渲染（避免被 Step F 覆蓋且意義不大）
             version_fp=vdir.name,
@@ -739,7 +810,9 @@ def run_step_e(
                 "C": cn.get("consultant_C") or {},
             }
             for role, note in notes.items():
-                readable = render_consultant_note(role, note if isinstance(note, dict) else {"error": "invalid_note_type"})
+                readable = render_consultant_note(
+                    role, note if isinstance(note, dict) else {"error": "invalid_note_type"}
+                )
                 write_text(vdir / f"consultant_{role}.md", readable)
         except Exception as e:
             logger.warning("寫入顧問自然語句失敗", error=str(e))
@@ -762,7 +835,11 @@ def run_step_f_final(
     logger.info("Step F (final) 開始", week_id=week_id, mode=mode_label)
     sync_manual_inputs_to_inputs_json(vdir)
 
-    if (not force_rerun) and step_exists(vdir, "meeting.md") and step_exists(vdir, "workflow_state.json"):
+    if (
+        (not force_rerun)
+        and step_exists(vdir, "meeting.md")
+        and step_exists(vdir, "workflow_state.json")
+    ):
         ws = read_json_if_exists(vdir / "workflow_state.json")
         if ws:
             st.session_state["workflow_state"] = ws
@@ -778,7 +855,9 @@ def run_step_f_final(
         ri = load_or_session("report_insights", vdir / "report_insights.json")
         cn = load_or_session("consultant_notes", vdir / "consultant_notes.json")
         if not rs or not ri or not cn:
-            raise RuntimeError("缺少 report_summary/report_insights/consultant_notes（Step B/C/E 未成功）")
+            raise RuntimeError(
+                "缺少 report_summary/report_insights/consultant_notes（Step B/C/E 未成功）"
+            )
 
         rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]
         ws = build_workflow_state(rs_ctx, ri, consultant_notes=cn, step="F", version_fp=vdir.name)
@@ -790,6 +869,7 @@ def run_step_f_final(
 
     write_pipeline_state(vdir, "F(final)", mode_label)
     render_sidebar_status_fn(week_id, vdir)
+
 
 # -------------------------
 # Step G: 技能包管理員 (New Feature)
@@ -809,4 +889,5 @@ def run_step_g(session_state: Dict[str, Any]) -> None:
 
     # 呼叫獨立 UI 模組渲染
     from ui.skill_manager import render_skill_manager
+
     render_skill_manager(skills_context)

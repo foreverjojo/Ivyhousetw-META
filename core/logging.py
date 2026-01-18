@@ -37,9 +37,20 @@ class JSONFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
 
+        # Trace ID（若有啟用 core.tracing）
+        try:
+            from core.tracing import get_trace_id
+
+            trace_id = get_trace_id()
+            if trace_id:
+                log_data["trace_id"] = trace_id
+        except Exception:
+            pass
+
         # 加入額外資訊（由 logger.info(msg, **extra) 傳入）
-        if hasattr(record, "extra_data"):
-            log_data["extra"] = record.extra_data
+        extra_data = getattr(record, "extra_data", None)
+        if extra_data is not None:
+            log_data["extra"] = extra_data
 
         # 加入 exception 資訊
         if record.exc_info:
