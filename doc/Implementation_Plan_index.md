@@ -145,9 +145,9 @@
   - [X] 設計 `schemas/unified_ad_data.json` ✅
   - [X] 實作 Meta to Unified 轉換器 (`scripts/adapters/meta_adapter.py`) ✅
   - [X] 建立 `doc/DATA_CONTRACT.md` ✅
-  - [ ] Shopee/Momo 轉換器 → 移至 Phase 3 規劃
+  - [X] Shopee/Momo 轉換器 ✅（Phase 3 已落地）
 
-  - **DoD**: Meta 通路已轉換為統一格式，Shopee/Momo 待 Phase 3
+  - **DoD**: Meta/Shopee/Momo 通路已轉換為統一格式
 - [X] **驗收標準 (DoD)** (TEST-001~003) ✅
 
   - [X] 建立 `doc/ACCEPTANCE_CRITERIA.md` ✅
@@ -163,13 +163,13 @@
 
   - [X] 結構化 Logging (`core/logging.py`)
   - [X] LLM 呼叫監控 (`core/llm_monitor.py`)
-  - [ ] Trace ID 追蹤 (`core/tracing.py`) → Phase 4 規劃
-  - [ ] Runbook 文件 (`doc/RUNBOOK.md`) → Phase 4 規劃
+  - [X] Trace ID 追蹤 (`core/tracing.py`) ✅（Idx-016）
+  - [X] Runbook 文件 (`doc/RUNBOOK.md`) ✅
 - [X] **版本管理** (VER-001~003) ✅
 
   - [X] `CHANGELOG.md` (Keep a Changelog 格式，100% 繁中)
   - [X] 語意化版本 (`VERSION`)
-  - [ ] 自動化發布流程 (`.github/workflows/release.yml`) → Phase 4 規劃
+  - [X] 自動化發布流程 (`.github/workflows/release.yml`) ✅
 
 #### 🔴 P0: QA 報告修正 (2026-01-04) ✅ 完成
 
