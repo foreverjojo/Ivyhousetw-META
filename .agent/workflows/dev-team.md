@@ -5,6 +5,10 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
 
 當使用者輸入 `/dev`（或相容別名 `/dev-team`）或請求「啟動開發團隊」時，請依照以下步驟執行。
 
+> 📌 **Slash 指令說明**：
+> - `/dev` 或 `/dev-team`：啟動本 repo 的 dev-team workflow（Ivy Coordinator 流程）
+> - 如果你有個人的 Copilot prompt file 使用 `/dev`，建議改用其他名稱（如 `/devchat`）以避免衝突
+
 ---
 
 ## 📋 前置準備

@@ -6,7 +6,17 @@
 
 專案概況：Python 3.11 專案，使用 Ruff + Pytest。CI 會執行 lint/format/tests 與 repo 內的驗證腳本。
 
+---
 
+## 🚀 Dev-Team Workflow 入口
+
+當需要啟動開發團隊工作流程時：
+- 使用 `/dev` 或 `/dev-team` 指令
+- 詳細流程請參閱：`.agent/workflows/dev-team.md`
+
+> 📌 **注意**：如果你有個人的 Copilot prompt file 使用 `/dev`，建議改用其他名稱（如 `/devchat`）以避免與 repo workflow 衝突。
+
+---
 ## Repo Layout（high signal）
 
 - `core/`: 核心業務邏輯（建議 <= 400 行/檔；硬上限 500）
