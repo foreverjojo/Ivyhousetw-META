@@ -5,8 +5,11 @@
 
 ## 遷移對照表
 
-以下 plan 原本在 `doc/Implementation_Plan_index.md`，於 2026-01-19 遷移至此：
-- Idx-009 ~ Idx-018
+以下 workflow 任務原本在 `doc/Implementation_Plan_index.md`，於 2026-01-19 遷移至此：
+- Idx-009 ~ Idx-015：workflow 治理與基礎設施任務
+- Idx-018：資料夾隔離與雙 Index 架構
+
+**注意**：Idx-016（Trace ID）和 Idx-017（MCP Roadmap）是專案功能任務，保留在 `doc/Implementation_Plan_index.md`
 
 ---
 
@@ -23,8 +26,6 @@
 | Idx-013 | One-Click Restore Hardening - Env vars + Extensions Sync | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `.agent/plans/Idx-013_one_click_restore_hardening.md` | 移除硬編碼 token + extensions 三方一致性檢查 + CI workflow |
 | Idx-014 | One-Click Restore Reproducibility Hardening | P1 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-014_log.md` | 可重現性補強：base image digest pin + restore verify 工具鏈 |
 | Idx-015 | Full-Fidelity Restore via Pinned Devcontainer Image (GHCR) | P1 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-015_log.md` | GHCR 發佈 pinned image + 新機器 digest pin 流程 |
-| Idx-016 | Dev-Team Agents Hardening | P1 | ⏳ 待處理 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-016_log.md` | dev-team agents hardening |
-| Idx-017 | Dev-Team Workflow Governance Consolidation | P0 | ⏳ 待處理 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-017_log.md` | Consolidate governance + register CLI plan |
 | Idx-018 | Dev-Team Folder Segregation & File Ownership (Dual Index) | P0 | ✅ 已完成 | OpenCode | PASS | 1.0.0 | `.agent/logs/Idx-018_log.md` | segregate dev-team files from project (方案 B) |
 
 ### 狀態說明

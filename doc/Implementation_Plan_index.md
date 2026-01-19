@@ -23,6 +23,8 @@
 | Idx-006 | 清償 TD-001：修復 skill_converter.py 語法錯誤 | P2 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v3 | `doc/logs/Idx-006_log.md` | 修正縮排錯誤，TD-001 已清償 |
 | Idx-007 | 補齊 Plan.md 產出規範 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v4 | `doc/logs/Idx-007_log.md` | 建立 plan template + 更新 workflow |
 | Idx-008 | 實現 Plan Summary + 完成後刪除 plan.md | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v5 | `doc/logs/Idx-008_log.md` | log template 加入 summary 區段 |
+| Idx-016 | Trace ID 追蹤（Correlation ID） | P1 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `.agent/logs/Idx-016_log.md` | core.tracing + logger trace_id（logs 已遷移至 .agent/） |
+| Idx-017 | Implementation Plan 移除 MCP Roadmap | P2 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `.agent/logs/Idx-017_log.md` | Plan 不再以 MCP 作為 roadmap 概念（logs 已遷移至 .agent/） |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
