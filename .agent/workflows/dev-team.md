@@ -299,7 +299,7 @@ rollback_files: [N/A|檔案清單]
 
 如果 QA 發現問題，請回到 **Step 3 (Engineer)** 修正後再次審查。
 
-> 💡 Log 段落結構示例：`.agent/logs/Idx-010_log_template_example.md` 或 `doc/logs/Idx-010_log_template_example.md`
+> 💡 Log 段落結構示例：`.agent/logs/Idx-010_log_template_example.md`（workflow/治理任務）
 
 ---
 

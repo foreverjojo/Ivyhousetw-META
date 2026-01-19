@@ -25,7 +25,7 @@
 | Idx-015 | Full-Fidelity Restore via Pinned Devcontainer Image (GHCR) | P1 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-015_log.md` | GHCR 發佈 pinned image + 新機器 digest pin 流程 |
 | Idx-016 | Dev-Team Agents Hardening | P1 | ⏳ 待處理 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-016_log.md` | dev-team agents hardening |
 | Idx-017 | Dev-Team Workflow Governance Consolidation | P0 | ⏳ 待處理 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-017_log.md` | Consolidate governance + register CLI plan |
-| Idx-018 | Dev-Team Folder Segregation & File Ownership (Dual Index) | P0 | 🔄 進行中 | OpenCode | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-018_log.md` | segregate dev-team files from project (方案 B) |
+| Idx-018 | Dev-Team Folder Segregation & File Ownership (Dual Index) | P0 | ✅ 已完成 | OpenCode | PASS | 1.0.0 | `.agent/logs/Idx-018_log.md` | segregate dev-team files from project (方案 B) |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)

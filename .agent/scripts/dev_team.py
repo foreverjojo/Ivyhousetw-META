@@ -1,6 +1,6 @@
 """
 檔案用途：艾薇手工坊 (Ivy House) 虛擬開發團隊 (Virtual Dev Team)
-使用方式：python scripts/dev_team.py "您的開發需求"
+使用方式：python .agent/scripts/dev_team.py "您的開發需求"
 
 角色：
 1. 艾薇規劃師 (Planner): 產出 Spec

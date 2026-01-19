@@ -200,7 +200,7 @@ def main(argv: List[str]) -> int:
             "log_path": "",
             "statistics": {},
             "message": "缺少 Log 檔案路徑參數",
-            "suggestion": "請提供 Log 檔案路徑，例如：python .agent/skills/skills_evaluator.py doc/logs/Idx-012_log.md",
+            "suggestion": "請提供 Log 檔案路徑，例如：python .agent/skills/skills_evaluator.py .agent/logs/Idx-012_log.md（workflow/治理）或 doc/logs/Idx-012_log.md（專案功能）",
             "usage": usage,
         }
         result = validate_output_schema(result, "skills_evaluator")
@@ -216,7 +216,7 @@ def main(argv: List[str]) -> int:
             "log_path": str(log_path),
             "statistics": {},
             "message": f"Log 檔案不存在：{log_path}",
-            "suggestion": "請確認路徑正確，或先在 doc/logs 內建立/產生 Log 檔案。",
+            "suggestion": "請確認路徑正確，workflow/治理任務的 Log 通常在 .agent/logs；專案功能任務的 Log 通常在 doc/logs。",
             "usage": usage,
         }
         result = validate_output_schema(result, "skills_evaluator")

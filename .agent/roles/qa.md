@@ -275,6 +275,10 @@ git reset --soft abc123f
 
 **執行指令**:
 ```bash
+# workflow/治理任務：log 通常位於 .agent/logs/
+python .agent/skills/skills_evaluator.py .agent/logs/Idx-XXX_log.md
+
+# 專案功能任務：log 通常位於 doc/logs/
 python .agent/skills/skills_evaluator.py doc/logs/Idx-XXX_log.md
 ```
 
@@ -288,7 +292,7 @@ python .agent/skills/skills_evaluator.py doc/logs/Idx-XXX_log.md
 ```json
 {
   "status": "pass",
-  "log_path": "doc/logs/Idx-012_log.md",
+   "log_path": ".agent/logs/Idx-012_log.md",
   "statistics": {
     "total_executions": 6,
     "success_rate": 100.0,
