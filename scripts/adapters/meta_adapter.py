@@ -7,10 +7,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -21,7 +22,7 @@ from utils import naming
 class MetaCsvSpec:
     level: str
     name_col: str
-    id_cols: Tuple[str, ...]
+    id_cols: tuple[str, ...]
 
 
 META_ADSET_SPEC = MetaCsvSpec(
@@ -51,7 +52,7 @@ def _clean_cols(df: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
-def _first_existing_col(df: pd.DataFrame, candidates: Iterable[str]) -> Optional[str]:
+def _first_existing_col(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     for c in candidates:
         if c in df.columns:
             return c
@@ -81,7 +82,7 @@ def _to_int(x: Any) -> int:
     return int(round(_to_float(x)))
 
 
-def _normalize_date_yyyy_mm_dd(s: Any) -> Optional[str]:
+def _normalize_date_yyyy_mm_dd(s: Any) -> str | None:
     if s is None:
         return None
     ss = str(s).strip().replace("/", "-")[:10]
@@ -94,7 +95,7 @@ def _normalize_date_yyyy_mm_dd(s: Any) -> Optional[str]:
         return None
 
 
-def _drop_total_rows(df: pd.DataFrame, name_col: str) -> Tuple[pd.DataFrame, int]:
+def _drop_total_rows(df: pd.DataFrame, name_col: str) -> tuple[pd.DataFrame, int]:
     if df.empty or name_col not in df.columns:
         return df, 0
     d = df.copy()
@@ -105,21 +106,21 @@ def _drop_total_rows(df: pd.DataFrame, name_col: str) -> Tuple[pd.DataFrame, int
 
 
 def _stable_fallback_id(
-    *, platform: str, level: str, name: str, time_range: Dict[str, str], salt: str = ""
+    *, platform: str, level: str, name: str, time_range: dict[str, str], salt: str = ""
 ) -> str:
     raw = f"{platform}|{level}|{name}|{time_range.get('start', '')}|{time_range.get('end', '')}|{salt}"
     h = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
     return f"{platform}_{level}_{h}"
 
 
-def _extract_time_range(df: pd.DataFrame) -> Dict[str, str]:
+def _extract_time_range(df: pd.DataFrame) -> dict[str, str]:
     start, end = naming.extract_date_range_from_csv(df)
     start_n = _normalize_date_yyyy_mm_dd(start) or ""
     end_n = _normalize_date_yyyy_mm_dd(end) or ""
     return {"start": start_n, "end": end_n}
 
 
-def _row_time_range(row: pd.Series, fallback: Dict[str, str]) -> Dict[str, str]:
+def _row_time_range(row: pd.Series, fallback: dict[str, str]) -> dict[str, str]:
     start = _normalize_date_yyyy_mm_dd(row.get("分析報告開始"))
     end = _normalize_date_yyyy_mm_dd(row.get("分析報告結束"))
     return {
@@ -155,8 +156,8 @@ def _build_record(
     spec: MetaCsvSpec,
     row: pd.Series,
     row_index: int,
-    time_range: Dict[str, str],
-) -> Dict[str, Any]:
+    time_range: dict[str, str],
+) -> dict[str, Any]:
     name = _get_str(row, spec.name_col)
     id_col = _first_existing_col(pd.DataFrame([row]), spec.id_cols)
     raw_id = _get_str(row, id_col) if id_col else ""
@@ -213,12 +214,12 @@ def _build_record(
     }
 
 
-def adapt_meta_csv(path: Path, *, spec: MetaCsvSpec) -> Dict[str, Any]:
+def adapt_meta_csv(path: Path, *, spec: MetaCsvSpec) -> dict[str, Any]:
     df = _clean_cols(_read_csv(path))
     df, _ = _drop_total_rows(df, spec.name_col)
 
     base_time_range = _extract_time_range(df)
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for i, row in df.iterrows():
         name = _get_str(row, spec.name_col)
         if name == "":
@@ -235,24 +236,22 @@ def adapt_meta_csv(path: Path, *, spec: MetaCsvSpec) -> Dict[str, Any]:
     }
 
 
-def adapt_meta_adset_csv(path: Path) -> Dict[str, Any]:
+def adapt_meta_adset_csv(path: Path) -> dict[str, Any]:
     return adapt_meta_csv(path, spec=META_ADSET_SPEC)
 
 
-def adapt_meta_ad_csv(path: Path) -> Dict[str, Any]:
+def adapt_meta_ad_csv(path: Path) -> dict[str, Any]:
     return adapt_meta_csv(path, spec=META_AD_SPEC)
 
 
-def adapt_meta_adset_and_ad_csv(
-    *, adset_csv: Optional[Path], ad_csv: Optional[Path]
-) -> Dict[str, Any]:
-    chunks: List[Dict[str, Any]] = []
+def adapt_meta_adset_and_ad_csv(*, adset_csv: Path | None, ad_csv: Path | None) -> dict[str, Any]:
+    chunks: list[dict[str, Any]] = []
     if adset_csv:
         chunks.append(adapt_meta_adset_csv(adset_csv))
     if ad_csv:
         chunks.append(adapt_meta_ad_csv(ad_csv))
 
-    merged: List[Dict[str, Any]] = []
+    merged: list[dict[str, Any]] = []
     for c in chunks:
         merged.extend(c.get("data", []))
 
@@ -265,7 +264,7 @@ def adapt_meta_adset_and_ad_csv(
     }
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Meta CSV -> Unified Ad Data")
     p.add_argument("--adset", type=Path, help="Meta Adset CSV 檔案路徑")
     p.add_argument("--ad", type=Path, help="Meta Ad CSV 檔案路徑")

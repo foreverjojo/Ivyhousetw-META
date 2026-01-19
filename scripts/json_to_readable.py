@@ -1,5 +1,4 @@
 # 用途：將 Step C/E 產出的 JSON 轉為使用者可讀的自然語句｜scripts/json_to_readable.py
-# -*- coding: utf-8 -*-
 """
 職責：
   - render_report_insights(): 將 report_insights.json 轉為摘要段落
@@ -10,7 +9,7 @@
   - 輸出格式為 Markdown（供 Streamlit 渲染）
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 def render_skeleton_insight() -> str:
@@ -34,7 +33,7 @@ _ AI 正在分析您的廣告數據..._
 """
 
 
-def render_report_insights(ri: Dict[str, Any]) -> str:
+def render_report_insights(ri: dict[str, Any]) -> str:
     """
     將 report_insights.json 轉為自然語句摘要
 
@@ -97,7 +96,7 @@ def render_report_insights(ri: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _render_report_insights_v1(ri: Dict[str, Any]) -> str:
+def _render_report_insights_v1(ri: dict[str, Any]) -> str:
     """支援 insights.v1 結構的可讀轉換（deterministic，不做任何 KPI 重算）。"""
     week_id = str(ri.get("week_id") or "").strip()
     date_range = str(ri.get("date_range") or "").strip()
@@ -168,7 +167,7 @@ def _render_report_insights_v1(ri: Dict[str, Any]) -> str:
                 if stoploss:
                     extra.append(f"止損：{stoploss}")
                 if extra:
-                    lines.append(f"   - " + "；".join(extra))
+                    lines.append("   - " + "；".join(extra))
             else:
                 lines.append(f"{i}. {_safe_str(a)}")
         lines.append("")
@@ -198,7 +197,7 @@ def _safe_str(v: Any) -> str:
     return s.strip()
 
 
-def render_consultant_note(role: str, note: Dict[str, Any]) -> str:
+def render_consultant_note(role: str, note: dict[str, Any]) -> str:
     """
     將單一顧問的 JSON 轉為可讀分析
 
@@ -237,7 +236,7 @@ def render_consultant_note(role: str, note: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _render_consultant_a(note: Dict[str, Any]) -> list:
+def _render_consultant_a(note: dict[str, Any]) -> list:
     """渲染成效顧問 A 的輸出"""
     lines = []
 
@@ -273,7 +272,7 @@ def _render_consultant_a(note: Dict[str, Any]) -> list:
     return lines
 
 
-def _render_consultant_b(note: Dict[str, Any]) -> list:
+def _render_consultant_b(note: dict[str, Any]) -> list:
     """渲染視覺顧問 B 的輸出"""
     lines = []
 
@@ -309,7 +308,7 @@ def _render_consultant_b(note: Dict[str, Any]) -> list:
     return lines
 
 
-def _render_consultant_c(note: Dict[str, Any]) -> list:
+def _render_consultant_c(note: dict[str, Any]) -> list:
     """渲染策略顧問 C 的輸出"""
     lines = []
 
@@ -345,7 +344,7 @@ def _render_consultant_c(note: Dict[str, Any]) -> list:
     return lines
 
 
-def _render_generic_note(note: Dict[str, Any]) -> list:
+def _render_generic_note(note: dict[str, Any]) -> list:
     """通用顧問輸出渲染（fallback）"""
     lines = []
 

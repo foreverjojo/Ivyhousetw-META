@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """建立 MOMO Golden Test 檔案"""
 
 import sys
 
 sys.path.insert(0, ".")
-from scripts.adapters.momo_adapter import adapt_momo_ad_report
-from pathlib import Path
 import json
+from pathlib import Path
+
+from scripts.adapters.momo_adapter import adapt_momo_ad_report
 
 # MOMO Golden Test 輸入 (已由前一步驟從 xlsx 轉為 csv)
 csv_input = Path("tests/golden/momo_sample_input.csv")

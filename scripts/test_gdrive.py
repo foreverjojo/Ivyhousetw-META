@@ -6,12 +6,10 @@
 """
 
 import os
-import json
-from pathlib import Path
-import google.auth
+
+import requests
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
-import requests
 
 
 def test_gdrive_connection(json_path: str):

@@ -7,12 +7,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
 
 from core.config import MEDIA_ASSETS_DIR
-
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 VIDEO_SUFFIXES = {".mp4", ".mov"}
@@ -20,8 +19,8 @@ VIDEO_SUFFIXES = {".mp4", ".mov"}
 
 @dataclass(frozen=True)
 class MediaScanResult:
-    images: List[Path]
-    videos: List[Path]
+    images: list[Path]
+    videos: list[Path]
 
 
 def _iter_files(root: Path, *, recursive: bool) -> Iterable[Path]:
@@ -31,9 +30,7 @@ def _iter_files(root: Path, *, recursive: bool) -> Iterable[Path]:
         yield from root.glob("*")
 
 
-def scan_media_assets(
-    media_dir: Optional[Path] = None, *, recursive: bool = True
-) -> MediaScanResult:
+def scan_media_assets(media_dir: Path | None = None, *, recursive: bool = True) -> MediaScanResult:
     """
     掃描素材目錄，回傳圖片與影片清單（以副檔名判斷）。
     """
@@ -41,8 +38,8 @@ def scan_media_assets(
     if not root.exists():
         return MediaScanResult(images=[], videos=[])
 
-    images: List[Path] = []
-    videos: List[Path] = []
+    images: list[Path] = []
+    videos: list[Path] = []
 
     for path in _iter_files(root, recursive=recursive):
         if not path.is_file():
@@ -56,7 +53,7 @@ def scan_media_assets(
     return MediaScanResult(images=images, videos=videos)
 
 
-def get_top_images(images: List[Path], n: int = 6) -> List[Path]:
+def get_top_images(images: list[Path], n: int = 6) -> list[Path]:
     """
     取得最多 N 張圖片（以檔案修改時間由新到舊排序）。
     """

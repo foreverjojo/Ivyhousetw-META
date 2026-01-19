@@ -7,7 +7,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 def _get_manual_inputs(report_summary: dict) -> dict:
@@ -81,9 +81,9 @@ def _strategy_snapshot_md(report_summary: dict) -> str:
 
 
 def build_meeting_markdown(
-    workflow_state: Dict[str, Any],
-    report_summary: Dict[str, Any],
-    report_insights: Dict[str, Any],
+    workflow_state: dict[str, Any],
+    report_summary: dict[str, Any],
+    report_insights: dict[str, Any],
 ) -> str:
     """
     meeting.md：人看的週會紀要（Markdown）
@@ -392,7 +392,7 @@ def build_meeting_markdown(
     return "\n".join(lines)
 
 
-def write_artifacts(hist_dir: Path, meeting_md: str, workflow_state: Dict[str, Any]) -> None:
+def write_artifacts(hist_dir: Path, meeting_md: str, workflow_state: dict[str, Any]) -> None:
     (hist_dir / "meeting.md").write_text(meeting_md, encoding="utf-8")
     (hist_dir / "workflow_state.json").write_text(
         json.dumps(workflow_state, ensure_ascii=False, indent=2),

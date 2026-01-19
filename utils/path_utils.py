@@ -7,9 +7,8 @@
   - Week info 寫入
 """
 
-from pathlib import Path
-from typing import Optional
 from datetime import datetime
+from pathlib import Path
 
 
 def now_iso() -> str:
@@ -46,7 +45,7 @@ def latest_ptr_path(week_id: str, history_root: Path) -> Path:
     return week_meta_dir(week_id, history_root) / "latest.json"
 
 
-def read_latest_ptr(week_id: str, history_root: Path) -> Optional[dict]:
+def read_latest_ptr(week_id: str, history_root: Path) -> dict | None:
     """讀取 latest.json"""
     from utils.file_io import read_json_if_exists
 

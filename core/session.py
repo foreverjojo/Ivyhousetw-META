@@ -7,7 +7,7 @@
 """
 
 from pathlib import Path
-from typing import Optional
+
 import streamlit as st
 
 from utils.file_io import read_json_if_exists, write_json
@@ -41,7 +41,7 @@ def reset_session_lock() -> None:
         st.session_state.pop(k, None)
 
 
-def load_or_session(key: str, path: Path) -> Optional[dict]:
+def load_or_session(key: str, path: Path) -> dict | None:
     """從 session 或檔案載入資料"""
     if key in st.session_state:
         return st.session_state[key]

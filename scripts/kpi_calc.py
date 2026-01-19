@@ -5,8 +5,8 @@
 
 import io
 from datetime import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
-from typing import Any, Dict
 
 import pandas as pd
 
@@ -29,7 +29,7 @@ from utils.week_utils import normalize_week_id
 # =========================
 # KPI 計算（真值 = Website Direct）
 # =========================
-def calc_meta_kpis(adset_df: pd.DataFrame, ads_df: pd.DataFrame) -> Dict[str, Any]:
+def calc_meta_kpis(adset_df: pd.DataFrame, ads_df: pd.DataFrame) -> dict[str, Any]:
     """
     KPI 真值：網站直接（website_*）
     漂移偵測：平台購買（platform_*）+ delta_*
@@ -113,7 +113,7 @@ def calc_meta_kpis(adset_df: pd.DataFrame, ads_df: pd.DataFrame) -> Dict[str, An
     }
 
 
-def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5) -> Dict[str, Any]:
+def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5) -> dict[str, Any]:
     """
     Top/Worst 表格：
     - 預設用「網站直接」作 ROAS 排序（與 KPI 真值一致）
@@ -295,7 +295,7 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
 # =========================
 # 網站 KPI
 # =========================
-def calc_web_kpis(web_df: pd.DataFrame) -> Dict[str, Any]:
+def calc_web_kpis(web_df: pd.DataFrame) -> dict[str, Any]:
     d = web_df.copy()
     d.columns = [str(c).strip() for c in d.columns]
 
@@ -323,7 +323,7 @@ def build_report_summary(
     meta_adset_bytes: bytes,
     meta_ads_bytes: bytes,
     web_excel_bytes: bytes,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     adset_df = _clean_cols(_read_csv_bytes(meta_adset_bytes))
     ads_df = _clean_cols(_read_csv_bytes(meta_ads_bytes))
     web_df = pd.read_excel(io.BytesIO(web_excel_bytes))
@@ -338,7 +338,7 @@ def build_report_summary(
 
     # ✅ P1：保存原始日資料供 Skill 2/3 使用
     adset_daily_df = adset_df.copy() if _is_daily_data(adset_df) else None
-    ads_daily_df = ads_df.copy() if _is_daily_data(ads_df) else None
+    _ads_daily_df = ads_df.copy() if _is_daily_data(ads_df) else None
     is_daily = adset_daily_df is not None
 
     # ✅ P1：若為日資料，聚合為週彙總供 KPI 計算

@@ -27,7 +27,9 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
    - 需要修改/新增的檔案清單
    - 每個檔案的邏輯細節
    - 注意事項與風險提示
-4. **保存 Spec 為獨立文件**：`doc/plans/Idx-NNN_plan.md`
+4. **保存 Spec 為獨立文件**：
+   - **Workflow/治理改善任務** → `.agent/plans/Idx-NNN_plan.md`
+   - **專案功能開發任務** → `doc/plans/Idx-NNN_plan.md`
 5. **Plan 固定段落（必須存在）**：
    - `## 📋 SPEC`
    - `## 🔍 RESEARCH & ASSUMPTIONS`（至少包含 `research_required: true/false`）
@@ -142,7 +144,7 @@ qa_result: [PASS|PASS_WITH_RISK|FAIL]
 qa_compliance: [✅ 符合|⚠️ 例外：原因]
 
 # 收尾
-log_file_path: [doc/logs/Idx-XXX_log.md]
+log_file_path: [.agent/logs/Idx-XXX_log.md（workflow任務）或 doc/logs/Idx-XXX_log.md（專案任務）]
 commit_hash: [pending|hash]
 rollback_at: [N/A|YYYY-MM-DD HH:mm:ss]
 rollback_reason: [N/A|原因]
@@ -289,13 +291,15 @@ rollback_files: [N/A|檔案清單]
 ## 🏁 完成
 
 當 QA 審查通過後：
-1. **建立執行記錄**: 由 Coordinator 產生 `doc/logs/Idx-XXX_log.md`（引用 `doc/plans/Idx-XXX_plan.md`）
-2. **保留 Plan 檔案**: `doc/plans/Idx-XXX_plan.md` 不刪除（作為規格與決策留存）
+1. **建立執行記錄**: 由 Coordinator 產生執行記錄：
+   - **Workflow/治理改善任務** → `.agent/logs/Idx-XXX_log.md`（引用 `.agent/plans/Idx-XXX_plan.md`）
+   - **專案功能開發任務** → `doc/logs/Idx-XXX_log.md`（引用 `doc/plans/Idx-XXX_plan.md`）
+2. **保留 Plan 檔案**: Plan 檔案不刪除（作為規格與決策留存）
 3. **提交變更（選用）**: 是否 `git commit` 由用戶決策
 
 如果 QA 發現問題，請回到 **Step 3 (Engineer)** 修正後再次審查。
 
-> 💡 Log 段落結構示例：`doc/logs/Idx-010_log_template_example.md`
+> 💡 Log 段落結構示例：`.agent/logs/Idx-010_log_template_example.md` 或 `doc/logs/Idx-010_log_template_example.md`
 
 ---
 

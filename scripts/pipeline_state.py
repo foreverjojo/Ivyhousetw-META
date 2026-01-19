@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # =========================
 # Timezone（固定台北時間）
@@ -30,13 +30,13 @@ def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def read_json_if_exists(p: Path) -> Optional[Dict[str, Any]]:
+def read_json_if_exists(p: Path) -> dict[str, Any] | None:
     if p.exists():
         return json.loads(p.read_text(encoding="utf-8"))
     return None
 
 
-def write_json(p: Path, obj: Dict[str, Any]) -> None:
+def write_json(p: Path, obj: dict[str, Any]) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -45,7 +45,7 @@ def pipeline_state_path(vdir: Path) -> Path:
     return vdir / "pipeline_state.json"
 
 
-def init_pipeline_state() -> Dict[str, Any]:
+def init_pipeline_state() -> dict[str, Any]:
     return {
         "schema_version": "pipeline_state.v1",
         "created_at": now_iso(),
@@ -54,16 +54,16 @@ def init_pipeline_state() -> Dict[str, Any]:
 
 
 def append_event(
-    state: Dict[str, Any],
+    state: dict[str, Any],
     *,
     step: str,
     mode: str,
     status: str,
-    error: Optional[str] = None,
-    details: Optional[List[str]] = None,
-    extra: Optional[Dict[str, Any]] = None,
+    error: str | None = None,
+    details: list[str] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
-    ev: Dict[str, Any] = {"at": now_iso(), "mode": mode, "step": step, "status": status}
+    ev: dict[str, Any] = {"at": now_iso(), "mode": mode, "step": step, "status": status}
     if error:
         ev["error"] = error
 
@@ -86,9 +86,9 @@ def write_pipeline_state(
     mode: str,
     *,
     status: str = "ok",
-    error: Optional[str] = None,
-    details: Optional[List[str]] = None,
-    extra: Optional[Dict[str, Any]] = None,
+    error: str | None = None,
+    details: list[str] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """
     Write/append pipeline_state.json.

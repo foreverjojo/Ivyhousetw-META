@@ -7,15 +7,14 @@
   - DataFrame 預覽
 """
 
+import io
 import json
 from pathlib import Path
-from typing import Optional
-import io
 
 import pandas as pd
 
 
-def read_json_if_exists(p: Path) -> Optional[dict]:
+def read_json_if_exists(p: Path) -> dict | None:
     """讀取 JSON 檔案，若不存在則回傳 None"""
     if p.exists():
         return json.loads(p.read_text(encoding="utf-8"))
@@ -28,7 +27,7 @@ def write_json(p: Path, obj: dict) -> None:
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def read_text_if_exists(p: Path) -> Optional[str]:
+def read_text_if_exists(p: Path) -> str | None:
     """讀取文字檔案，若不存在則回傳 None"""
     if p.exists():
         return p.read_text(encoding="utf-8")

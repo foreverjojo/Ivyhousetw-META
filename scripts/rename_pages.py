@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-import os
 import glob
+import os
 
 # Mapping from "part of filename" to "new filename"
 # We match by unique substring to avoid encoding issues in shell

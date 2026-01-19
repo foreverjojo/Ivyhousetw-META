@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 tests/conftest.py
 =====================================
@@ -7,8 +6,8 @@ Pytest 配置檔案
 =====================================
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 

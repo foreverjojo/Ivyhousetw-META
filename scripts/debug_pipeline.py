@@ -13,12 +13,10 @@ from __future__ import annotations
 
 import argparse
 import io
-import json
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
 
 """
 執行提示：
@@ -32,6 +30,19 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+# 注意：這些 imports 刻意放在 sys.path 調整之後（避免 ModuleNotFoundError）
+from scripts.consultants import generate_consultant_notes  # noqa: E402
+from scripts.kpi_calc import build_report_summary  # noqa: E402
+from scripts.llm_insights import generate_report_insights  # noqa: E402
+from utils import (  # noqa: E402
+    compute_inputs_fingerprint,
+    ensure_week_meta_dirs,
+    fp_short,
+    version_dir,
+    write_json,
+    write_text,
+)
+
 
 def _try_load_env() -> None:
     """
@@ -44,21 +55,6 @@ def _try_load_env() -> None:
         load_environment_variables()
     except Exception:
         return
-
-
-from scripts.kpi_calc import build_report_summary
-from scripts.llm_insights import generate_report_insights
-from scripts.consultants import generate_consultant_notes
-
-from utils import (
-    compute_inputs_fingerprint,
-    fp_short,
-    fingerprint_key_for_version,
-    ensure_week_meta_dirs,
-    version_dir,
-    write_json,
-    write_text,
-)
 
 
 @dataclass(frozen=True)
@@ -189,12 +185,12 @@ def run_debug_pipeline(
     *,
     input_dir: Path,
     detail_level: str,
-    model_insights: Optional[str],
-    model_a: Optional[str],
-    model_b: Optional[str],
-    model_c: Optional[str],
-    model_moderator: Optional[str],
-) -> Tuple[Path, str]:
+    model_insights: str | None,
+    model_a: str | None,
+    model_b: str | None,
+    model_c: str | None,
+    model_moderator: str | None,
+) -> tuple[Path, str]:
     files = _discover_input_files(input_dir)
     print("Input files:")
     print(f"- meta_adset: {files.meta_adset}")
@@ -240,6 +236,10 @@ def run_debug_pipeline(
         )
     else:
         report_insights = generate_report_insights(report_summary, version_fp=vdir.name)
+
+    # generate_report_insights 可能回傳 (out, usage)（當 return_usage=True 時）；這裡強制只取 out
+    if isinstance(report_insights, tuple):
+        report_insights = report_insights[0]
     t1 = time.time()
     write_json(vdir / "report_insights.json", report_insights)
     print(f"insights_version={report_insights.get('insights_version')} ({t1 - t0:.1f}s)")
@@ -268,7 +268,8 @@ def run_debug_pipeline(
 
     _print_step("Step F：Moderator（workflow_state + meeting.md）")
     try:
-        from scripts.moderator import build_workflow_state, build_meeting_markdown
+        from scripts.moderator import build_workflow_state
+        from scripts.moderator_meeting import build_meeting_markdown
     except ModuleNotFoundError as e:
         raise RuntimeError(
             f"匯入 scripts.moderator 失敗：{e}\n"

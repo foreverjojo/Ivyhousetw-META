@@ -11,12 +11,12 @@ import base64
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import requests
 
 
-def encode_image_to_base64(image_path: Union[str, Path]) -> str:
+def encode_image_to_base64(image_path: str | Path) -> str:
     """
     將圖片檔案編碼為 base64 字串（不含 data: 前綴）。
     """
@@ -27,7 +27,7 @@ def encode_image_to_base64(image_path: Union[str, Path]) -> str:
     return base64.b64encode(data).decode("utf-8")
 
 
-def get_image_media_type(image_path: Union[str, Path]) -> str:
+def get_image_media_type(image_path: str | Path) -> str:
     """
     根據圖片副檔名判斷 MIME 類型。
     """
@@ -43,7 +43,7 @@ def get_image_media_type(image_path: Union[str, Path]) -> str:
     raise ValueError(f"不支援的圖片格式：{suffix}")
 
 
-def create_image_content(image_path: Union[str, Path]) -> Dict[str, Any]:
+def create_image_content(image_path: str | Path) -> dict[str, Any]:
     """
     建立 OpenRouter（OpenAI 相容）messages content 的圖片區塊。
     """
@@ -53,12 +53,12 @@ def create_image_content(image_path: Union[str, Path]) -> Dict[str, Any]:
 
 
 def openrouter_multimodal_completion(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     model: str,
     *,
     temperature: float = 0.2,
     max_tokens: int = 1600,
-    response_format: Optional[Union[str, Dict[str, Any]]] = None,
+    response_format: str | dict[str, Any] | None = None,
     timeout_s: int = 120,
 ) -> str:
     """
@@ -86,7 +86,7 @@ def openrouter_multimodal_completion(
         "X-Title": os.getenv("OPENROUTER_APP_NAME", "ivyhouse-meta-weekly-mvp"),
     }
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "temperature": temperature,

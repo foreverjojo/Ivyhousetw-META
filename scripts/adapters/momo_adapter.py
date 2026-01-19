@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 檔案用途：將 MOMO ADS 報表 CSV 轉換為專案通用的 Unified JSON 格式（unified_ad_data）。
 支援解析 MOMO 廣告素材報表 (商品層級)。
@@ -10,10 +9,9 @@ import argparse
 import hashlib
 import json
 import re
-import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -52,7 +50,7 @@ def _read_momo_csv(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, header=MOMO_HEADER_ROW)
 
 
-def _extract_date_range_from_filename(filename: str) -> Tuple[str, str]:
+def _extract_date_range_from_filename(filename: str) -> tuple[str, str]:
     """從檔名擷取日期範圍 (例如 momo_20251201-20251231.xlsx)。若無則回傳 default。"""
     # 支援 YYYYMMDD-YYYYMMDD
     match = re.search(r"(\d{8})[-_](\d{8})", filename)
@@ -80,7 +78,7 @@ def _clean_cols(df: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
-def _find_col(row: pd.Series, possible_names: List[str]) -> Any:
+def _find_col(row: pd.Series, possible_names: list[str]) -> Any:
     """從多個可能的欄位名稱中找值。"""
     for name in possible_names:
         if name in row:
@@ -131,8 +129,8 @@ def _build_momo_record(
     *,
     row: pd.Series,
     row_index: int,
-    time_range: Dict[str, str],
-) -> Optional[Dict[str, Any]]:
+    time_range: dict[str, str],
+) -> dict[str, Any] | None:
     """建立單筆 Unified Ad Data record。"""
 
     # 欄位值擷取 (使用 MOMO_COL_MAP)
@@ -189,7 +187,7 @@ def _build_momo_record(
 # === 主要轉換函式 ===
 
 
-def adapt_momo_ad_report(path: Path) -> Dict[str, Any]:
+def adapt_momo_ad_report(path: Path) -> dict[str, Any]:
     """將 MOMO 報表轉換為 Unified Ad Data 格式。"""
     df = _clean_cols(_read_momo_csv(path))
 
@@ -197,7 +195,7 @@ def adapt_momo_ad_report(path: Path) -> Dict[str, Any]:
     start, end = _extract_date_range_from_filename(path.name)
     time_range = {"start": start, "end": end}
 
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     for i, row in df.iterrows():
         record = _build_momo_record(row=row, row_index=int(i), time_range=time_range)
         if record:
@@ -215,7 +213,7 @@ def adapt_momo_ad_report(path: Path) -> Dict[str, Any]:
 # === CLI 入口 ===
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="MOMO ADS 報表 -> Unified Ad Data")
     p.add_argument("--input", type=Path, required=True, help="MOMO 報表檔案路徑 (csv/xlsx/xls)")
     p.add_argument("--out", type=Path, required=True, help="輸出 unified JSON 檔案路徑")

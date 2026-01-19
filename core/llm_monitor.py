@@ -29,11 +29,7 @@
 
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
-
-from core.config import TAIPEI_TZ
 
 
 @dataclass
@@ -47,8 +43,8 @@ class LLMCall:
     total_tokens: int
     cost_usd: float
     function: str  # 呼叫的函式名稱（如 "generate_report_insights"）
-    week_id: Optional[str] = None
-    extra: Optional[Dict] = None  # 額外資訊（如 step, mode）
+    week_id: str | None = None
+    extra: dict | None = None  # 額外資訊（如 step, mode）
 
 
 class LLMMonitor:
@@ -72,7 +68,7 @@ class LLMMonitor:
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(asdict(call), ensure_ascii=False) + "\n")
 
-    def load_calls(self, week_id: Optional[str] = None) -> List[LLMCall]:
+    def load_calls(self, week_id: str | None = None) -> list[LLMCall]:
         """
         載入所有呼叫記錄（可選按 week_id 過濾）
 
@@ -85,8 +81,8 @@ class LLMMonitor:
         if not self.log_file.exists():
             return []
 
-        calls: List[LLMCall] = []
-        with open(self.log_file, "r", encoding="utf-8") as f:
+        calls: list[LLMCall] = []
+        with open(self.log_file, encoding="utf-8") as f:
             for line in f:
                 data = json.loads(line.strip())
                 call = LLMCall(**data)
@@ -99,7 +95,7 @@ class LLMMonitor:
 
         return calls
 
-    def get_summary(self, week_id: Optional[str] = None) -> Dict:
+    def get_summary(self, week_id: str | None = None) -> dict:
         """
         取得成本摘要統計
 
@@ -136,7 +132,7 @@ class LLMMonitor:
         total_cost = sum(c.cost_usd for c in calls)
 
         # 按 model 分組
-        calls_by_model: Dict[str, Dict] = {}
+        calls_by_model: dict[str, dict] = {}
         for call in calls:
             if call.model not in calls_by_model:
                 calls_by_model[call.model] = {"count": 0, "tokens": 0, "cost_usd": 0.0}
@@ -145,7 +141,7 @@ class LLMMonitor:
             calls_by_model[call.model]["cost_usd"] += call.cost_usd
 
         # 按 function 分組
-        calls_by_function: Dict[str, Dict] = {}
+        calls_by_function: dict[str, dict] = {}
         for call in calls:
             if call.function not in calls_by_function:
                 calls_by_function[call.function] = {"count": 0, "tokens": 0, "cost_usd": 0.0}
@@ -166,7 +162,7 @@ class LLMMonitor:
 
 
 # 全域 monitor 實例
-_monitor_instance: Optional[LLMMonitor] = None
+_monitor_instance: LLMMonitor | None = None
 
 
 def get_monitor() -> LLMMonitor:

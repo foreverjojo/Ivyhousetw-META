@@ -4,9 +4,10 @@ Listens on PORT environment variable
 """
 
 import os
-import subprocess
 import signal
+import subprocess
 import sys
+
 from flask import Flask
 
 app = Flask(__name__)

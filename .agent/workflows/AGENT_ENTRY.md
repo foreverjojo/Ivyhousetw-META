@@ -18,11 +18,14 @@
 
 1. `./.agent/workflows/dev-team.md`
 2. `./ivy_house_rules.md`
-3. `./doc/Implementation_Plan_index.md`
+3. **Index 檔案（根據任務類型選擇）**：
+   - 若任務是 **workflow/治理改善**（涉及 `.agent/**` 檔案、dev-team 流程、CI/CD、工具鏈等）→ 必讀 **`./.agent/Workflow_Plan_index.md`**
+   - 若任務是 **專案功能開發**（Meta 分析、報表、UI、多通路整合等）→ 必讀 **`./doc/Implementation_Plan_index.md`**
 
 > 注意：
 > - 「提到」不等於「已讀」。你必須實際打開檔案並萃取重點。
 > - 若你沒有讀到其中任何一份檔案，不得進入 Plan 階段。
+> - 若不確定任務類型，請先詢問使用者或檢查變更檔案路徑。
 
 ---
 
@@ -34,7 +37,7 @@
 - 已開啟閱讀的檔案（含路徑）：
   - [ ] ./.agent/workflows/dev-team.md
   - [ ] ./ivy_house_rules.md
-  - [ ] ./doc/Implementation_Plan_index.md
+  - [ ] ./.agent/Workflow_Plan_index.md（workflow 任務）或 ./doc/Implementation_Plan_index.md（專案任務）
 
 - 從「規則/流程」萃取的 Top 5 硬約束（請用條列）：
   1.
@@ -43,7 +46,7 @@
   4.
   5.
 
-- 與 Index 對照（implementation_plan_index）：
+- 與 Index 對照（根據任務類型選擇對應 Index）：
   - 這次任務是否已存在於 Index？（YES / NO / UNCLEAR）
   - 若 YES：請寫出 Index 中的 Task ID / Task 名稱（照 Index 原文）
   - 若 NO：請寫「NEW TASK - 需先登記 Index 才能進入執行」

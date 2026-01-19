@@ -8,16 +8,16 @@
 
 import json
 from pathlib import Path
-from typing import List, Optional
+
 from jsonschema import validators
 
 
 class SchemaValidationError(RuntimeError):
     """給 pipeline_state.json 落盤用：保留可讀錯誤清單在 details"""
 
-    def __init__(self, message: str, details: Optional[List[str]] = None):
+    def __init__(self, message: str, details: list[str] | None = None):
         super().__init__(message)
-        self.details: List[str] = details or []
+        self.details: list[str] = details or []
 
 
 def _load_schema(schema_filename: str, schemas_dir: Path) -> dict:
@@ -33,16 +33,16 @@ def validate_json(instance: dict, schema: dict, *, label: str = "") -> None:
     使用 schema 的 $schema 自動選對 validator，並輸出可讀錯誤
     若驗證失敗，拋出 SchemaValidationError
     """
-    ValidatorCls = validators.validator_for(schema)
-    ValidatorCls.check_schema(schema)
-    v = ValidatorCls(schema)
+    validator_cls = validators.validator_for(schema)
+    validator_cls.check_schema(schema)
+    v = validator_cls(schema)
 
     errors = sorted(v.iter_errors(instance), key=lambda e: list(e.path))
     if not errors:
         return
 
     # 只列前 20 條，避免 UI / log 爆炸
-    lines: List[str] = []
+    lines: list[str] = []
     for e in errors[:20]:
         path = ".".join(str(p) for p in e.path) or "(root)"
         lines.append(f"- {path}: {e.message}")

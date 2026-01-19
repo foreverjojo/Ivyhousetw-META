@@ -10,21 +10,19 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
-from google.oauth2 import service_account
 from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 
 from core.cloud_config import CloudConfig, load_cloud_config
 from core.config import MEDIA_ASSETS_DIR
 from scripts.media_scanner import scan_media_assets
 from utils.naming import build_media_filename, compute_sha256_8_from_file, infer_material_type
-
 
 # Manifest 路徑
 UPLOAD_MANIFEST_PATH = Path("upload_manifest.json")
@@ -38,11 +36,11 @@ class UploadResult:
     upload_name: str
     provider: str
     status: str
-    sha256_8: Optional[str] = None
-    size: Optional[int] = None
-    remote_id: Optional[str] = None
-    remote_url: Optional[str] = None
-    error: Optional[str] = None
+    sha256_8: str | None = None
+    size: int | None = None
+    remote_id: str | None = None
+    remote_url: str | None = None
+    error: str | None = None
 
 
 def get_gdrive_access_token(cfg: CloudConfig) -> str:
@@ -62,7 +60,7 @@ def get_gdrive_access_token(cfg: CloudConfig) -> str:
 
 
 def ensure_gdrive_folder(
-    token: str, folder_name: str, parent_id: Optional[str] = None, timeout: int = 60
+    token: str, folder_name: str, parent_id: str | None = None, timeout: int = 60
 ) -> str:
     """在 Google Drive 確保資料夾存在，回傳其 ID。"""
     # 處理資料夾名稱中的單引號 (Drive API query 語法需跳脫)
@@ -117,13 +115,13 @@ def get_target_folder_id_by_type(token: str, root_id: str, file_path: Path) -> s
 def _drive_upload_file(
     *,
     token: str,
-    target_folder_id: Optional[str],
+    target_folder_id: str | None,
     file_path: Path,
     upload_name: str,
     timeout: int = 120,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """執行檔案上傳至 Google Drive。"""
-    metadata: Dict[str, Any] = {"name": upload_name}
+    metadata: dict[str, Any] = {"name": upload_name}
     if target_folder_id:
         metadata["parents"] = [target_folder_id]
 
@@ -155,25 +153,25 @@ def _drive_upload_file(
 
 def upload_media_assets(
     *,
-    media_dir: Optional[Path] = None,
-    max_files: Optional[int] = None,
+    media_dir: Path | None = None,
+    max_files: int | None = None,
     dry_run: bool = False,
-    provider: Optional[str] = None,
-) -> Dict[str, Any]:
+    provider: str | None = None,
+) -> dict[str, Any]:
     """主程序：掃描素材並上傳至雲端。"""
     media_dir = media_dir or MEDIA_ASSETS_DIR
     cfg = load_cloud_config()
     chosen_provider = (provider or cfg.provider or "none").strip().lower()
 
     scan = scan_media_assets(media_dir=media_dir, recursive=True)
-    all_files: List[Path] = []
+    all_files: list[Path] = []
     all_files.extend(scan.images)
     all_files.extend(scan.videos)
 
     if max_files is not None:
         all_files = all_files[: max(0, int(max_files))]
 
-    results: List[UploadResult] = []
+    results: list[UploadResult] = []
     token = None
 
     if not dry_run and chosen_provider == "gdrive":
@@ -259,22 +257,22 @@ def upload_media_assets(
 
 
 def write_upload_manifest(
-    results: List[UploadResult],
+    results: list[UploadResult],
     *,
-    media_dir: Optional[Path] = None,
-    manifest_path: Optional[Path] = None,
+    media_dir: Path | None = None,
+    manifest_path: Path | None = None,
 ) -> None:
     """將結果追加至 upload_manifest.json。"""
     manifest_path = manifest_path or UPLOAD_MANIFEST_PATH
 
-    existing: List[Dict[str, Any]] = []
+    existing: list[dict[str, Any]] = []
     if manifest_path.exists():
         try:
             with manifest_path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     existing = data
-        except:
+        except (OSError, json.JSONDecodeError):
             pass
 
     timestamp = datetime.now().isoformat(timespec="seconds")

@@ -11,12 +11,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from jsonschema import validators
 
 from scripts.pipeline_state import write_pipeline_state
-
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS_DIR = ROOT / "schemas"
@@ -25,9 +24,9 @@ SCHEMAS_DIR = ROOT / "schemas"
 class SchemaValidationError(RuntimeError):
     """Validation error carrying human-readable details for UI/logging."""
 
-    def __init__(self, message: str, details: Optional[List[str]] = None):
+    def __init__(self, message: str, details: list[str] | None = None):
         super().__init__(message)
-        self.details: List[str] = details or []
+        self.details: list[str] = details or []
 
 
 def schema_path(schema_filename: str) -> Path:
@@ -38,15 +37,15 @@ def schema_exists(schema_filename: str) -> bool:
     return schema_path(schema_filename).exists()
 
 
-def load_schema(schema_filename: str) -> Dict[str, Any]:
+def load_schema(schema_filename: str) -> dict[str, Any]:
     sp = schema_path(schema_filename)
     if not sp.exists():
         raise FileNotFoundError(f"找不到 schema 檔案：{sp}（請確認已放在 schemas/）")
     return json.loads(sp.read_text(encoding="utf-8"))
 
 
-def _format_errors(errors: List[Any], *, limit: int = 20) -> List[str]:
-    lines: List[str] = []
+def _format_errors(errors: list[Any], *, limit: int = 20) -> list[str]:
+    lines: list[str] = []
     for e in errors[:limit]:
         path = ".".join(str(p) for p in e.path) or "(root)"
         lines.append(f"- {path}: {e.message}")
@@ -56,15 +55,15 @@ def _format_errors(errors: List[Any], *, limit: int = 20) -> List[str]:
 
 
 def validate_jsonschema(
-    instance: Dict[str, Any], schema: Dict[str, Any], *, label: str = ""
+    instance: dict[str, Any], schema: dict[str, Any], *, label: str = ""
 ) -> None:
     """
     Validate instance against schema (auto-choose validator from $schema).
     Raises SchemaValidationError with `.details` (list[str]).
     """
-    ValidatorCls = validators.validator_for(schema)
-    ValidatorCls.check_schema(schema)
-    v = ValidatorCls(schema)
+    validator_cls = validators.validator_for(schema)
+    validator_cls.check_schema(schema)
+    v = validator_cls(schema)
 
     errors = sorted(v.iter_errors(instance), key=lambda e: list(e.path))
     if not errors:
@@ -77,7 +76,7 @@ def validate_jsonschema(
 
 
 def validate_file(
-    instance: Dict[str, Any],
+    instance: dict[str, Any],
     *,
     schema_filename: str,
     label: str = "",
@@ -88,7 +87,7 @@ def validate_file(
 
 def validate_or_record(
     *,
-    instance: Dict[str, Any],
+    instance: dict[str, Any],
     schema_filename: str,
     label: str,
     vdir: Path,

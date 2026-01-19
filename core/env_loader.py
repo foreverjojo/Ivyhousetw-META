@@ -7,8 +7,8 @@
   - 整合 Secret Manager 載入敏感資料
 """
 
-import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 

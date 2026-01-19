@@ -7,10 +7,11 @@
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import streamlit as st
 
-from utils.file_io import read_json_if_exists, write_json, read_text_if_exists
+from utils.file_io import read_json_if_exists, read_text_if_exists, write_json
 from utils.path_utils import now_iso
 
 
@@ -19,8 +20,8 @@ def write_pipeline_state(
     last_completed_step: str,
     mode: str,
     status: str = "ok",
-    error: Optional[str] = None,
-    details: Optional[List[str]] = None,
+    error: str | None = None,
+    details: list[str] | None = None,
 ) -> None:
     """
     寫入 pipeline_state.json（events 追溯用）
@@ -36,7 +37,7 @@ def write_pipeline_state(
     state["last_completed_step"] = last_completed_step
     state["last_mode"] = mode
 
-    ev: Dict[str, Any] = {
+    ev: dict[str, Any] = {
         "at": now_iso(),
         "mode": mode,
         "step": last_completed_step,

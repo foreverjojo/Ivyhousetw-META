@@ -16,7 +16,6 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-
 LOCK_FILE = Path(".agent/active_task.lock")
 DEFAULT_TTL_HOURS = 24
 
@@ -27,9 +26,9 @@ def load_lock():
         return None
 
     try:
-        with open(LOCK_FILE, "r", encoding="utf-8") as f:
+        with open(LOCK_FILE, encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return None
 
 
@@ -61,7 +60,7 @@ def acquire_lock(index):
         print(f"❌ 錯誤: 任務 {lock['index']} 正在進行中")
         print(f"   開始時間: {lock['started_at']}")
         print(f"   TTL: {lock.get('ttl_hours', DEFAULT_TTL_HOURS)} 小時")
-        print(f"\n   請先釋放鎖或等待過期後使用 force-release")
+        print("\n   請先釋放鎖或等待過期後使用 force-release")
         return False
 
     # 建立新鎖
@@ -110,7 +109,7 @@ def force_release():
         print(f"   原開始時間: {lock['started_at']}")
         return True
     else:
-        print(f"⚠️  警告: 鎖尚未過期")
+        print("⚠️  警告: 鎖尚未過期")
         print(f"   任務: {lock['index']}")
         print(f"   開始時間: {lock['started_at']}")
 
@@ -134,15 +133,15 @@ def show_status():
 
     expired = is_expired(lock)
 
-    print(f"📋 當前任務鎖狀態:")
+    print("📋 當前任務鎖狀態:")
     print(f"   Index: {lock['index']}")
     print(f"   狀態: {lock['status']}")
     print(f"   開始時間: {lock['started_at']}")
     print(f"   TTL: {lock.get('ttl_hours', DEFAULT_TTL_HOURS)} 小時")
 
     if expired:
-        print(f"   ⚠️  狀態: 已過期")
-        print(f"\n   建議執行: python scripts/check_active_task.py force-release")
+        print("   ⚠️  狀態: 已過期")
+        print("\n   建議執行: python scripts/check_active_task.py force-release")
     else:
         started_at = datetime.fromisoformat(lock["started_at"])
         ttl_hours = lock.get("ttl_hours", DEFAULT_TTL_HOURS)

@@ -5,7 +5,7 @@ Ivy House Meta Ad Analyzer - Agent Skills Package
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 def now_taipei_iso() -> str:
@@ -21,11 +21,11 @@ def now_taipei_iso() -> str:
 def build_standard_skill_contract(
     *,
     schema_version: str,
-    inputs: Dict[str, Any],
-    thresholds: Dict[str, Any],
-    results: Dict[str, Any],
-    warnings: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    inputs: dict[str, Any],
+    thresholds: dict[str, Any],
+    results: dict[str, Any],
+    warnings: list[str] | None = None,
+) -> dict[str, Any]:
     """
     統一 Skill 輸出合約（以相容性為優先）：
     - 保留既有欄位（由呼叫者 merge 回原結果）

@@ -9,16 +9,15 @@
 import json
 import re
 from pathlib import Path
-from typing import Optional
 
 from core import HISTORY_ROOT
 from utils import (
-    read_json_if_exists,
-    write_json,
-    write_text,
-    sha256_str,
     normalize_week_id,
     now_iso,
+    read_json_if_exists,
+    sha256_str,
+    write_json,
+    write_text,
 )
 
 LEGACY_RE = re.compile(r"^(?P<wk>[^_]+)_(?P<dr>.+?)(?:_fp-[0-9a-f]{8})?$")
@@ -38,7 +37,7 @@ def migrate_one_legacy_dir(
     write_week_info_fn,
     ensure_week_meta_dirs_fn,
     fp_short_fn,
-) -> Optional[dict]:
+) -> dict | None:
     """遷移單一舊版資料夾到新結構。
 
     參數：

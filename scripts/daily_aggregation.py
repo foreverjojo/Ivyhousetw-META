@@ -6,19 +6,17 @@
 import io
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import pandas as pd
 from dateutil import parser
 
-
 # =========================
 # Column Aliases（雙語欄位對應）
 # =========================
-_ALIASES_CACHE: Dict[str, List[str]] = {}
+_ALIASES_CACHE: dict[str, list[str]] = {}
 
 
-def _load_aliases() -> Dict[str, List[str]]:
+def _load_aliases() -> dict[str, list[str]]:
     """載入 `schemas/column_aliases.json`，支援英文與繁體中文欄位名稱對應。"""
     global _ALIASES_CACHE
     if _ALIASES_CACHE:
@@ -26,13 +24,13 @@ def _load_aliases() -> Dict[str, List[str]]:
 
     aliases_path = Path(__file__).parent.parent / "schemas" / "column_aliases.json"
     if aliases_path.exists():
-        with open(aliases_path, "r", encoding="utf-8") as f:
+        with open(aliases_path, encoding="utf-8") as f:
             data = json.load(f)
             _ALIASES_CACHE = {k: v for k, v in data.items() if not k.startswith("$")}
     return _ALIASES_CACHE
 
 
-def _get_alias(key: str) -> List[str]:
+def _get_alias(key: str) -> list[str]:
     """取得指定 alias key 的候選欄位清單；若不存在則回傳 [key]。"""
     aliases = _load_aliases()
     return aliases.get(key, [key])
@@ -58,7 +56,7 @@ def _clean_cols(df: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
-def _resolve_col_name(df: pd.DataFrame, candidates: List[str]) -> str:
+def _resolve_col_name(df: pd.DataFrame, candidates: list[str]) -> str:
     """嘗試從候選清單中找出存在的欄位名稱。"""
     for col in candidates:
         if col in df.columns:
@@ -66,7 +64,7 @@ def _resolve_col_name(df: pd.DataFrame, candidates: List[str]) -> str:
     return candidates[0] if candidates else ""
 
 
-def _drop_total_rows(df: pd.DataFrame, name_candidates: List[str]) -> Tuple[pd.DataFrame, int]:
+def _drop_total_rows(df: pd.DataFrame, name_candidates: list[str]) -> tuple[pd.DataFrame, int]:
     """
     移除 Meta 匯出中的「總計/摘要列」：通常 name 欄位為空字串。
     """
@@ -113,7 +111,7 @@ def _first_str(df: pd.DataFrame, col: str) -> str:
     return "" if pd.isna(v) else str(v).strip()
 
 
-def _sum_col(df: pd.DataFrame, candidates: List[str] | str) -> float:
+def _sum_col(df: pd.DataFrame, candidates: list[str] | str) -> float:
     """
     欄位加總。candidates 可以是：
     - 單一 alias key（如 "spend"）：自動查詢 `column_aliases.json`
@@ -132,7 +130,7 @@ def _sum_col(df: pd.DataFrame, candidates: List[str] | str) -> float:
 # =========================
 # 日期區間 / 週別
 # =========================
-def parse_date_range_from_meta(adset_df: pd.DataFrame) -> Tuple[str, str]:
+def parse_date_range_from_meta(adset_df: pd.DataFrame) -> tuple[str, str]:
     """
     以 Meta CSV 的「分析報告開始/結束」為準（支援英文/繁體中文欄位名稱）。
     v2 匯出多為日資料：不可用第一列推斷，需以全列 min/max 推導區間。
@@ -202,7 +200,7 @@ def _is_daily_data(df: pd.DataFrame) -> bool:
 
 def _aggregate_daily_to_weekly(
     df: pd.DataFrame, name_col: str
-) -> Tuple[pd.DataFrame, Dict[str, str]]:
+) -> tuple[pd.DataFrame, dict[str, str]]:
     """
     將日資料按 name_col 聚合為週彙總。
 
@@ -234,7 +232,7 @@ def _aggregate_daily_to_weekly(
         "video_100",
     ]
 
-    agg_dict: Dict[str, str] = {}
+    agg_dict: dict[str, str] = {}
     for key in additive_keys:
         col = _resolve_col_name(df, _get_alias(key))
         if col and col in df.columns:

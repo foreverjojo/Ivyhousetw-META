@@ -6,9 +6,8 @@
   - 支援本機開發與雲端部署兩種模式
 """
 
-import os
 import logging
-from typing import Optional
+import os
 
 # 嘗試使用專案的 logger，若不存在則使用標準 logger
 try:
@@ -25,7 +24,7 @@ _secret_cache: dict = {}
 _failed_secrets: set = set()
 
 
-def _get_secret_from_gcp(project_id: str, secret_id: str, version: str = "latest") -> Optional[str]:
+def _get_secret_from_gcp(project_id: str, secret_id: str, version: str = "latest") -> str | None:
     """
     從 GCP Secret Manager 讀取 secret
 
@@ -42,7 +41,7 @@ def _get_secret_from_gcp(project_id: str, secret_id: str, version: str = "latest
         response = client.access_secret_version(request={"name": name})
         secret_value = response.payload.data.decode("UTF-8")
 
-        logger.debug(f"✅ 從 Secret Manager 讀取成功")
+        logger.debug("✅ 從 Secret Manager 讀取成功")
         return secret_value
 
     except ImportError:
@@ -53,7 +52,7 @@ def _get_secret_from_gcp(project_id: str, secret_id: str, version: str = "latest
         return None
 
 
-def get_secret(secret_id: str, env_var_name: Optional[str] = None) -> Optional[str]:
+def get_secret(secret_id: str, env_var_name: str | None = None) -> str | None:
     """
     取得 secret 值（優先順序：快取 → Secret Manager → 環境變數）
 
@@ -93,7 +92,7 @@ def get_secret(secret_id: str, env_var_name: Optional[str] = None) -> Optional[s
         # 5. 備援：從環境變數讀取
         secret_value = os.getenv(env_var)
         if secret_value:
-            logger.debug(f"📋 從環境變數讀取")
+            logger.debug("📋 從環境變數讀取")
 
     # 6. 快取結果
     if secret_value:
@@ -102,7 +101,7 @@ def get_secret(secret_id: str, env_var_name: Optional[str] = None) -> Optional[s
     return secret_value
 
 
-def get_openrouter_api_key() -> Optional[str]:
+def get_openrouter_api_key() -> str | None:
     """
     取得 OpenRouter API Key
     優先順序：Secret Manager → OPENROUTER_API_KEY → OPENAI_API_KEY
@@ -144,6 +143,6 @@ def load_secrets_to_env() -> None:
         if value and not os.getenv(env_var):
             os.environ[env_var] = value
             loaded_count += 1
-            logger.debug(f"  ✅ 已載入一個 secret")
+            logger.debug("  ✅ 已載入一個 secret")
 
     logger.info(f"🔐 Secret Manager 載入完成：{loaded_count} 個 secrets")

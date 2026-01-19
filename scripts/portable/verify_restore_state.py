@@ -17,13 +17,12 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
-
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def run_extensions_check() -> Dict[str, Any]:
+def run_extensions_check() -> dict[str, Any]:
     script = REPO_ROOT / "scripts" / "portable" / "check_extensions_consistency.py"
     if not script.exists():
         return {"status": "error", "summary": "缺少 extensions 一致性檢查腳本", "path": str(script)}
@@ -42,11 +41,11 @@ def run_extensions_check() -> Dict[str, Any]:
     }
 
 
-def check_file(path: Path) -> Dict[str, Any]:
+def check_file(path: Path) -> dict[str, Any]:
     return {"path": str(path.relative_to(REPO_ROOT)), "exists": path.exists()}
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     as_json = "--json" in argv
     strict = "--strict" in argv
 
@@ -80,7 +79,9 @@ def main(argv: List[str]) -> int:
     ghcr_template_image = None
     ghcr_template_is_digest = False
     try:
-        dc = json.loads((REPO_ROOT / ".devcontainer" / "devcontainer.json").read_text(encoding="utf-8"))
+        dc = json.loads(
+            (REPO_ROOT / ".devcontainer" / "devcontainer.json").read_text(encoding="utf-8")
+        )
         if "image" in dc:
             devcontainer_mode = "image"
             devcontainer_image = dc.get("image")
@@ -106,8 +107,8 @@ def main(argv: List[str]) -> int:
             ghcr_template_is_digest = False
 
     status = "pass"
-    problems: List[str] = []
-    warnings: List[str] = []
+    problems: list[str] = []
+    warnings: list[str] = []
     missing_required = [c for c in missing if (REPO_ROOT / c["path"]) in required_files]
     missing_optional = [c for c in missing if (REPO_ROOT / c["path"]) in optional_files]
 
@@ -138,7 +139,9 @@ def main(argv: List[str]) -> int:
             warnings.append(msg)
 
     if missing_optional:
-        warnings.append("缺少 GHCR template（.devcontainer/devcontainer.ghcr.json）；將無法自動切換到 pinned image")
+        warnings.append(
+            "缺少 GHCR template（.devcontainer/devcontainer.ghcr.json）；將無法自動切換到 pinned image"
+        )
     elif ghcr_template_exists and not ghcr_template_is_digest:
         msg = "GHCR template 存在但未 pin digest（@sha256）；full-fidelity 仍可能因 tag 漂移而不完全一致"
         if strict:

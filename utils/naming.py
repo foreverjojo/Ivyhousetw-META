@@ -14,19 +14,17 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
 
 import pandas as pd
 
 from utils.week_utils import normalize_week_id
-
 
 # =========================
 # 報告自動命名 (Report Naming)
 # =========================
 
 
-def _normalize_date_str(s: str) -> Optional[str]:
+def _normalize_date_str(s: str) -> str | None:
     """
     將日期字串正規化為 YYYY-MM-DD 格式。
     支援 'YYYY-MM-DD', 'YYYY/MM/DD', 含時間的格式。
@@ -43,7 +41,7 @@ def _normalize_date_str(s: str) -> Optional[str]:
         return None
 
 
-def extract_date_range_from_csv(df: pd.DataFrame) -> Tuple[Optional[str], Optional[str]]:
+def extract_date_range_from_csv(df: pd.DataFrame) -> tuple[str | None, str | None]:
     """
     從 Meta CSV 的「分析報告開始/結束」欄位辨識日期範圍。
 
@@ -61,7 +59,7 @@ def extract_date_range_from_csv(df: pd.DataFrame) -> Tuple[Optional[str], Option
     if len(df) == 0:
         return None, None
 
-    def _find_first_valid(col_name: str) -> Optional[str]:
+    def _find_first_valid(col_name: str) -> str | None:
         for val in df[col_name]:
             parsed = _normalize_date_str(str(val))
             if parsed:
@@ -71,7 +69,7 @@ def extract_date_range_from_csv(df: pd.DataFrame) -> Tuple[Optional[str], Option
     return _find_first_valid(start_col), _find_first_valid(end_col)
 
 
-def infer_week_id_from_date(date_str: str) -> Optional[str]:
+def infer_week_id_from_date(date_str: str) -> str | None:
     """
     從日期字串推算 ISO Week ID (YYYY-Www)。
 
@@ -132,7 +130,7 @@ class MediaNamingResult:
     original_name: str
     material_type: str
     timestamp: str
-    sha256_8: Optional[str]
+    sha256_8: str | None
     filename: str
 
 
@@ -149,7 +147,7 @@ def _now_taipei() -> datetime:
         return datetime.now()
 
 
-def format_timestamp(dt: Optional[datetime] = None) -> str:
+def format_timestamp(dt: datetime | None = None) -> str:
     """將時間轉成檔名友善的時間戳（YYYYMMDD_HHMMSS）。"""
     dt = dt or _now_taipei()
     return dt.strftime("%Y%m%d_%H%M%S")
@@ -211,9 +209,9 @@ def build_media_filename(
     *,
     original_name: str,
     material_type: str,
-    timestamp: Optional[str] = None,
-    sha256_8: Optional[str] = None,
-    suffix: Optional[str] = None,
+    timestamp: str | None = None,
+    sha256_8: str | None = None,
+    suffix: str | None = None,
 ) -> MediaNamingResult:
     """
     建立一致的素材檔名：

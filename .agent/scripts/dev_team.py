@@ -15,13 +15,11 @@
 import os
 import sys
 from textwrap import dedent
-from typing import List, Optional
 
 # CrewAI imports
 from crewai import Agent, Crew, Process, Task
-from crewai_tools import FileReadTool, FileWriterTool, DirectoryReadTool
+from crewai_tools import DirectoryReadTool, FileReadTool, FileWriterTool
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 # 載入 .env 檔案
 # 優先嘗試讀取 ifp.env，如果沒有才讀 .env
@@ -178,7 +176,7 @@ class IvyDevTasks:
 
     def implement_task(self, agent, context_input):
         return Task(
-            description=dedent(f"""
+            description=dedent("""
                 **依據規格**：
                 (請參考上一份任務的 Spec)
 
@@ -195,7 +193,7 @@ class IvyDevTasks:
 
     def review_task(self, agent, context_input):
         return Task(
-            description=dedent(f"""
+            description=dedent("""
                 **審查變更**：
                 (請參考工程師的實作報告)
 

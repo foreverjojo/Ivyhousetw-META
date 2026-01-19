@@ -13,12 +13,12 @@
 
 import json
 import os
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
 import requests
 
 # LLM Monitor (新增)
-from core.llm_monitor import get_monitor, LLMCall, estimate_cost
+from core.llm_monitor import LLMCall, estimate_cost, get_monitor
 from utils import now_iso
 
 llm_monitor = get_monitor()
@@ -29,7 +29,7 @@ def _openrouter_chat_completion(
     model: str,
     temperature: float = 0.2,
     max_tokens: int = 8000,
-) -> Tuple[str, Dict[str, int]]:
+) -> tuple[str, dict[str, int]]:
     """
     呼叫 OpenRouter Chat Completions API。
 
@@ -72,8 +72,8 @@ def _openrouter_chat_completion(
 
     try:
         data = resp.json()
-    except Exception:
-        raise RuntimeError(f"OpenRouter returned non-JSON response: {resp.text[:200]}")
+    except Exception as err:
+        raise RuntimeError(f"OpenRouter returned non-JSON response: {resp.text[:200]}") from err
 
     if "error" in data:
         raise RuntimeError(f"OpenRouter API Error: {json.dumps(data['error'])}")
@@ -101,7 +101,7 @@ def _openrouter_chat_completion(
     )
 
 
-def _try_parse_json(s: str) -> Dict[str, Any]:
+def _try_parse_json(s: str) -> dict[str, Any]:
     if not s:
         return {
             "error": "Empty response from LLM",
@@ -128,11 +128,11 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
 
 
 def generate_report_insights(
-    report_summary: Dict[str, Any],
-    model: Optional[str] = None,
+    report_summary: dict[str, Any],
+    model: str | None = None,
     return_usage: bool = False,
-    version_fp: Optional[str] = None,
-) -> Union[Dict[str, Any], Tuple[Dict[str, Any], Dict[str, int]]]:
+    version_fp: str | None = None,
+) -> dict[str, Any] | tuple[dict[str, Any], dict[str, int]]:
     """
     只做「洞察解讀」，不算數字。輸出必須是 JSON object（無 code fence）。
     """
@@ -181,7 +181,7 @@ def generate_report_insights(
         {"role": "user", "content": user},
     ]
 
-    def _add_usage(a: Dict[str, int], b: Dict[str, int]) -> Dict[str, int]:
+    def _add_usage(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
         return {
             "prompt_tokens": int(a.get("prompt_tokens", 0)) + int(b.get("prompt_tokens", 0)),
             "completion_tokens": int(a.get("completion_tokens", 0))

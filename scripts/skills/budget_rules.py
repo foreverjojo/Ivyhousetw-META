@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from scripts.skills import build_standard_skill_contract
 
@@ -42,7 +42,7 @@ def _to_float(x: Any) -> float:
         return 0.0
 
 
-def _safe_div(num: float, den: float) -> Optional[float]:
+def _safe_div(num: float, den: float) -> float | None:
     """安全除法，分母為零時返回 None"""
     if den <= 0:
         return None
@@ -70,13 +70,13 @@ class AdSetBudgetAnalysis:
     spend: float = 0.0
     purchases: float = 0.0
     purchase_value: float = 0.0
-    roas: Optional[float] = None
-    cpa: Optional[float] = None
+    roas: float | None = None
+    cpa: float | None = None
     action: BudgetAction = BudgetAction.HOLD
     reason: str = ""
 
 
-def _extract_thresholds_from_inputs(manual_inputs: Dict[str, Any]) -> BudgetThresholds:
+def _extract_thresholds_from_inputs(manual_inputs: dict[str, Any]) -> BudgetThresholds:
     """從 manual_inputs 提取門檻值，缺失時使用預設"""
     target_cpa = _to_float(manual_inputs.get("target_cpa", 500.0))
     breakeven_roas = _to_float(manual_inputs.get("breakeven_roas", 2.0))
@@ -96,7 +96,7 @@ def _extract_thresholds_from_inputs(manual_inputs: Dict[str, Any]) -> BudgetThre
 def _determine_action(
     spend: float,
     purchases: float,
-    roas: Optional[float],
+    roas: float | None,
     thresholds: BudgetThresholds,
 ) -> tuple[BudgetAction, str]:
     """根據規則判定預算行動"""
@@ -148,9 +148,9 @@ def _determine_action(
 
 
 def run_budget_rules(
-    report_summary: Dict[str, Any],
-    manual_inputs: Dict[str, Any] | None = None,
-) -> Dict[str, Any]:
+    report_summary: dict[str, Any],
+    manual_inputs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     預算配置規則主函式
 
@@ -162,7 +162,7 @@ def run_budget_rules(
         包含預算決策建議的 dict
     """
     manual_inputs = manual_inputs or {}
-    warnings: List[str] = []
+    warnings: list[str] = []
 
     # 提取門檻值
     thresholds = _extract_thresholds_from_inputs(manual_inputs)
@@ -203,7 +203,7 @@ def run_budget_rules(
         thresholds=thresholds,
     )
 
-    actions: List[Dict[str, Any]] = []
+    actions: list[dict[str, Any]] = []
     actions.append(
         {
             "level": "overall",
@@ -219,7 +219,7 @@ def run_budget_rules(
     )
 
     # 生成建議
-    recommendations: List[str] = []
+    recommendations: list[str] = []
 
     if overall_action == BudgetAction.KILL:
         recommendations.append(
@@ -252,7 +252,7 @@ def run_budget_rules(
             "建議重新檢視受眾精準度與素材吸引力。"
         )
 
-    output: Dict[str, Any] = {
+    output: dict[str, Any] = {
         "skill_version": "budget_rules.v1",
         "thresholds": {
             "target_cpa_twd": thresholds.target_cpa,
@@ -278,7 +278,9 @@ def run_budget_rules(
         schema_version="skill_budget_rules_output.v1",
         inputs={
             "week_id": report_summary.get("week_id"),
-            "manual_inputs_keys": sorted(list(manual_inputs.keys())) if isinstance(manual_inputs, dict) else [],
+            "manual_inputs_keys": sorted(manual_inputs.keys())
+            if isinstance(manual_inputs, dict)
+            else [],
         },
         thresholds=output.get("thresholds") or {},
         results={

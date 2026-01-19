@@ -17,8 +17,8 @@ Creative Fatigue Diagnostic Skill (Deterministic)
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any
 
 from scripts.skills import build_standard_skill_contract
 
@@ -33,7 +33,7 @@ def _to_float(x: Any) -> float:
         return 0.0
 
 
-def _safe_div(num: float, den: float) -> Optional[float]:
+def _safe_div(num: float, den: float) -> float | None:
     """安全除法，分母為零時返回 None"""
     if den <= 0:
         return None
@@ -61,16 +61,16 @@ class AdMetrics:
     ad_id: str = ""
     impressions: float = 0.0
     frequency: float = 0.0
-    ctr: Optional[float] = None
+    ctr: float | None = None
     video_3s: float = 0.0
     thruplays: float = 0.0
-    hook_rate: Optional[float] = None
-    hold_rate: Optional[float] = None
+    hook_rate: float | None = None
+    hold_rate: float | None = None
     spend: float = 0.0
     purchases: float = 0.0
 
 
-def _extract_ad_metrics(record: Dict[str, Any]) -> AdMetrics:
+def _extract_ad_metrics(record: dict[str, Any]) -> AdMetrics:
     """從單一廣告記錄提取指標"""
     ad_name = str(record.get("ad_name", record.get("Ad name", "")))
     ad_id = str(record.get("ad_id", record.get("Ad ID", "")))
@@ -105,7 +105,7 @@ def _extract_ad_metrics(record: Dict[str, Any]) -> AdMetrics:
     )
 
 
-def _check_missing_video_fields(ads_records: List[Dict[str, Any]]) -> List[str]:
+def _check_missing_video_fields(ads_records: list[dict[str, Any]]) -> list[str]:
     """檢查是否缺少影片相關欄位"""
     missing = []
     if not ads_records:
@@ -127,10 +127,10 @@ def _check_missing_video_fields(ads_records: List[Dict[str, Any]]) -> List[str]:
 
 
 def run_creative_fatigue_diagnostic(
-    report_summary: Dict[str, Any],
-    ads_df_records: List[Dict[str, Any]],
+    report_summary: dict[str, Any],
+    ads_df_records: list[dict[str, Any]],
     thresholds: FatigueThresholds | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     素材疲乏偵測主函式
 
@@ -143,7 +143,7 @@ def run_creative_fatigue_diagnostic(
         包含疲乏分析結果的 dict
     """
     thresholds = thresholds or FatigueThresholds()
-    warnings: List[str] = []
+    warnings: list[str] = []
 
     # 檢查缺失欄位
     missing_fields = _check_missing_video_fields(ads_df_records)
@@ -151,7 +151,7 @@ def run_creative_fatigue_diagnostic(
         warnings.append(f"missing_fields: {', '.join(missing_fields)}")
 
     if not ads_df_records:
-        output: Dict[str, Any] = {
+        output: dict[str, Any] = {
             "skill_version": "creative_fatigue.v1",
             "triggered": False,
             "ads_analyzed": 0,
@@ -189,7 +189,7 @@ def run_creative_fatigue_diagnostic(
         return output
 
     # 提取所有廣告指標
-    ad_metrics_list: List[AdMetrics] = []
+    ad_metrics_list: list[AdMetrics] = []
     for record in ads_df_records:
         metrics = _extract_ad_metrics(record)
         if metrics.impressions >= thresholds.min_impressions:
@@ -238,8 +238,8 @@ def run_creative_fatigue_diagnostic(
     avg_ctr = sum(valid_ctrs) / len(valid_ctrs) if valid_ctrs else 0.0
     ctr_threshold = avg_ctr * thresholds.ctr_below_avg_ratio
 
-    fatigue_ads: List[Dict[str, Any]] = []
-    high_potential_ads: List[Dict[str, Any]] = []
+    fatigue_ads: list[dict[str, Any]] = []
+    high_potential_ads: list[dict[str, Any]] = []
 
     for metrics in ad_metrics_list:
         # 疲乏判定：frequency > 2.5 且 CTR 低於平均
@@ -291,7 +291,7 @@ def run_creative_fatigue_diagnostic(
             )
 
     # 生成建議
-    recommendations: List[str] = []
+    recommendations: list[str] = []
 
     if fatigue_ads:
         recommendations.append(

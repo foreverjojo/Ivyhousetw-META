@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """tests/test_validate_output_schema_graceful_degradation.py
 =====================================
 用途：覆蓋 skills 的 validate_output_schema graceful-degradation 行為
@@ -14,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = PROJECT_ROOT / ".agent" / "skills"

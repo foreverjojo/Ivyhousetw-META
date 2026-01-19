@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """tests/verify_skill_schemas.py
 =====================================
 用途：驗證 .agent/skills/schemas/ 下的 JSON Schema 檔案可被解析且本身符合 Draft-07 規範

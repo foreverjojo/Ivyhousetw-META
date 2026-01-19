@@ -1,18 +1,18 @@
-# -*- coding: utf-8 -*-
 """建立蝦皮 Golden Test 檔案"""
 
 import sys
 
 sys.path.insert(0, ".")
-from scripts.adapters.shopee_adapter import adapt_shopee_ad_csv
-from pathlib import Path
 import json
+from pathlib import Path
+
+from scripts.adapters.shopee_adapter import adapt_shopee_ad_csv
 
 # 建立 golden test 輸入 (取前 3 筆資料的 CSV)
 csv_path = Path("examples/蝦皮廣告-總體-數據-2025_12_04-2025_12_09.csv")
 
 # 讀取原始檔案的 header + 前 3 筆資料
-with open(csv_path, "r", encoding="utf-8-sig") as f:
+with open(csv_path, encoding="utf-8-sig") as f:
     lines = f.readlines()
 
 # 取 metadata (前7行) + header (第8行) + 前3筆資料 (第9-11行)

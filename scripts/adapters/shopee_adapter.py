@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 檔案用途：將蝦皮廣告報表 CSV 轉換為專案通用的 Unified JSON 格式（unified_ad_data）。
 支援解析蝦皮廣告總體報表與關鍵字版位報表。
@@ -12,10 +11,9 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
-
 
 # === 常數定義 ===
 
@@ -63,7 +61,7 @@ def _read_shopee_csv(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, skiprows=SHOPEE_HEADER_SKIP_ROWS)
 
 
-def _extract_date_range_from_filename(filename: str) -> Tuple[Optional[str], Optional[str]]:
+def _extract_date_range_from_filename(filename: str) -> tuple[str | None, str | None]:
     """從檔名擷取日期範圍 (例如 2025_12_04-2025_12_09)。"""
     match = re.search(r"(\d{4}_\d{2}_\d{2})-(\d{4}_\d{2}_\d{2})", filename)
     if match:
@@ -73,11 +71,11 @@ def _extract_date_range_from_filename(filename: str) -> Tuple[Optional[str], Opt
     return None, None
 
 
-def _extract_metadata_from_csv(path: Path) -> Dict[str, str]:
+def _extract_metadata_from_csv(path: Path) -> dict[str, str]:
     """從蝦皮 CSV 前幾行擷取 metadata（賣場名稱、期間等）。"""
     metadata = {}
     try:
-        with open(path, "r", encoding="utf-8-sig") as f:
+        with open(path, encoding="utf-8-sig") as f:
             lines = [f.readline().strip() for _ in range(7)]
         for line in lines:
             if "," in line:
@@ -139,7 +137,7 @@ def _get_str(row: pd.Series, col: str) -> str:
 
 
 def _stable_fallback_id(
-    *, platform: str, level: str, name: str, time_range: Dict[str, str], salt: str = ""
+    *, platform: str, level: str, name: str, time_range: dict[str, str], salt: str = ""
 ) -> str:
     """產生穩定的 fallback ID（當無原生 ID 時使用）。"""
     raw = f"{platform}|{level}|{name}|{time_range.get('start', '')}|{time_range.get('end', '')}|{salt}"
@@ -151,8 +149,8 @@ def _build_shopee_record(
     *,
     row: pd.Series,
     row_index: int,
-    time_range: Dict[str, str],
-) -> Dict[str, Any]:
+    time_range: dict[str, str],
+) -> dict[str, Any]:
     """建立單筆 Unified Ad Data record。"""
     name = _get_str(row, "廣告名稱")
     product_id = _get_str(row, "商品 ID") or _get_str(row, "商品ID")
@@ -224,7 +222,7 @@ def _drop_empty_rows(df: pd.DataFrame) -> pd.DataFrame:
 # === 主要轉換函式 ===
 
 
-def adapt_shopee_ad_csv(path: Path) -> Dict[str, Any]:
+def adapt_shopee_ad_csv(path: Path) -> dict[str, Any]:
     """將蝦皮廣告 CSV 轉換為 Unified Ad Data 格式。"""
     df = _clean_cols(_read_shopee_csv(path))
     df = _drop_empty_rows(df)
@@ -234,7 +232,7 @@ def adapt_shopee_ad_csv(path: Path) -> Dict[str, Any]:
     time_range = {"start": start or "", "end": end or ""}
 
     # 轉換每一筆資料
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     for i, row in df.iterrows():
         name = _get_str(row, "廣告名稱")
         if not name:
@@ -253,7 +251,7 @@ def adapt_shopee_ad_csv(path: Path) -> Dict[str, Any]:
 # === CLI 入口 ===
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="蝦皮廣告 CSV -> Unified Ad Data")
     p.add_argument("--input", type=Path, required=True, help="蝦皮廣告 CSV 檔案路徑")
     p.add_argument("--out", type=Path, required=True, help="輸出 unified JSON 檔案路徑")

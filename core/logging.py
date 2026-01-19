@@ -19,7 +19,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.config import TAIPEI_TZ
 
@@ -28,7 +28,7 @@ class JSONFormatter(logging.Formatter):
     """JSON 格式化器：將 log record 轉換為 JSON 格式"""
 
     def format(self, record: logging.LogRecord) -> str:
-        log_data: Dict[str, Any] = {
+        log_data: dict[str, Any] = {
             "timestamp": self._format_timestamp(),
             "level": record.levelname,
             "module": record.module,
@@ -106,14 +106,14 @@ class StructuredLogger:
         """記錄 WARNING 訊息"""
         self._log(logging.WARNING, message, extra)
 
-    def error(self, message: str, error: Optional[Exception] = None, **extra: Any) -> None:
+    def error(self, message: str, error: Exception | None = None, **extra: Any) -> None:
         """記錄 ERROR 訊息，可選包含 exception"""
         if error:
             extra["error_type"] = type(error).__name__
             extra["error_message"] = str(error)
         self._log(logging.ERROR, message, extra, exc_info=error is not None)
 
-    def _log(self, level: int, message: str, extra: Dict[str, Any], exc_info: bool = False) -> None:
+    def _log(self, level: int, message: str, extra: dict[str, Any], exc_info: bool = False) -> None:
         """內部 log 方法"""
         # 過濾敏感資訊
         filtered_extra = self._filter_sensitive_data(extra)
@@ -121,7 +121,7 @@ class StructuredLogger:
         # 使用 extra 參數傳遞額外資訊
         self.logger.log(level, message, extra={"extra_data": filtered_extra}, exc_info=exc_info)
 
-    def _filter_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _filter_sensitive_data(self, data: dict[str, Any]) -> dict[str, Any]:
         """過濾敏感資訊（API Key, Token, Password）"""
         filtered = {}
         sensitive_keys = {"api_key", "token", "password", "secret", "credential"}
@@ -137,7 +137,7 @@ class StructuredLogger:
 
 
 # 全域 logger cache
-_logger_cache: Dict[str, StructuredLogger] = {}
+_logger_cache: dict[str, StructuredLogger] = {}
 
 
 def get_logger(name: str) -> StructuredLogger:

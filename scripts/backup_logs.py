@@ -26,7 +26,6 @@ Log 備份工具
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path

@@ -25,7 +25,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
@@ -93,7 +93,7 @@ def parse_index_for_verifications() -> list[VerificationItem]:
         due_date = ""
         status = "⏳ 待驗證"
 
-        for i, part in enumerate(parts):
+        for _i, part in enumerate(parts):
             if re.match(r"Idx-\d{3}", part):
                 idx = part
             elif "PASS WITH RISK" in part.upper():
@@ -180,7 +180,7 @@ def print_results(
         for item, days in due_soon:
             print(f"   {item.index}: {item.title}")
             if days == 0:
-                print(f"   └─ 今天到期！")
+                print("   └─ 今天到期！")
             else:
                 print(f"   └─ {days} 天後到期（{item.due_date}）")
             if item.verification_plan:

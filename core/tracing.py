@@ -21,10 +21,9 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import uuid
-from typing import Dict, Iterator, Optional
+from collections.abc import Iterator
 
-
-_TRACE_ID: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("trace_id", default=None)
+_TRACE_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar("trace_id", default=None)
 
 
 def new_trace_id(prefix: str = "") -> str:
@@ -44,13 +43,13 @@ def new_trace_id(prefix: str = "") -> str:
     return tid
 
 
-def get_trace_id() -> Optional[str]:
+def get_trace_id() -> str | None:
     """取得目前 context 的 trace_id（若尚未設定則回傳 None）。"""
 
     return _TRACE_ID.get()
 
 
-def set_trace_id(trace_id: Optional[str]) -> None:
+def set_trace_id(trace_id: str | None) -> None:
     """直接設定目前 context 的 trace_id。
 
     注意：一般建議使用 trace_context() 以確保能自動還原。
@@ -71,7 +70,7 @@ def ensure_trace_id(prefix: str = "") -> str:
 
 
 @contextlib.contextmanager
-def trace_context(trace_id: Optional[str] = None, prefix: str = "") -> Iterator[str]:
+def trace_context(trace_id: str | None = None, prefix: str = "") -> Iterator[str]:
     """在區塊內注入 trace_id，並於退出時自動還原。
 
     Args:
@@ -90,7 +89,7 @@ def trace_context(trace_id: Optional[str] = None, prefix: str = "") -> Iterator[
         _TRACE_ID.reset(token)
 
 
-def attach_trace(extra: Optional[Dict] = None) -> Dict:
+def attach_trace(extra: dict | None = None) -> dict:
     """將 trace_id 附加到 extra dict（不會修改原 dict）。
 
     用途：在不方便改 logging formatter 的情況下，可把 trace_id 顯式帶入。

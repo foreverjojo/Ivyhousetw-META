@@ -12,7 +12,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -22,15 +21,15 @@ class CloudConfig:
     provider: str
 
     # Google Drive 設定
-    google_drive_folder_id: Optional[str]
-    google_drive_access_token: Optional[str]
-    google_application_credentials: Optional[str]  # SA JSON 路徑
+    google_drive_folder_id: str | None
+    google_drive_access_token: str | None
+    google_application_credentials: str | None  # SA JSON 路徑
 
     # HTTP 參數
     http_timeout_s: int = 120
 
 
-def load_cloud_config(environ: Optional[dict[str, str]] = None) -> CloudConfig:
+def load_cloud_config(environ: dict[str, str] | None = None) -> CloudConfig:
     """
     從環境變數載入設定。
 

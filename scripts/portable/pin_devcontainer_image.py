@@ -14,15 +14,14 @@ Pin Dev Container image for full-fidelity restore (GHCR).
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
 import sys
 import urllib.request
-import base64
 from pathlib import Path
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEVCONTAINER_DIR = REPO_ROOT / ".devcontainer"
@@ -33,7 +32,7 @@ BACKUP_BUILD = DEVCONTAINER_DIR / "devcontainer.build.json"
 IMAGE_REPO = "ghcr.io/foreverjojo/ivyhousetw-meta-devcontainer"
 
 
-def resolve_digest_via_ghcr(image_repo: str, tag: str) -> Optional[str]:
+def resolve_digest_via_ghcr(image_repo: str, tag: str) -> str | None:
     """Resolve manifest digest from GHCR using GHCR_TOKEN (PAT), best-effort.
 
     This avoids requiring Docker/buildx on the target machine.
@@ -101,7 +100,7 @@ def resolve_digest_via_ghcr(image_repo: str, tag: str) -> Optional[str]:
     return None
 
 
-def resolve_digest(image_ref: str) -> Optional[str]:
+def resolve_digest(image_ref: str) -> str | None:
     """Best-effort resolve manifest digest for an image ref.
 
     Requires Docker CLI; for private GHCR images, user must `docker login ghcr.io`.
@@ -143,9 +142,11 @@ def resolve_digest(image_ref: str) -> Optional[str]:
     return None
 
 
-def git_sha() -> Optional[str]:
+def git_sha() -> str | None:
     try:
-        out = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT), text=True).strip()
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT), text=True
+        ).strip()
         if out and len(out) >= 7:
             return out
     except Exception:
@@ -153,11 +154,11 @@ def git_sha() -> Optional[str]:
     return None
 
 
-def load_json(path: Path) -> Dict[str, Any]:
+def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def save_json(path: Path, obj: Dict[str, Any]) -> None:
+def save_json(path: Path, obj: dict[str, Any]) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -207,7 +208,9 @@ def main(argv: list[str]) -> int:
         print("[WARN] Digest pin unavailable; using tag pin.")
         print("       Tips: ensure image exists (CI built).")
         print("       - Option A: set GHCR_TOKEN (PAT with read:packages) then re-run.")
-        print("       - Option B: run `docker login ghcr.io` (and ensure docker/buildx ready) then re-run.")
+        print(
+            "       - Option B: run `docker login ghcr.io` (and ensure docker/buildx ready) then re-run."
+        )
     print(f"[INFO] Backup (build-mode) saved at: {BACKUP_BUILD}")
     return 0
 

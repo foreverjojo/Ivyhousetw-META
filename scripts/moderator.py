@@ -10,13 +10,12 @@
 
 import json
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import requests
 
 from core.config import MODEL_MODERATOR
 from core.llm_monitor import LLMCall, estimate_cost, get_monitor
-from scripts.moderator_meeting import build_meeting_markdown, write_artifacts
 from scripts.moderator_fallback import build_deterministic_workflow_state
 from utils import now_iso
 
@@ -28,7 +27,7 @@ def _openrouter_chat_completion(
     model: str,
     temperature: float = 0.2,
     max_tokens: int = 10000,
-) -> Tuple[str, Dict[str, int]]:
+) -> tuple[str, dict[str, int]]:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
     base_url = (
         os.getenv("OPENAI_BASE_URL")
@@ -63,8 +62,8 @@ def _openrouter_chat_completion(
 
     try:
         data = resp.json()
-    except Exception:
-        raise RuntimeError(f"OpenRouter returned non-JSON response: {resp.text[:200]}")
+    except Exception as err:
+        raise RuntimeError(f"OpenRouter returned non-JSON response: {resp.text[:200]}") from err
 
     if "error" in data:
         raise RuntimeError(f"OpenRouter API Error: {json.dumps(data['error'])}")
@@ -89,7 +88,7 @@ def _openrouter_chat_completion(
     }
 
 
-def _try_parse_json(s: str) -> Dict[str, Any]:
+def _try_parse_json(s: str) -> dict[str, Any]:
     if not s:
         return {
             "error": "Empty response from LLM",
@@ -115,7 +114,7 @@ def _try_parse_json(s: str) -> Dict[str, Any]:
         }
 
 
-def _guardrail_check(report_summary: Dict[str, Any]) -> Dict[str, Any]:
+def _guardrail_check(report_summary: dict[str, Any]) -> dict[str, Any]:
     """
     用你專案的硬護欄口徑做最基本判斷（只用輸入數字，不重算）。
     目前：Meta ROAS、官網 AOV 兩個示範欄位。
@@ -154,14 +153,14 @@ def _guardrail_check(report_summary: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def build_workflow_state(
-    report_summary: Dict[str, Any],
-    report_insights: Dict[str, Any],
-    consultant_notes: Optional[Dict[str, Any]] = None,
-    model: Optional[str] = None,
+    report_summary: dict[str, Any],
+    report_insights: dict[str, Any],
+    consultant_notes: dict[str, Any] | None = None,
+    model: str | None = None,
     *,
     step: str = "F",
-    version_fp: Optional[str] = None,
-) -> Dict[str, Any]:
+    version_fp: str | None = None,
+) -> dict[str, Any]:
     """
     Moderator 輸出 workflow_state.json（乾淨 JSON）
     - 只引用輸入中的數字，不重算 KPI
@@ -221,7 +220,7 @@ def build_workflow_state(
         {"role": "user", "content": user},
     ]
 
-    total_usage: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     try:
         content, usage_main = _openrouter_chat_completion(
@@ -386,7 +385,7 @@ def build_workflow_state(
                 return False
             return True
 
-        def pick_first_text(obj: Any) -> Optional[str]:
+        def pick_first_text(obj: Any) -> str | None:
             if isinstance(obj, str):
                 s = obj.strip()
                 return s if _is_good_text(s) else None
@@ -463,9 +462,9 @@ def build_workflow_state(
                 bullets.append(f"{key} 重點：（未提供有效摘要；請查看該顧問輸出）")
         out["consultant_summary"] = bullets[:10]
 
-    det: Optional[Dict[str, Any]] = None
+    det: dict[str, Any] | None = None
 
-    def _get_det() -> Dict[str, Any]:
+    def _get_det() -> dict[str, Any]:
         nonlocal det
         if det is None:
             det = build_deterministic_workflow_state(

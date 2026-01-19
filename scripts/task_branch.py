@@ -12,7 +12,6 @@ Git 分支管理腳本
 
 import subprocess
 import sys
-from pathlib import Path
 
 
 def run_command(cmd, check=True):
@@ -62,7 +61,7 @@ def create_branch(index):
     # 檢查分支是否已存在
     if branch_exists(branch_name):
         print(f"❌ 錯誤: 分支 {branch_name} 已存在")
-        print(f"   請先刪除舊分支或使用 checkout：")
+        print("   請先刪除舊分支或使用 checkout：")
         print(f"   git checkout {branch_name}")
         return False
 
@@ -80,7 +79,7 @@ def create_branch(index):
         print(f"✅ 成功建立並切換到分支: {branch_name}")
         print()
         print("下一步：")
-        print(f"  1. 執行任務開發")
+        print("  1. 執行任務開發")
         print(f"  2. git commit -m 'feat({index}): 描述'")
         print(f"  3. QA 審查後執行: python scripts/task_branch.py merge {index}")
         return True
@@ -113,9 +112,9 @@ def merge_branch(index):
 
     # 確認 QA 通過
     print("⚠️  請確認：")
-    print(f"   1. QA 審查已通過")
-    print(f"   2. 所有測試都通過")
-    print(f"   3. 準備合併到 main")
+    print("   1. QA 審查已通過")
+    print("   2. 所有測試都通過")
+    print("   3. 準備合併到 main")
     print()
     response = input("確定繼續？(yes/no): ")
 
@@ -152,7 +151,7 @@ def merge_branch(index):
     print()
     print("下一步：")
     print(f"  1. python scripts/check_active_task.py release {index}")
-    print(f"  2. 更新 doc/Implementation_Plan_index.md（狀態改為 COMPLETED）")
+    print("  2. 更新 doc/Implementation_Plan_index.md（狀態改為 COMPLETED）")
     print(f"  3. 完成 Log: doc/logs/{index}_log.md")
 
     return True
@@ -170,8 +169,8 @@ def abort_branch(index):
     # 確認操作
     print("⚠️  警告: 此操作將：")
     print(f"   1. 刪除分支 {branch_name}")
-    print(f"   2. 丟棄該分支上的所有變更")
-    print(f"   3. 無法恢復")
+    print("   2. 丟棄該分支上的所有變更")
+    print("   3. 無法恢復")
     print()
     response = input("確定要中止任務？(yes/no): ")
 
@@ -197,8 +196,8 @@ def abort_branch(index):
         print()
         print("下一步：")
         print(f"  1. python scripts/check_active_task.py release {index}")
-        print(f"  2. 更新 doc/Implementation_Plan_index.md（狀態改為 ABORTED）")
-        print(f"  3. 記錄 Log 並說明中止原因")
+        print("  2. 更新 doc/Implementation_Plan_index.md（狀態改為 ABORTED）")
+        print("  3. 記錄 Log 並說明中止原因")
         return True
     else:
         print(f"❌ 錯誤: {output}")
@@ -229,7 +228,7 @@ def main():
 
     # 驗證 Index 格式
     if not index.startswith("Idx-"):
-        print(f"❌ 錯誤: Index 格式錯誤（應為 Idx-NNN）")
+        print("❌ 錯誤: Index 格式錯誤（應為 Idx-NNN）")
         sys.exit(1)
 
     if command == "create":

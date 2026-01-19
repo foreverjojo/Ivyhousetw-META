@@ -18,13 +18,12 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 try:
     from jsonschema import Draft202012Validator
-except Exception as e:
+except Exception:
     print("ERROR: jsonschema is required. Install it first (pip install jsonschema).")
     raise
 
@@ -38,7 +37,7 @@ SCHEMAS = ROOT / "schemas"
 # ---------------------------
 
 
-def load_json(path: Path) -> Dict[str, Any]:
+def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -48,10 +47,10 @@ def must_exist(path: Path) -> None:
         raise FileNotFoundError(f"Missing required file: {path}")
 
 
-def validate_instance(instance: Any, schema: Dict[str, Any]) -> List[str]:
+def validate_instance(instance: Any, schema: dict[str, Any]) -> list[str]:
     v = Draft202012Validator(schema)
     errors = sorted(v.iter_errors(instance), key=lambda e: list(e.path))
-    out: List[str] = []
+    out: list[str] = []
     for e in errors:
         p = "$"
         for seg in e.path:
@@ -83,7 +82,7 @@ def expect_fail(
     print(f"[PASS] {name} (expected fail)")
 
 
-def assert_schema_const(schema: Dict[str, Any], prop: str, expected: str) -> None:
+def assert_schema_const(schema: dict[str, Any], prop: str, expected: str) -> None:
     props = schema.get("properties", {})
     if prop not in props:
         raise AssertionError(f"Schema missing property: {prop}")
@@ -94,7 +93,7 @@ def assert_schema_const(schema: Dict[str, Any], prop: str, expected: str) -> Non
         )
 
 
-def assert_schema_required(schema: Dict[str, Any], field: str) -> None:
+def assert_schema_required(schema: dict[str, Any], field: str) -> None:
     req = schema.get("required", [])
     if field not in req:
         raise AssertionError(f"Schema required[] missing: {field}")
@@ -171,7 +170,7 @@ META_REQUIRED_ZH_AD = [
 ]
 
 
-def detect_lang_drift(headers: List[str], required_zh: List[str]) -> Tuple[bool, List[str]]:
+def detect_lang_drift(headers: list[str], required_zh: list[str]) -> tuple[bool, list[str]]:
     missing = [c for c in required_zh if c not in headers]
     return (len(missing) > 0, missing)
 
@@ -183,7 +182,7 @@ def detect_lang_drift(headers: List[str], required_zh: List[str]) -> Tuple[bool,
 ATTR_CONST = "點擊後 7 天、瀏覽後 1 天或互動觀看後 1 天"
 
 
-def fixture_inputs_snapshot_adset() -> Dict[str, Any]:
+def fixture_inputs_snapshot_adset() -> dict[str, Any]:
     return {
         "version": "inputs_snapshot.meta_adset.v1",
         "source": "meta_adset_csv",
@@ -226,7 +225,7 @@ def fixture_inputs_snapshot_adset() -> Dict[str, Any]:
     }
 
 
-def fixture_inputs_snapshot_ad() -> Dict[str, Any]:
+def fixture_inputs_snapshot_ad() -> dict[str, Any]:
     return {
         "version": "inputs_snapshot.meta_ad.v1",
         "source": "meta_ad_csv",
@@ -271,7 +270,7 @@ def fixture_inputs_snapshot_ad() -> Dict[str, Any]:
     }
 
 
-def fixture_inputs_snapshot_v3() -> Dict[str, Any]:
+def fixture_inputs_snapshot_v3() -> dict[str, Any]:
     # Metadata-only snapshot (MVP route A)
     return {
         "schema_version": "inputs_snapshot.v3",
@@ -307,7 +306,7 @@ def fixture_inputs_snapshot_v3() -> Dict[str, Any]:
     }
 
 
-def fixture_report_insights() -> Dict[str, Any]:
+def fixture_report_insights() -> dict[str, Any]:
     return {
         "version": "report_insights.meta.v1",
         "week_id": "2025-W49",
@@ -328,7 +327,7 @@ def fixture_report_insights() -> Dict[str, Any]:
     }
 
 
-def fixture_consultant_notes() -> Dict[str, Any]:
+def fixture_consultant_notes() -> dict[str, Any]:
     return {
         "version": "consultant_notes.meta.v1",
         "week_id": "2025-W49",
@@ -344,7 +343,7 @@ def fixture_consultant_notes() -> Dict[str, Any]:
     }
 
 
-def fixture_workflow_state() -> Dict[str, Any]:
+def fixture_workflow_state() -> dict[str, Any]:
     return {
         "version": "workflow_state.meta_weekly.v1",
         "week_id": "2025-W49",

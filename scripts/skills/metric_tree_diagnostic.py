@@ -15,7 +15,7 @@ Metric Tree Diagnostic Skill (Deterministic)
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from scripts.skills import build_standard_skill_contract
 
@@ -29,7 +29,7 @@ def _to_float(x: Any) -> float:
         return 0.0
 
 
-def _safe_div(num: float, den: float) -> Optional[float]:
+def _safe_div(num: float, den: float) -> float | None:
     if den <= 0:
         return None
     return num / den
@@ -47,8 +47,8 @@ class Thresholds:
 
 
 def run_metric_tree_diagnostic(
-    report_summary: Dict[str, Any], thresholds: Thresholds | None = None
-) -> Dict[str, Any]:
+    report_summary: dict[str, Any], thresholds: Thresholds | None = None
+) -> dict[str, Any]:
     thresholds = thresholds or Thresholds()
 
     meta = (report_summary.get("kpi") or {}).get("meta") or {}
@@ -199,7 +199,7 @@ def run_metric_tree_diagnostic(
         "把最弱的一段做成 1~2 個最小改動 A/B（例如商品頁信任元素、運費/到貨資訊、結帳流程）。"
     )
 
-    output: Dict[str, Any] = {
+    output: dict[str, Any] = {
         "skill_version": "metric_tree_diagnostic.v1",
         "trigger_rule": {"roas_lt": thresholds.roas_trigger},
         "triggered": triggered,

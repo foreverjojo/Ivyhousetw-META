@@ -1,12 +1,11 @@
-import sys
 import os
-import json
+import sys
 
 # Add project root to path
 sys.path.append(os.getcwd())
 
-from scripts.skills.creative_fatigue import run_creative_fatigue_diagnostic
 from scripts.skills.budget_rules import run_budget_rules
+from scripts.skills.creative_fatigue import run_creative_fatigue_diagnostic
 
 
 def test_creative_fatigue():

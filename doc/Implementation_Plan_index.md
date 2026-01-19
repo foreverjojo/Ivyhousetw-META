@@ -9,6 +9,9 @@
 ## 📊 任務追蹤表（State Gate 與治理）
 
 > 本表用於追蹤核心任務的狀態、執行者與 QA 結果。遵循五條鐵律。
+>
+> 📌 **Dev-Team workflow / 治理相關的 plan/log 已遷移至 `.agent/Workflow_Plan_index.md`**。
+> 本 Index 僅追蹤「專案功能與交付」的任務，避免 index 混雜與路徑失效。
 
 | Index | 任務標題 | 優先級 | Status | Executor Tool | QA Result | Plan Version | Log 檔 | 備註 |
 |-------|----------|--------|--------|---------------|-----------|-------------|--------|------|
@@ -20,15 +23,6 @@
 | Idx-006 | 清償 TD-001：修復 skill_converter.py 語法錯誤 | P2 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v3 | `doc/logs/Idx-006_log.md` | 修正縮排錯誤，TD-001 已清償 |
 | Idx-007 | 補齊 Plan.md 產出規範 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v4 | `doc/logs/Idx-007_log.md` | 建立 plan template + 更新 workflow |
 | Idx-008 | 實現 Plan Summary + 完成後刪除 plan.md | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v5 | `doc/logs/Idx-008_log.md` | log template 加入 summary 區段 |
-| Idx-009 | Terminal 管理完整方案 | P0 | ✅ 已完成 | GitHub Copilot | PASS | 2026-01-12-v1 | `doc/logs/Idx-009_log.md` | 狀態已對齊 log：PASS |
-| Idx-010 | Agent Architecture Enhancement - Research/Reviewer/UI-UX Gates | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.3 | `doc/logs/Idx-010_log.md` | 三個條件式 Gate + 機械化判定規則 |
-| Idx-011 | Skills System Enhancement - 9 builtin skills + graceful degradation | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-011_log.md` | 9 個 builtin skills 完成 + manifest_updater + plan_validator |
-| Idx-012 | JSON Schema Validation & VSCode System Config | P0 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-012_log.md` | 7 個 JSON schemas + graceful degradation + VSCode system files |
-| Idx-013 | One-Click Restore Hardening - Env vars + Extensions Sync | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/plans/Idx-013_one_click_restore_hardening.md` | 移除硬編碼 token + extensions 三方一致性檢查 + CI workflow |
-| Idx-014 | One-Click Restore Reproducibility Hardening | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-014_log.md` | Plan: `doc/plans/Idx-014_one_click_restore_reproducibility_hardening.md` |
-| Idx-015 | Full-Fidelity Restore via Pinned Devcontainer Image (GHCR) | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `doc/logs/Idx-015_log.md` | Plan: `doc/plans/Idx-015_full_fidelity_restore_via_pinned_devcontainer_image.md` |
-| Idx-016 | Trace ID 追蹤（Correlation ID） | P1 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `doc/logs/Idx-016_log.md` | core.tracing + logger trace_id |
-| Idx-017 | Implementation Plan 移除 MCP Roadmap | P2 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `doc/logs/Idx-017_log.md` | Plan 不再以 MCP 作為 roadmap 概念 |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)

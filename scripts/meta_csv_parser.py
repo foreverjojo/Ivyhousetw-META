@@ -1,6 +1,5 @@
 from core import validation as core_validation
 
-
 REQUIRED_ZH_ADSET = [...]  # 直接用 FIELD_SPECS_META.md YAML 那份清單
 REQUIRED_ZH_AD = [...]
 

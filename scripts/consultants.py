@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 scripts/consultants.py
 =====================================
@@ -13,25 +12,24 @@ scripts/consultants.py
 
 import json
 import os
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any
 
 import requests
 
 from core.config import MODEL_CONSULTANT_A, MODEL_CONSULTANT_B, MODEL_CONSULTANT_C
 from core.llm_monitor import LLMCall, estimate_cost, get_monitor
-from utils import now_iso
-
 from scripts.media_scanner import get_top_images, scan_media_assets
 from scripts.multimodal import create_image_content, openrouter_multimodal_completion
-
+from utils import now_iso
 
 llm_monitor = get_monitor()
 
 
 def _openrouter_chat_completion(
     messages, model: str, temperature: float = 0.2, max_tokens: int = 8000
-) -> Tuple[str, Dict[str, int]]:
+) -> tuple[str, dict[str, int]]:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
     base_url = (
         os.getenv("OPENAI_BASE_URL")
@@ -64,8 +62,8 @@ def _openrouter_chat_completion(
 
     try:
         data = resp.json()
-    except Exception:
-        raise RuntimeError(f"OpenRouter returned non-JSON response: {resp.text[:200]}")
+    except Exception as err:
+        raise RuntimeError(f"OpenRouter returned non-JSON response: {resp.text[:200]}") from err
 
     if "error" in data:
         raise RuntimeError(f"OpenRouter API Error: {json.dumps(data['error'])}")
@@ -94,7 +92,7 @@ def _openrouter_chat_completion(
     )
 
 
-def _try_parse_json(s: str) -> Dict[str, Any]:
+def _try_parse_json(s: str) -> dict[str, Any]:
     if not s:
         return {"error": "Empty response from LLM", "raw_content": ""}
     s = s.strip()
@@ -125,8 +123,8 @@ def _days_in_range(date_range: str) -> int:
 
 
 def _compact_inputs(
-    report_summary: Dict[str, Any], report_insights: Dict[str, Any]
-) -> Dict[str, Any]:
+    report_summary: dict[str, Any], report_insights: dict[str, Any]
+) -> dict[str, Any]:
     meta = report_summary.get("kpi", {}).get("meta", {})
     web = report_summary.get("kpi", {}).get("web", {})
     date_range = report_summary.get("date_range", "")
@@ -188,7 +186,7 @@ def _consultant_task(role_key: str) -> str:
     )
 
 
-def _prepare_context(report_summary: Dict[str, Any], report_insights: Dict[str, Any]) -> str:
+def _prepare_context(report_summary: dict[str, Any], report_insights: dict[str, Any]) -> str:
     """
     用途：組裝三顧問共用的 Context 字串（給 LLM 的 user content）
     原則：
@@ -201,8 +199,8 @@ def _prepare_context(report_summary: Dict[str, Any], report_insights: Dict[str, 
 
 
 def _parse_or_repair(
-    content: str, usage: Dict[str, int], model: str, system: str
-) -> Tuple[Dict[str, Any], Dict[str, int]]:
+    content: str, usage: dict[str, int], model: str, system: str
+) -> tuple[dict[str, Any], dict[str, int]]:
     """
     用途：解析模型輸出；若不是合法 JSON，會自動做一次「修復重試」。
     注意：_try_parse_json 解析失敗時會回傳含 error 的 dict（不會丟例外），因此需同時檢查 error key。
@@ -249,15 +247,15 @@ def _parse_or_repair(
 
 
 def generate_consultant_notes(
-    report_summary: Dict[str, Any],
-    report_insights: Dict[str, Any],
-    model_a: Optional[str] = None,
-    model_b: Optional[str] = None,
-    model_c: Optional[str] = None,
-    status_callback: Optional[Callable[[str, str], None]] = None,
-    on_consultant_done: Optional[Callable[[str, Dict[str, Any]], None]] = None,
-    version_fp: Optional[str] = None,
-) -> Dict[str, Any]:
+    report_summary: dict[str, Any],
+    report_insights: dict[str, Any],
+    model_a: str | None = None,
+    model_b: str | None = None,
+    model_c: str | None = None,
+    status_callback: Callable[[str, str], None] | None = None,
+    on_consultant_done: Callable[[str, dict[str, Any]], None] | None = None,
+    version_fp: str | None = None,
+) -> dict[str, Any]:
     """
     分別呼叫三位顧問（A:成效, B:視覺/文案, C:策略），回傳各自的 JSON。
 
@@ -422,8 +420,8 @@ def generate_consultant_notes(
 def run_visual_consultant(
     *,
     max_images: int = 6,
-    model_b: Optional[str] = None,
-) -> Dict[str, Any]:
+    model_b: str | None = None,
+) -> dict[str, Any]:
     """
     視覺顧問（顧問 B）：自動讀取 `attached_assets/` 素材，交由多模態模型進行分析。
 

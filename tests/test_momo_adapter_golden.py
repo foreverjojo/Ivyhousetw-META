@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 檔案用途：MOMO adapter 的 golden regression test，確保 CSV->Unified 轉換結果穩定可重現。
 """

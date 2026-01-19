@@ -9,16 +9,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 def build_deterministic_workflow_state(
     *,
-    report_summary: Dict[str, Any],
-    report_insights: Dict[str, Any],
-    consultant_notes: Optional[Dict[str, Any]],
-    guardrails: Dict[str, Any],
-) -> Dict[str, Any]:
+    report_summary: dict[str, Any],
+    report_insights: dict[str, Any],
+    consultant_notes: dict[str, Any] | None,
+    guardrails: dict[str, Any],
+) -> dict[str, Any]:
     """
     用途：當 Moderator LLM 輸出解析失敗時，改用 deterministic 組裝 workflow_state（避免 meeting.md 大量（待補））
     原則：
@@ -254,7 +254,7 @@ def build_deterministic_workflow_state(
     consultant_summary: list[str] = []
     if consultant_notes:
 
-        def pick_readable_text(obj: Any) -> Optional[str]:
+        def pick_readable_text(obj: Any) -> str | None:
             if isinstance(obj, str):
                 s = obj.strip()
                 return s if s else None

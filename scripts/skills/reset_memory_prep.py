@@ -17,7 +17,6 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 
 def _get_project_root() -> Path:
@@ -71,12 +70,12 @@ class PrepResult:
     """準備結果"""
 
     success: bool = False
-    backup_path: Optional[Path] = None
+    backup_path: Path | None = None
     tasks_updated: int = 0
     walkthrough_updated: int = 0
-    handover_path: Optional[Path] = None
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    handover_path: Path | None = None
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +87,7 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def safe_read_file(path: Path) -> Tuple[Optional[str], Optional[str]]:
+def safe_read_file(path: Path) -> tuple[str | None, str | None]:
     """安全讀取檔案，回傳 (內容, 錯誤訊息)"""
     if not path.exists():
         return None, f"檔案不存在：{path.name}"
@@ -98,7 +97,7 @@ def safe_read_file(path: Path) -> Tuple[Optional[str], Optional[str]]:
         return None, f"讀取 {path.name} 失敗：{str(e)}"
 
 
-def safe_write_file(path: Path, content: str) -> Tuple[bool, Optional[str]]:
+def safe_write_file(path: Path, content: str) -> tuple[bool, str | None]:
     """
     安全寫入檔案 (Atomic Write)
 
@@ -151,7 +150,7 @@ def safe_write_file(path: Path, content: str) -> Tuple[bool, Optional[str]]:
         return False, f"寫入 {path.name} 失敗：{str(e)}"
 
 
-def create_backup(source: Path, backup_dir: Path) -> Optional[Path]:
+def create_backup(source: Path, backup_dir: Path) -> Path | None:
     if not source.exists():
         return None
     ensure_dir(backup_dir)
@@ -164,8 +163,8 @@ def create_backup(source: Path, backup_dir: Path) -> Optional[Path]:
         return None
 
 
-def parse_tasks(content: str) -> List[TaskItem]:
-    tasks: List[TaskItem] = []
+def parse_tasks(content: str) -> list[TaskItem]:
+    tasks: list[TaskItem] = []
     lines = content.split("\n")
     for i, line in enumerate(lines):
         match = TASK_PATTERN.match(line)
@@ -175,7 +174,7 @@ def parse_tasks(content: str) -> List[TaskItem]:
     return tasks
 
 
-def get_task_summary(tasks: List[TaskItem]) -> TaskSummary:
+def get_task_summary(tasks: list[TaskItem]) -> TaskSummary:
     summary = TaskSummary()
     for task in tasks:
         if task.is_completed:
@@ -199,7 +198,7 @@ def update_task_in_content(content: str, task: TaskItem, new_status: str) -> str
 # ---------------------------------------------------------------------------
 
 
-def prompt_user(message: str, options: List[str], default: int = 1) -> int:
+def prompt_user(message: str, options: list[str], default: int = 1) -> int:
     print(f"\n{message}")
     for i, opt in enumerate(options, 1):
         marker = " *" if i == default else ""
@@ -235,7 +234,7 @@ def prompt_yes_no(message: str, default: bool = True) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def interactive_update_tasks(content: str) -> Tuple[str, int]:
+def interactive_update_tasks(content: str) -> tuple[str, int]:
     """互動式更新進行中的任務"""
     tasks = parse_tasks(content)
     in_progress = [t for t in tasks if t.is_in_progress]
@@ -268,8 +267,8 @@ def interactive_update_tasks(content: str) -> Tuple[str, int]:
 
 
 def interactive_update_walkthrough(
-    task_content: str, walkthrough_content: Optional[str]
-) -> Tuple[str, int]:
+    task_content: str, walkthrough_content: str | None
+) -> tuple[str, int]:
     """互動式更新 walkthrough.md"""
     tasks = parse_tasks(task_content)
     completed = [t for t in tasks if t.is_completed]
@@ -306,7 +305,7 @@ def interactive_update_walkthrough(
     return updated, len(recent)
 
 
-def generate_handover(task_content: Optional[str], walkthrough_content: Optional[str]) -> str:
+def generate_handover(task_content: str | None, walkthrough_content: str | None) -> str:
     """生成交接文件"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -368,9 +367,7 @@ def generate_handover(task_content: Optional[str], walkthrough_content: Optional
 # ---------------------------------------------------------------------------
 
 
-def run_reset_memory_prep(
-    project_root: Optional[Path] = None, interactive: bool = True
-) -> PrepResult:
+def run_reset_memory_prep(project_root: Path | None = None, interactive: bool = True) -> PrepResult:
     """執行記憶重置準備"""
     result = PrepResult()
     root = project_root or PROJECT_ROOT
@@ -404,7 +401,7 @@ def run_reset_memory_prep(
         success, write_err = safe_write_file(task_file, initial)
         if not success:
             result.errors.append(f"無法建立 task.md：{write_err}")
-            print(f"  ❌ 建立失敗，中止執行")
+            print("  ❌ 建立失敗，中止執行")
             return result
         result.warnings.append("task.md 不存在，已建立初始檔案")
 

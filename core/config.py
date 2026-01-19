@@ -6,6 +6,7 @@
   - Streamlit 頁面設定
 """
 
+import os
 from pathlib import Path
 
 # =========================
@@ -31,7 +32,6 @@ SCHEMAS_DIR = Path("schemas")
 # 2026 模型常數（OpenRouter）
 # 注意：這些是備援預設值，應透過環境變數 MODEL_CONSULTANT_X 覆蓋
 # =========================
-import os
 
 MODEL_CONSULTANT_A = os.getenv("MODEL_CONSULTANT_A", "openai/gpt-4o-mini")
 MODEL_CONSULTANT_B = os.getenv("MODEL_CONSULTANT_B", "google/gemini-pro-1.5")
