@@ -71,3 +71,19 @@ def test_state_gate_passes_when_index_in_selected_index(tmp_path):
 
     ok = m.validate_commit_message("feat(Idx-019): test", project_index)
     assert ok is True
+
+
+def test_state_gate_allows_scoped_exempt_commit(tmp_path):
+    m = load_validate_state_gate_module()
+
+    project_index = tmp_path / "project_index.md"
+    workflow_index = tmp_path / "workflow_index.md"
+    write_index_file(project_index, [])
+    write_index_file(workflow_index, [])
+
+    m.PROJECT_INDEX_FILE = project_index
+    m.WORKFLOW_INDEX_FILE = workflow_index
+    m.LOCK_FILE = tmp_path / "lock.json"
+
+    ok = m.validate_commit_message("chore(service_manager): tweak PTY wrapper", project_index)
+    assert ok is True

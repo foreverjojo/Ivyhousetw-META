@@ -21,15 +21,20 @@ PROJECT_INDEX_FILE = Path("doc/Implementation_Plan_index.md")
 WORKFLOW_INDEX_FILE = Path(".agent/Workflow_Plan_index.md")
 LOCK_FILE = Path(".agent/active_task.lock")
 
-# Commit message 豁免前綴（不需要 Index）
-EXEMPT_PREFIXES = [
-    "chore:",
-    "docs:",
-    "style:",
-    "ci:",
-    "build:",
-    "revert:",
+# Commit message 豁免類型（不需要 Index）
+# 支援：
+# - chore: <description>
+# - chore(scope): <description>
+EXEMPT_TYPES = [
+    "chore",
+    "docs",
+    "style",
+    "ci",
+    "build",
+    "revert",
 ]
+
+EXEMPT_COMMIT_RE = re.compile(rf"^({'|'.join(EXEMPT_TYPES)})(\([^)]*\))?:")
 
 
 def detect_index_file():
@@ -78,10 +83,7 @@ def detect_index_file():
 
 def is_exempt_commit(message):
     """檢查是否為豁免的 commit 類型"""
-    for prefix in EXEMPT_PREFIXES:
-        if message.startswith(prefix):
-            return True
-    return False
+    return bool(EXEMPT_COMMIT_RE.match(message.strip()))
 
 
 def extract_index(commit_message):
@@ -152,7 +154,9 @@ def validate_commit_message(message, index_file):
     # 檢查豁免
     if is_exempt_commit(message):
         print("✅ 豁免類型，跳過 Index 檢查")
-        print(f"   類型: {message.split(':')[0]}")
+        m = EXEMPT_COMMIT_RE.match(message.strip())
+        commit_type = m.group(1) if m else message.split(":")[0]
+        print(f"   類型: {commit_type}")
         return True
 
     # 提取 Index
@@ -168,8 +172,9 @@ def validate_commit_message(message, index_file):
         print("  fix(Idx-002): 修復 bug")
         print()
         print("或使用豁免前綴：")
-        for prefix in EXEMPT_PREFIXES:
-            print(f"  {prefix} <description>")
+        for t in EXEMPT_TYPES:
+            print(f"  {t}: <description>")
+            print(f"  {t}(scope): <description>")
         return False
 
     print(f"✅ Index 格式正確: {index}")
