@@ -79,3 +79,10 @@ bash -n /tmp/agent-workflow-template-Idx-019/.agent/scripts/setup_workflow.sh
 
 1. PR 已建立：https://github.com/foreverwow001/agent-workflow-template/pull/2
 2. PR 進行 Cross-QA（`qa_tool != last_change_tool`）
+## Addendum: Service Manager PTY support (local repo)
+
+- Date: 2026-01-20
+- Change: 增加 `scripts/service_manager.sh` 的 `--pty` 選項，使用系統 `script` 提供 pseudo-tty；加入自動 fallback（若 nohup 啟動快速失敗則自動嘗試 PTY wrapper）；加入更嚴謹的狀態檢查與 stale-pid 偵測。
+- Tests: 新增 `tests/test_service_manager.py`（涵蓋 PTY start、以及自動 fallback 流程）。
+- Result: ✅ PASS（本地 pytest 通過）
+- Notes: 若服務仍持續發生 stale pid，建議使用 `scripts/service_manager.sh start <svc> --pty` 或在具 tty 的機器使用 tmux 啟動；若問題持續，請提供 `codex` 的啟動日志以便進一步 debug。
