@@ -25,7 +25,6 @@
 | Idx-008 | 實現 Plan Summary + 完成後刪除 plan.md | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v5 | `doc/logs/Idx-008_log.md` | log template 加入 summary 區段 |
 | Idx-016 | Trace ID 追蹤（Correlation ID） | P1 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `.agent/logs/Idx-016_log.md` | core.tracing + logger trace_id（logs 已遷移至 .agent/） |
 | Idx-017 | Implementation Plan 移除 MCP Roadmap | P2 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `.agent/logs/Idx-017_log.md` | Plan 不再以 MCP 作為 roadmap 概念（logs 已遷移至 .agent/） |
-| Idx-019 | Service Manager: PTY wrapper fallback and health checks | P2 | ✅ 已完成 | OpenCode | PASS | 2026-01-20-v1 | `.agent/logs/Idx-019_log.md` | 增加 `--pty` 選項、script PTY wrapper、與自動 fallback 檢測，新增測試 `tests/test_service_manager.py` |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
