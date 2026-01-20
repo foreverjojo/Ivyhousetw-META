@@ -1,0 +1,71 @@
+{
+  "name": "ivyhouse-terminal-orchestrator",
+  "displayName": "IvyHouse Terminal Orchestrator",
+  "description": "Auto-start and sendText to dedicated Codex/OpenCode terminals.",
+  "version": "0.0.1",
+  "publisher": "ivyhouse-local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ivyhouseTerminalOrchestrator.startCodex",
+        "title": "IvyHouse: Start Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.startOpenCode",
+        "title": "IvyHouse: Start OpenCode Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.startAll",
+        "title": "IvyHouse: Start Codex + OpenCode Terminals"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.sendToCodex",
+        "title": "IvyHouse: Send Text to Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.sendToOpenCode",
+        "title": "IvyHouse: Send Text to OpenCode Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.resetSessionState",
+        "title": "IvyHouse: Reset Terminal Orchestrator Session State"
+      }
+    ],
+    "configuration": {
+      "title": "IvyHouse Terminal Orchestrator",
+      "properties": {
+        "ivyhouseTerminalOrchestrator.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start Codex and OpenCode terminals on VS Code startup."
+        },
+        "ivyhouseTerminalOrchestrator.codexCommand": {
+          "type": "string",
+          "default": "codex",
+          "description": "Command sent via terminal.sendText to start Codex CLI."
+        },
+        "ivyhouseTerminalOrchestrator.opencodeCommand": {
+          "type": "string",
+          "default": "opencode --port 35103",
+          "description": "Command sent via terminal.sendText to start OpenCode."
+        },
+        "ivyhouseTerminalOrchestrator.codexTerminalName": {
+          "type": "string",
+          "default": "Codex CLI",
+          "description": "Name of the dedicated Codex terminal."
+        },
+        "ivyhouseTerminalOrchestrator.opencodeTerminalName": {
+          "type": "string",
+          "default": "OpenCode CLI",
+          "description": "Name of the dedicated OpenCode terminal."
+        }
+      }
+    }
+  }
+}

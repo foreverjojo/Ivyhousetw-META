@@ -28,6 +28,7 @@
 | Idx-015 | Full-Fidelity Restore via Pinned Devcontainer Image (GHCR) | P1 | ✅ 已完成 | GitHub Copilot | PASS | 1.0.0 | `.agent/logs/Idx-015_log.md` | GHCR 發佈 pinned image + 新機器 digest pin 流程 |
 | Idx-018 | Dev-Team Folder Segregation & File Ownership (Dual Index) | P0 | ✅ 已完成 | OpenCode | PASS | 1.0.0 | `.agent/logs/Idx-018_log.md` | segregate dev-team files from project (方案 B) |
 | Idx-019 | Sync Template Repo with Ivyhousetw-META Workflow (Remove SendText Bridge) | P1 | ✅ 已完成 | codex-cli | PASS | 2026-01-19-v1 | `.agent/logs/Idx-019_log.md` | QA PASS（Round 2）：blocking issues 已於 template commit `3d61350` 修復；已建立 PR，可進入 Cross-QA |
+| Idx-020 | Auto-start Codex/OpenCode in visible interactive terminals via sendText | P1 | ✅ 已完成 | GitHub Copilot | PASS | 2026-01-20-v1 | `.agent/logs/Idx-020_log.md` | local VS Code extension：自動啟動兩個專屬 terminal，指令下達僅使用 terminal.sendText；提供安裝腳本 |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
