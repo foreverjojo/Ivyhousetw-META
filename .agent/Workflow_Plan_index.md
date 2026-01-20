@@ -27,6 +27,7 @@
 | Idx-014 | One-Click Restore Reproducibility Hardening | P1 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-014_log.md` | 可重現性補強：base image digest pin + restore verify 工具鏈 |
 | Idx-015 | Full-Fidelity Restore via Pinned Devcontainer Image (GHCR) | P1 | 🔄 進行中 | GitHub Copilot | ⏳ 待 QA | 1.0.0 | `.agent/logs/Idx-015_log.md` | GHCR 發佈 pinned image + 新機器 digest pin 流程 |
 | Idx-018 | Dev-Team Folder Segregation & File Ownership (Dual Index) | P0 | ✅ 已完成 | OpenCode | PASS | 1.0.0 | `.agent/logs/Idx-018_log.md` | segregate dev-team files from project (方案 B) |
+| Idx-019 | Sync Template Repo with Ivyhousetw-META Workflow (Remove SendText Bridge) | P1 | 🔄 進行中 | codex-cli | PASS | 2026-01-19-v1 | `.agent/logs/Idx-019_log.md` | QA PASS（Round 2）：blocking issues 已於 template commit `3d61350` 修復；可建立 PR 並進入 Cross-QA |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
