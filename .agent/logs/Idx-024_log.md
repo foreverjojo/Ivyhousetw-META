@@ -62,6 +62,10 @@
       - 輸入 `Idx-024`
       - 期望：命令會先檢查 `.agent/logs/Idx-024_log.md` 存在，並嘗試從最新的 `qa_<timestamp>_raw.log` 偵測 PASS；通過後才會清空 `.service/terminal_capture/`。
 
+    6) （自動提示 Smoke Test）在 Workflow Loop 啟動時於「Associated Idx」填入 `Idx-024`：
+      - 啟動 Workflow Loop 並以正常流程讓 QA 輸出 `[QA_DONE]` 與 `QA_RESULT=PASS`。
+      - 期望：extension 自動彈出 modal 提示是否清空 `.service/terminal_capture/`（若 `.agent/logs/Idx-024_log.md` 可被找到）；選擇 `清空` 會顯示刪除數量的第二次確認，確認後會清空並在 events log 補上 `cleanup_done` 事件。
+
 ---
 
 ## 🔍 風險與限制
