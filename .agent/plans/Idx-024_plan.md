@@ -195,11 +195,11 @@ scope_exceptions: []
 # Engineer 執行
 executor_tool: opencode
 executor_tool_version: 1.1.28
-executor_user: [pending]
-executor_start: [pending]
-executor_end: [pending]
+executor_user: feature/idx-024-clear-on-pass (automated)
+executor_start: 2026-01-21 03:39:07 +0000
+executor_end: 2026-01-21 03:55:52 +0000
 session_id: [pending]
-last_change_tool: [pending]
+last_change_tool: opencode
 
 # QA 執行
 qa_tool: codex-cli
@@ -212,7 +212,7 @@ qa_compliance: [pending]
 
 # 收尾
 log_file_path: .agent/logs/Idx-024_log.md
-commit_hash: pending
+commit_hash: 28ce69b
 rollback_at: N/A
 rollback_reason: N/A
 rollback_files: N/A
