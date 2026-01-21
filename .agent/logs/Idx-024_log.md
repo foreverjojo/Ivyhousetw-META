@@ -66,6 +66,13 @@
       - 啟動 Workflow Loop 並以正常流程讓 QA 輸出 `[QA_DONE]` 與 `QA_RESULT=PASS`。
       - 期望：extension 自動彈出 modal 提示是否清空 `.service/terminal_capture/`（若 `.agent/logs/Idx-024_log.md` 可被找到）；選擇 `清空` 會顯示刪除數量的第二次確認，確認後會清空並在 events log 補上 `cleanup_done` 事件。
 
+- 實測結果（2026-01-21）：
+  - 已觸發 PASS 後自動提示清理流程，並完成清理。
+  - events log：`.service/terminal_capture/workflow_20260121042916_events.jsonl`
+    - `{"action":"cleanup_done","idx":"Idx-024","removed":9,...}`
+    - `{"action":"workflow_stop","reason":"PASS",...}`
+  - 注意：若選擇「清空」，會刪除 `.service/terminal_capture/` 內包含 events/raw logs 在內的檔案；因此 events 檔可能只保留清理後重新 append 的尾端事件（屬預期行為）。
+
 ---
 
 ## 🔍 風險與限制
