@@ -29,6 +29,10 @@
 | Idx-018 | Dev-Team Folder Segregation & File Ownership (Dual Index) | P0 | ✅ 已完成 | OpenCode | PASS | 1.0.0 | `.agent/logs/Idx-018_log.md` | segregate dev-team files from project (方案 B) |
 | Idx-019 | Sync Template Repo with Ivyhousetw-META Workflow (Remove SendText Bridge) | P1 | ✅ 已完成 | codex-cli | PASS | 2026-01-19-v1 | `.agent/logs/Idx-019_log.md` | QA PASS（Round 2）：blocking issues 已於 template commit `3d61350` 修復；已建立 PR，可進入 Cross-QA |
 | Idx-020 | Auto-start Codex/OpenCode in visible interactive terminals via sendText | P1 | ✅ 已完成 | GitHub Copilot | PASS | 2026-01-20-v1 | `.agent/logs/Idx-020_log.md` | local VS Code extension：自動啟動兩個專屬 terminal，指令下達僅使用 terminal.sendText；提供安裝腳本 |
+| Idx-021 | Restore service_manager --pty + add OpenCode retry recovery | P0 | ✅ 已完成 | opencode | PASS | 2026-01-20-v1 | `.agent/logs/Idx-021_log.md` | 修復 `scripts/service_manager.sh` 的 `--pty`/auto-fallback 並補強 VS Code extension 可恢復重送 |
+| Idx-022 | SendText + read terminal output (Codex /status capture) | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-20-v1 | `.agent/logs/Idx-022_log.md` | 主要路徑：Proposed API；fallback：Shell Integration execution stream（需 Restart Codex 以掛載） |
+| Idx-023 | Workflow Loop：sendText 編排（Engineer→QA→Fix 直到 PASS）+ 落檔輪詢 | P0 | ✅ 已完成 | opencode | PASS | 2026-01-20-v1 | `.agent/logs/Idx-023_log.md` | extension 增加狀態機：可見 terminal + log polling + marker 推進；實作已完成並文件化 |
+| Idx-024 | Workflow Loop Reliability Hardening（ready/retry/observability） | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-21-v1 | `.agent/logs/Idx-024_log.md` | 修補 workflow loop：以 ready gate 取代固定 sleep，加入注入重試與 events log，降低「停在啟動畫面不執行」風險 |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
