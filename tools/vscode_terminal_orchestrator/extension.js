@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 const vscode = require("vscode");
+const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const childProcess = require("child_process");
@@ -9,6 +10,18 @@ const STATE_KEYS = {
   startedCodex: "ivyhouseTerminalOrchestrator.startedCodex",
   startedOpenCode: "ivyhouseTerminalOrchestrator.startedOpenCode",
 };
+
+const WORKFLOW_STATE_KEYS = {
+  workflowRunId: "ivyhouseTerminalOrchestrator.workflowRunId",
+  planId: "ivyhouseTerminalOrchestrator.workflowPlanId",
+  state: "ivyhouseTerminalOrchestrator.workflowState",
+  engineerRawLogAbs: "ivyhouseTerminalOrchestrator.workflowEngineerRawLogAbs",
+  qaRawLogAbs: "ivyhouseTerminalOrchestrator.workflowQaRawLogAbs",
+  startedAtIso: "ivyhouseTerminalOrchestrator.workflowStartedAtIso",
+};
+
+let sendtextBridgeServer;
+let sendtextBridgeServerStartedAtIso;
 
 function getConfig() {
   const cfg = vscode.workspace.getConfiguration("ivyhouseTerminalOrchestrator");
@@ -22,7 +35,7 @@ function getConfig() {
     captureSilenceMs: cfg.get("captureSilenceMs", 800),
     captureMaxBytes: cfg.get("captureMaxBytes", 65536),
     captureDir: cfg.get("captureDir", ".service/terminal_capture"),
-    workflowPollIntervalMs: cfg.get("workflowPollIntervalMs", 5000),
+    workflowPollIntervalMs: cfg.get("workflowPollIntervalMs", 10000),
     workflowMaxRounds: cfg.get("workflowMaxRounds", 10),
     workflowTimeoutMs: cfg.get("workflowTimeoutMs", 1800000),
     workflowTailLines: cfg.get("workflowTailLines", 200),
@@ -33,7 +46,767 @@ function getConfig() {
     workflowSendRetryDelayMs: cfg.get("workflowSendRetryDelayMs", 1200),
     workflowPrimeEnterCount: cfg.get("workflowPrimeEnterCount", 2),
     workflowPromptClearCaptureOnPass: cfg.get("workflowPromptClearCaptureOnPass", true),
+    workflowPostSendEnterDelayMs: cfg.get("workflowPostSendEnterDelayMs", 250),
+    workflowPostSendEnterCount: cfg.get("workflowPostSendEnterCount", 1),
+    workflowQaEngineerSummaryMaxChars: cfg.get("workflowQaEngineerSummaryMaxChars", 1800),
+
+    sendtextBridgeEnabled: cfg.get("sendtextBridgeEnabled", true),
+    // Security hard rule: host must be 127.0.0.1. Setting exists for documentation parity only.
+    sendtextBridgeHost: cfg.get("sendtextBridgeHost", "127.0.0.1"),
+    sendtextBridgePort: cfg.get("sendtextBridgePort", 8765),
+    sendtextBridgeMaxPayloadBytes: cfg.get("sendtextBridgeMaxPayloadBytes", 32768),
+    sendtextBridgeMaxRequestBytes: cfg.get("sendtextBridgeMaxRequestBytes", 65536),
+    sendtextBridgeRateLimit: cfg.get("sendtextBridgeRateLimit", 1.0),
+    sendtextBridgeRateBurst: cfg.get("sendtextBridgeRateBurst", 2),
   };
+}
+
+function normalizeIp(remoteAddress) {
+  const s = String(remoteAddress || "");
+  if (!s) return "";
+  if (s === "::1") return "127.0.0.1";
+  // Node reports IPv4 connections as ::ffff:127.0.0.1
+  if (s.startsWith("::ffff:")) return s.slice("::ffff:".length);
+  return s;
+}
+
+function jsonResponse(res, statusCode, obj) {
+  try {
+    const body = JSON.stringify(obj);
+    res.statusCode = statusCode;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.end(body);
+  } catch {
+    try {
+      res.statusCode = 500;
+      res.end("{\"error\":\"internal_error\"}");
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function readJsonBody(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const limit = Math.max(0, Number(maxBytes) || 0);
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk || ""), "utf8");
+      size += buf.length;
+      if (limit > 0 && size > limit) {
+        reject(new Error("request_too_large"));
+        try {
+          req.destroy();
+        } catch {
+          // ignore
+        }
+        return;
+      }
+      chunks.push(buf);
+    });
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      if (!raw) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        reject(new Error("invalid_json"));
+      }
+    });
+    req.on("error", () => reject(new Error("request_error")));
+  });
+}
+
+function loadSendtextBridgeToken(rootAbs) {
+  // Priority 1: environment variable
+  const envToken = process.env.IVY_SENDTEXT_BRIDGE_TOKEN;
+  if (envToken && String(envToken).trim()) return String(envToken).trim();
+
+  // Priority 2: token file
+  if (!rootAbs) return undefined;
+  const p = path.join(rootAbs, ".service", "sendtext_bridge", "token");
+  try {
+    if (!fs.existsSync(p)) return undefined;
+    const s = fs.readFileSync(p, "utf8");
+    const token = String(s || "").trim();
+    return token || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractBearerToken(req) {
+  const auth = String(req.headers?.authorization || "").trim();
+  if (auth.toLowerCase().startsWith("bearer ")) {
+    return auth.slice("bearer ".length).trim();
+  }
+  const x = req.headers?.["x-ivy-token"];
+  if (typeof x === "string" && x.trim()) return x.trim();
+  return undefined;
+}
+
+function ensureAllowedTerminalName(cfg, terminalKind) {
+  const kind = String(terminalKind || "").trim();
+  if (kind === "codex") return cfg.codexTerminalName;
+  if (kind === "opencode") return cfg.opencodeTerminalName;
+  return undefined;
+}
+
+function appendSendtextBridgeAuditEvent(cfg, evt) {
+  try {
+    const root = getWorkspaceRootFsPath();
+    if (!root) return;
+    const dirAbs = path.join(root, cfg.captureDir);
+    fs.mkdirSync(dirAbs, { recursive: true });
+    const fileAbs = path.join(dirAbs, "sendtext_bridge_events.jsonl");
+    fs.appendFileSync(fileAbs, JSON.stringify(evt) + "\n", "utf8");
+  } catch {
+    // ignore
+  }
+}
+
+function createRequestId() {
+  try {
+    return `req_${crypto.randomBytes(8).toString("hex")}`;
+  } catch {
+    return `req_${Date.now()}`;
+  }
+}
+
+function rateLimiterCreate(cfg) {
+  // Token bucket per IP (memory-only). Intended as a light local safeguard.
+  const limitPerSec = Math.max(0, Number(cfg.sendtextBridgeRateLimit) || 0);
+  const burst = Math.max(0, Number(cfg.sendtextBridgeRateBurst) || 0);
+  const buckets = new Map();
+
+  function take(ip) {
+    if (limitPerSec <= 0 || burst <= 0) return { ok: true };
+    const now = Date.now();
+    const key = ip || "";
+    const prev = buckets.get(key) || { tokens: burst, lastMs: now };
+    const elapsed = Math.max(0, now - prev.lastMs);
+    const refill = (elapsed / 1000) * limitPerSec;
+    const tokens = Math.min(burst, prev.tokens + refill);
+    if (tokens < 1) {
+      buckets.set(key, { tokens, lastMs: now });
+      const retryAfter = Math.ceil((1 - tokens) / limitPerSec);
+      return { ok: false, retryAfter: Math.max(1, retryAfter) };
+    }
+    buckets.set(key, { tokens: tokens - 1, lastMs: now });
+    return { ok: true };
+  }
+
+  return { take };
+}
+
+async function sendInstructionWithIdx024Pipeline(cfg, terminalKind, text, submit, mode) {
+  const terminalName = ensureAllowedTerminalName(cfg, terminalKind);
+  if (!terminalName) {
+    return { ok: false, error: "invalid_terminal_kind" };
+  }
+
+  const terminal = findTerminalByName(terminalName);
+  if (!terminal) {
+    return { ok: false, error: "terminal_not_found", terminalName };
+  }
+
+  try {
+    terminal.show(true);
+  } catch {
+    // ignore
+  }
+
+  const kind = terminalKind === "codex" ? "codex" : "opencode";
+  const normalized = normalizeInstruction(text, kind);
+  const payloadBytes = Buffer.from(normalized, "utf8");
+  const maxPayload = Math.max(0, Number(cfg.sendtextBridgeMaxPayloadBytes) || 0);
+  if (maxPayload > 0 && payloadBytes.length > maxPayload) {
+    return { ok: false, error: "payload_too_large", textBytes: payloadBytes.length, maxBytes: maxPayload };
+  }
+
+  const chunked =
+    String(mode || "").toLowerCase() === "chunked" ||
+    (kind === "codex" && normalized.length > 500);
+
+  const parts = [];
+  if (!chunked) {
+    parts.push(normalized);
+  } else {
+    const CHUNK_SIZE = 500;
+    let remaining = normalized;
+    while (remaining.length > 0) {
+      if (remaining.length <= CHUNK_SIZE) {
+        parts.push(remaining);
+        break;
+      }
+      const slice = remaining.slice(0, CHUNK_SIZE);
+      const nl = slice.lastIndexOf("\n");
+      if (nl > Math.floor(CHUNK_SIZE * 0.4)) {
+        parts.push(slice.slice(0, nl + 1));
+        remaining = remaining.slice(nl + 1);
+      } else {
+        parts.push(slice);
+        remaining = remaining.slice(CHUNK_SIZE);
+      }
+    }
+  }
+
+  try {
+    for (const part of parts) {
+      // Do not auto-submit each chunk; only submit at the end.
+      terminal.sendText(part, false);
+      await sleepMs(kind === "codex" ? 35 : 15);
+    }
+    if (submit) {
+      await workflowSendEnter(terminalName, kind, 1);
+    }
+  } catch (err) {
+    return { ok: false, error: "send_failed", details: String(err || "") };
+  }
+
+  return {
+    ok: true,
+    terminalKind: kind,
+    terminalName,
+    submit: Boolean(submit),
+    mode: chunked ? "chunked" : "single",
+    textBytes: payloadBytes.length,
+    payloadSha256: sha256Hex(normalized),
+  };
+}
+
+function extractPlanSections(planText) {
+  const s = String(planText || "");
+  if (!s.trim()) return "";
+
+  // Extract high-signal sections. Keep logic simple and robust to minor template variations.
+  function extractByHeading(title) {
+    const esc = String(title).replace(/[-/\\^$*+?.()|[\\]{}]/g, "\\$&");
+    const re = new RegExp(`(^|\\n)##\\s+${esc}\\s*\\n([\\s\\S]*?)(?=\\n##\\s+|$)`, "m");
+    const m = s.match(re);
+    if (!m) return "";
+    return `## ${title}\n` + String(m[2] || "").trim() + "\n";
+  }
+
+  const goal = extractByHeading("Goal");
+  const spec = extractByHeading("SPEC");
+
+  const out = [goal, spec].filter(Boolean).join("\n").trim();
+  return out || s.trim();
+}
+
+function resolvePlanAbs(planId, scope) {
+  const root = getWorkspaceRootFsPath();
+  if (!root) return undefined;
+  const idx = normalizeIdxName(planId);
+  if (!idx) return undefined;
+  if (scope === "project") return path.join(root, "doc", "plans", `${idx}_plan.md`);
+  return path.join(root, ".agent", "plans", `${idx}_plan.md`);
+}
+
+async function startWorkflowLoopCore(context, params) {
+  const cfg = getConfig();
+  const engineerTerminalName = params?.engineerTerminalName || cfg.opencodeTerminalName;
+  const qaTerminalName = params?.qaTerminalName || cfg.codexTerminalName;
+  const taskDescription = String(params?.taskDescription || "").trim();
+  const normalizedIdx = normalizeIdxName(params?.idxName || "");
+  const workflowRunId = String(params?.workflowRunId || "").trim();
+
+  if (!taskDescription) {
+    throw new Error("missing taskDescription");
+  }
+  if (!engineerTerminalName || !qaTerminalName || engineerTerminalName === qaTerminalName) {
+    throw new Error("invalid terminal selection");
+  }
+
+  // This mirrors startWorkflowLoop(), but without UI prompts.
+  if (workflowLoopState.active) {
+    throw new Error("workflow already running");
+  }
+
+  const paths = resolveWorkflowLogPaths(cfg);
+  if (!paths) {
+    throw new Error("workspace folder not found; cannot create workflow logs");
+  }
+
+  fs.mkdirSync(paths.dirAbs, { recursive: true });
+  fs.writeFileSync(paths.engineerLogAbs, "", "utf8");
+  fs.writeFileSync(paths.qaLogAbs, "", "utf8");
+  fs.writeFileSync(paths.engineerRawLogAbs, "", "utf8");
+  fs.writeFileSync(paths.qaRawLogAbs, "", "utf8");
+  fs.writeFileSync(paths.eventLogAbs, "", "utf8");
+
+  const scriptOk = isScriptAvailable();
+  let captureMode = "none";
+  if (scriptOk) {
+    captureMode = "script";
+  } else if (terminalDataWriteEventAvailable) {
+    captureMode = "terminalData";
+  }
+
+  if (captureMode === "none") {
+    throw new Error(
+      "Workflow loop cannot start: missing `script` and Proposed API terminalDataWriteEvent is not enabled",
+    );
+  }
+
+  workflowLoopState = {
+    active: true,
+    phase: WORKFLOW_PHASE.waitEngineerDone,
+    captureMode,
+    startedAtMs: Date.now(),
+    round: 1,
+    taskDescription,
+    idxName: normalizedIdx,
+    engineerTerminalName,
+    qaTerminalName,
+    engineerTerminal: undefined,
+    qaTerminal: undefined,
+    engineerRawLogAbs: paths.engineerRawLogAbs,
+    qaRawLogAbs: paths.qaRawLogAbs,
+    engineerLogAbs: paths.engineerLogAbs,
+    engineerLogDisplay: paths.engineerLogDisplay,
+    qaLogAbs: paths.qaLogAbs,
+    qaLogDisplay: paths.qaLogDisplay,
+    eventLogAbs: paths.eventLogAbs,
+    eventLogDisplay: paths.eventLogDisplay,
+    engineerOffset: 0,
+    qaOffset: 0,
+    engineerMarkerBuf: "",
+    qaMarkerBuf: "",
+    pollIntervalMs: Math.max(200, Number(cfg.workflowPollIntervalMs) || 10000),
+    maxRounds: Math.max(1, Number(cfg.workflowMaxRounds) || 10),
+    timeoutMs: Math.max(1000, Number(cfg.workflowTimeoutMs) || 1800000),
+    timer: undefined,
+    tickBusy: false,
+  };
+
+  appendWorkflowEvent({
+    action: "workflow_start",
+    captureMode,
+    engineerTerminalName: workflowLoopState.engineerTerminalName,
+    qaTerminalName: workflowLoopState.qaTerminalName,
+    engineerRawLog: paths.engineerRawLogDisplay,
+    qaRawLog: paths.qaRawLogDisplay,
+    idxName: workflowLoopState.idxName,
+    workflowRunId,
+  });
+
+  // Persist minimal status for /workflow/status (survives window reload).
+  try {
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.workflowRunId, workflowRunId || "");
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.planId, normalizedIdx || "");
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.state, "running");
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.engineerRawLogAbs, paths.engineerRawLogAbs);
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.qaRawLogAbs, paths.qaRawLogAbs);
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.startedAtIso, new Date().toISOString());
+  } catch {
+    // ignore
+  }
+
+  // Start / restart terminals to ensure clean session.
+  for (const terminalName of [engineerTerminalName, qaTerminalName]) {
+    const stateKey = getStateKeyForTerminal(cfg, terminalName);
+    if (stateKey) {
+      await context.workspaceState.update(stateKey, false);
+    }
+    disposeTerminalByName(terminalName);
+    await waitForTerminalToClose(terminalName, 3000);
+  }
+
+  const engineerStart = getStartCommandForTerminal(cfg, engineerTerminalName);
+  const qaStart = getStartCommandForTerminal(cfg, qaTerminalName);
+  if (!engineerStart || !qaStart) {
+    stopWorkflowLoop("invalid terminal selection");
+    throw new Error("unsupported terminal selection");
+  }
+
+  const engineerTerm = getOrCreateTerminal(engineerTerminalName);
+  const qaTerm = getOrCreateTerminal(qaTerminalName);
+  workflowLoopState.engineerTerminal = engineerTerm;
+  workflowLoopState.qaTerminal = qaTerm;
+
+  if (captureMode === "script") {
+    const engineerCmd =
+      `script -q -f -c ${bashSingleQuote(engineerStart)} ` +
+      bashSingleQuote(workflowLoopState.engineerRawLogAbs);
+    const qaCmd =
+      `script -q -f -c ${bashSingleQuote(qaStart)} ` + bashSingleQuote(workflowLoopState.qaRawLogAbs);
+
+    const engineerKey = getStateKeyForTerminal(cfg, engineerTerminalName);
+    const qaKey = getStateKeyForTerminal(cfg, qaTerminalName);
+    const ok1 = await startTerminalIfNeeded(context, engineerTerm, engineerKey, engineerCmd, true);
+    const ok2 = await startTerminalIfNeeded(context, qaTerm, qaKey, qaCmd, true);
+    if (!ok1 || !ok2) {
+      stopWorkflowLoop("failed to start terminals (script mode)");
+      throw new Error("failed to start terminals (script mode)");
+    }
+  } else {
+    const engineerKey = getStateKeyForTerminal(cfg, engineerTerminalName);
+    const qaKey = getStateKeyForTerminal(cfg, qaTerminalName);
+    const ok1 = await startTerminalIfNeeded(context, engineerTerm, engineerKey, engineerStart, true);
+    const ok2 = await startTerminalIfNeeded(context, qaTerm, qaKey, qaStart, true);
+    if (!ok1 || !ok2) {
+      stopWorkflowLoop("failed to start terminals (terminalData mode)");
+      throw new Error("failed to start terminals (terminalData mode)");
+    }
+  }
+
+  // Avoid false-positive marker detection from transcript echo of our own prompt.
+  workflowLoopState.engineerPauseUntilMs = Date.now() + 2000;
+  const firstSendOk = await workflowSendInstructionWithRetry(
+    cfg,
+    workflowLoopState.engineerTerminalName,
+    buildEngineerPrompt(workflowLoopState.taskDescription),
+  );
+  if (!firstSendOk || !workflowLoopState.active) {
+    throw new Error("failed to send first prompt to engineer");
+  }
+
+  if (workflowLoopState.engineerRawLogAbs) {
+    await sleepMs(400);
+    workflowLoopState.engineerOffset = safeGetFileSize(workflowLoopState.engineerRawLogAbs);
+    workflowLoopState.engineerMarkerBuf = "";
+  }
+
+  workflowLoopState.timer = setInterval(() => {
+    workflowTick(getConfig()).catch((err) => {
+      console.error(err);
+    });
+  }, workflowLoopState.pollIntervalMs);
+
+  return {
+    ok: true,
+    engineerRawLogDisplay: paths.engineerRawLogDisplay,
+    qaRawLogDisplay: paths.qaRawLogDisplay,
+    workflowRunId,
+    planId: normalizedIdx,
+  };
+}
+
+async function startWorkflowLoopNonInteractive(context, planId, scope) {
+  const normalizedIdx = normalizeIdxName(planId);
+  if (!normalizedIdx) {
+    throw new Error("invalid planId");
+  }
+
+  const planAbs = resolvePlanAbs(normalizedIdx, scope);
+  if (!planAbs || !fs.existsSync(planAbs)) {
+    throw new Error(`plan not found: ${String(planAbs || "")}`);
+  }
+
+  const planText = fs.readFileSync(planAbs, "utf8");
+  const extracted = extractPlanSections(planText);
+  const workflowRunId = `wf_${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}_${crypto
+    .randomBytes(3)
+    .toString("hex")}`;
+
+  // Mark state = starting first (so /workflow/status is meaningful during startup).
+  try {
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.workflowRunId, workflowRunId);
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.planId, normalizedIdx);
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.state, "starting");
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.startedAtIso, new Date().toISOString());
+  } catch {
+    // ignore
+  }
+
+  const cfg = getConfig();
+  const result = await startWorkflowLoopCore(context, {
+    engineerTerminalName: cfg.opencodeTerminalName,
+    qaTerminalName: cfg.codexTerminalName,
+    taskDescription: extracted,
+    idxName: normalizedIdx,
+    workflowRunId,
+  });
+  return {
+    status: "started",
+    workflowRunId,
+    planId: normalizedIdx,
+    extractedSections: extracted,
+    ...result,
+  };
+}
+
+function getWorkflowStatusForApi(context) {
+  const state =
+    (workflowLoopState && workflowLoopState.active && "running") ||
+    context.workspaceState.get(WORKFLOW_STATE_KEYS.state, "idle");
+  const workflowRunId = context.workspaceState.get(WORKFLOW_STATE_KEYS.workflowRunId, "");
+  const planId = context.workspaceState.get(WORKFLOW_STATE_KEYS.planId, "");
+  const startedAtIso = context.workspaceState.get(WORKFLOW_STATE_KEYS.startedAtIso, "");
+
+  // Prefer active raw logs, then persisted.
+  const activeEngineer = workflowLoopState?.engineerRawLogAbs;
+  const activeQa = workflowLoopState?.qaRawLogAbs;
+  const persistedEngineer = context.workspaceState.get(WORKFLOW_STATE_KEYS.engineerRawLogAbs, "");
+  const persistedQa = context.workspaceState.get(WORKFLOW_STATE_KEYS.qaRawLogAbs, "");
+
+  let rawLogAbs;
+  let lastOutputSource = "none";
+  if (activeEngineer) {
+    rawLogAbs = activeEngineer;
+    lastOutputSource = "active_engineer";
+  } else if (activeQa) {
+    rawLogAbs = activeQa;
+    lastOutputSource = "active_qa";
+  } else if (persistedEngineer) {
+    rawLogAbs = persistedEngineer;
+    lastOutputSource = "persisted_engineer";
+  } else if (persistedQa) {
+    rawLogAbs = persistedQa;
+    lastOutputSource = "persisted_qa";
+  }
+
+  let lastOutputTs;
+  let lastRawLogSizeBytes;
+  try {
+    if (rawLogAbs && fs.existsSync(rawLogAbs)) {
+      const st = fs.statSync(rawLogAbs);
+      lastOutputTs = st.mtime.toISOString();
+      lastRawLogSizeBytes = Number(st.size) || 0;
+    } else if (rawLogAbs) {
+      lastOutputSource = "raw_log_not_found";
+    }
+  } catch {
+    // ignore
+  }
+
+  return {
+    workflowRunId,
+    planId,
+    state,
+    startedAtIso,
+    lastOutputTs,
+    lastRawLogSizeBytes,
+    lastOutputSource,
+  };
+}
+
+function startSendtextBridgeServer(context) {
+  const cfg = getConfig();
+  if (!cfg.sendtextBridgeEnabled) {
+    logLine("[bridge] disabled by setting: sendtextBridgeEnabled=false");
+    return;
+  }
+
+  if (sendtextBridgeServer) {
+    return;
+  }
+
+  const limiter = rateLimiterCreate(cfg);
+  const host = "127.0.0.1";
+  const port = Math.max(1, Math.min(65535, Number(cfg.sendtextBridgePort) || 8765));
+  sendtextBridgeServerStartedAtIso = new Date().toISOString();
+
+  const server = http.createServer(async (req, res) => {
+    const method = String(req.method || "GET").toUpperCase();
+    const url = String(req.url || "/");
+    const endpoint = url.split("?")[0];
+    const ip = normalizeIp(req.socket?.remoteAddress);
+    const requestId = createRequestId();
+
+    const tokenConfigured = loadSendtextBridgeToken(getWorkspaceRootFsPath());
+    const tokenHash = tokenConfigured ? sha256Hex(tokenConfigured) : "";
+    const provided = extractBearerToken(req);
+    const authed = Boolean(tokenConfigured) && Boolean(provided) && provided === tokenConfigured;
+
+    const rate = limiter.take(ip);
+    if (!rate.ok) {
+      const evt = {
+        ts: new Date().toISOString(),
+        endpoint,
+        result: "rate_limited",
+        requestId,
+        tokenHash,
+        ip,
+        retryAfter: rate.retryAfter,
+      };
+      appendSendtextBridgeAuditEvent(cfg, evt);
+      jsonResponse(res, 429, { error: "rate_limited", retryAfter: rate.retryAfter, requestId });
+      return;
+    }
+
+    if (method === "GET" && endpoint === "/healthz") {
+      jsonResponse(res, 200, {
+        status: "ok",
+        ts: new Date().toISOString(),
+        serverStartedAt: sendtextBridgeServerStartedAtIso,
+      });
+      return;
+    }
+
+    const protectedEndpoints = new Set(["/send", "/workflow/start", "/workflow/status"]);
+    if (protectedEndpoints.has(endpoint)) {
+      if (!tokenConfigured) {
+        const evt = {
+          ts: new Date().toISOString(),
+          endpoint,
+          result: "rejected",
+          error: "token_not_configured",
+          requestId,
+          tokenHash,
+          ip,
+        };
+        appendSendtextBridgeAuditEvent(cfg, evt);
+        jsonResponse(res, 503, { error: "token_not_configured", requestId });
+        return;
+      }
+      if (!authed) {
+        const evt = {
+          ts: new Date().toISOString(),
+          endpoint,
+          result: "rejected",
+          error: "unauthorized",
+          requestId,
+          tokenHash,
+          ip,
+        };
+        appendSendtextBridgeAuditEvent(cfg, evt);
+        jsonResponse(res, 401, { error: "unauthorized", requestId });
+        return;
+      }
+    }
+
+    if (method === "POST" && endpoint === "/send") {
+      let body;
+      try {
+        body = await readJsonBody(req, cfg.sendtextBridgeMaxRequestBytes);
+      } catch (err) {
+        const code = String(err?.message || "");
+        jsonResponse(res, code === "request_too_large" ? 413 : 400, {
+          error: code || "bad_request",
+          requestId,
+        });
+        return;
+      }
+
+      const terminalKind = body?.terminalKind;
+      const text = body?.text;
+      const submit = Boolean(body?.submit);
+      const mode = body?.mode || "single";
+
+      const sendRes = await sendInstructionWithIdx024Pipeline(cfg, terminalKind, text, submit, mode);
+
+      const evt = {
+        ts: new Date().toISOString(),
+        endpoint: "/send",
+        result: sendRes.ok ? "success" : "error",
+        requestId,
+        terminalKind: sendRes.terminalKind || String(terminalKind || ""),
+        submit,
+        mode: sendRes.mode || String(mode || ""),
+        textBytes: sendRes.textBytes || 0,
+        payloadSha256: sendRes.payloadSha256 || "",
+        tokenHash,
+        ip,
+        error: sendRes.ok ? undefined : sendRes.error,
+      };
+      appendSendtextBridgeAuditEvent(cfg, evt);
+
+      if (!sendRes.ok) {
+        jsonResponse(res, 400, { error: sendRes.error, requestId });
+        return;
+      }
+
+      jsonResponse(res, 200, {
+        status: "sent",
+        terminalKind: sendRes.terminalKind,
+        textBytes: sendRes.textBytes,
+        requestId,
+      });
+      return;
+    }
+
+    if (method === "POST" && endpoint === "/workflow/start") {
+      let body;
+      try {
+        body = await readJsonBody(req, cfg.sendtextBridgeMaxRequestBytes);
+      } catch (err) {
+        const code = String(err?.message || "");
+        jsonResponse(res, code === "request_too_large" ? 413 : 400, {
+          error: code || "bad_request",
+          requestId,
+        });
+        return;
+      }
+
+      const planId = body?.planId;
+      const scope = body?.scope || "workflow";
+
+      try {
+        const started = await startWorkflowLoopNonInteractive(context, planId, scope);
+        appendSendtextBridgeAuditEvent(cfg, {
+          ts: new Date().toISOString(),
+          endpoint: "/workflow/start",
+          result: "success",
+          requestId,
+          tokenHash,
+          ip,
+          planId: started.planId,
+          workflowRunId: started.workflowRunId,
+        });
+        jsonResponse(res, 200, started);
+      } catch (err) {
+        const msg = String(err || "");
+        try {
+          await context.workspaceState.update(WORKFLOW_STATE_KEYS.state, "error");
+        } catch {
+          // ignore
+        }
+        appendSendtextBridgeAuditEvent(cfg, {
+          ts: new Date().toISOString(),
+          endpoint: "/workflow/start",
+          result: "error",
+          requestId,
+          tokenHash,
+          ip,
+          error: msg,
+        });
+        jsonResponse(res, 400, { error: "workflow_start_failed", details: msg, requestId });
+      }
+      return;
+    }
+
+    if (method === "GET" && endpoint === "/workflow/status") {
+      const status = getWorkflowStatusForApi(context);
+      appendSendtextBridgeAuditEvent(cfg, {
+        ts: new Date().toISOString(),
+        endpoint: "/workflow/status",
+        result: "success",
+        requestId,
+        tokenHash,
+        ip,
+        workflowRunId: status.workflowRunId,
+        planId: status.planId,
+        state: status.state,
+      });
+      jsonResponse(res, 200, status);
+      return;
+    }
+
+    jsonResponse(res, 404, { error: "not_found", requestId });
+  });
+
+  server.on("error", (err) => {
+    const msg = String(err || "");
+    logLine(`[bridge] server error: ${msg}`);
+  });
+
+  try {
+    server.listen(port, host, () => {
+      logLine(`[bridge] SendText Bridge listening on http://${host}:${port}`);
+    });
+    sendtextBridgeServer = server;
+  } catch (err) {
+    const msg = String(err || "");
+    logLine(`[bridge] failed to listen: ${msg}`);
+  }
 }
 
 function getWorkspaceRootFsPath() {
@@ -63,6 +836,60 @@ function getOrCreateTerminal(name) {
 
 function sleepMs(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendTerminalSequenceToActive(sequenceText) {
+  try {
+    await vscode.commands.executeCommand("workbench.action.terminal.sendSequence", {
+      text: String(sequenceText || ""),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function workflowSendEnter(terminalName, kind, count = 1) {
+  const t = findTerminalByName(terminalName);
+  if (!t) return false;
+
+  try {
+    t.show(true);
+  } catch {
+    // ignore
+  }
+
+  // Give VS Code a brief moment to focus the terminal before sending sequences.
+  await sleepMs(40);
+
+  const n = Math.max(1, Number(count) || 1);
+  for (let i = 0; i < n; i += 1) {
+    // Prefer sendSequence (more like real keypress). Fall back to sendText.
+    const ok = await sendTerminalSequenceToActive("\r");
+    if (!ok) {
+      try {
+        t.sendText("", true);
+      } catch {
+        // ignore
+      }
+    }
+    await sleepMs(kind === "codex" ? 120 : 60);
+  }
+  return true;
+}
+
+async function workflowDisableBracketedPasteIfPossible(terminalName, kind) {
+  if (kind !== "codex") return false;
+  const t = findTerminalByName(terminalName);
+  if (!t) return false;
+  try {
+    t.show(true);
+  } catch {
+    // ignore
+  }
+  await sleepMs(40);
+  // Disable xterm bracketed paste mode: CSI ? 2004 l
+  return await sendTerminalSequenceToActive("\u001b[?2004l");
 }
 
 async function waitForTerminalToClose(name, timeoutMs = 3000) {
@@ -172,6 +999,7 @@ let workflowLoopState = {
   startedAtMs: 0,
   round: 0,
   taskDescription: "",
+  idxName: undefined,
   engineerTerminalName: undefined,
   qaTerminalName: undefined,
   engineerTerminal: undefined,
@@ -190,25 +1018,41 @@ let workflowLoopState = {
   qaOffset: 0,
   engineerMarkerBuf: "",
   qaMarkerBuf: "",
+  qaWrongMarkerNudgedRound: 0,
+  qaPromptSentinel: "",
+  qaSeenPromptSentinel: false,
   // When we send a prompt, transcript logs will include our input (including marker strings).
-  // To avoid false-positive marker detection, we temporarily pause detection and then
-  // fast-forward offsets once the prompt echo has been written.
+  // For QA, we rely on prompt sentinel gating (qaPromptSentinel + qaSeenPromptSentinel) to avoid
+  // parsing prompt echo; do not depend on offset fast-forward.
+  qaNudgeCount: 0,
+  qaNudgeMaxPerRound: 2,
   engineerPauseUntilMs: 0,
   qaPauseUntilMs: 0,
-  pollIntervalMs: 5000,
+  pollIntervalMs: 10000,
   maxRounds: 10,
   timeoutMs: 1800000,
   timer: undefined,
   tickBusy: false,
 };
 
-function normalizeInstruction(text) {
-  // Many interactive CLIs treat multi-line input specially (may not submit on Enter).
-  // For reliability, collapse to a single line.
-  return String(text || "")
-    .replace(/\r?\n+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function normalizeInstruction(text, kind = "opencode") {
+  // Normalize instruction differently depending on terminal kind.
+  // - opencode: existing behaviour (collapse to single line)
+  // - codex: keep newlines, strip control chars, and collapse excessive blank lines
+  const s = String(text || "");
+  if (kind === "codex") {
+    // Strip ANSI and non-printable control chars except keep LF
+    const noAnsi = stripAnsi(s).replace(/\r/g, "\n");
+    // Remove other C0 control chars but preserve newline (LF)
+    const kept = noAnsi.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+    // Collapse more than 2 consecutive blank lines into 2
+    const collapsedBlankLines = kept.replace(/\n{3,}/g, "\n\n");
+    // Trim leading / trailing whitespace but preserve internal newlines
+    return collapsedBlankLines.replace(/^[ \t\n]+|[ \t\n]+$/g, "");
+  }
+
+  // Fallback / opencode: collapse to a single line (original behaviour)
+  return s.replace(/\r?\n+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function safeGetFileSize(filePath) {
@@ -228,26 +1072,186 @@ function stripAnsi(s) {
   // Minimal ANSI stripper for marker detection.
   // Covers CSI + a few common ESC sequences.
   return String(s)
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
+    // CSI 可能包含 '?' 參數（例如 \x1b[?25h），終止字元也不一定是字母。
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
     .replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, "")
     .replace(/\x1b\([^)]/g, "");
 }
 
-function hasMarkerLine(buf, markerName) {
-  // Require the bracketed marker to appear as a standalone line.
-  // This prevents false positives when prompts are echoed by the CLI.
-  const m = String(markerName || "");
-  if (!m) return false;
-  const re = new RegExp(`(^|\\n)\\[${m.replace(/[-/\\^$*+?.()|[\\]{}]/g, "\\$&")}\\](\\r?\\n|$)`, "m");
-  return re.test(String(buf || ""));
+function detectCompletionMarker(buf, markerName) {
+  // Prefer strict standalone-line detection, but fall back to token detection.
+  // Real-world interactive TUIs may:
+  // - remove newlines (screen redraw capture)
+  // - output markers without brackets (e.g. ENGINEER_DONE)
+  // - use fullwidth brackets
+  // We allow those variants while still trying to avoid false positives via
+  // prompt-echo guards (pause + offset fast-forward) and boundary checks.
+  const m = String(markerName || "").trim();
+  if (!m) return { found: false, mode: "none" };
+
+  const esc = m.replace(/[-/\\^$*+?.()|[\\]{}]/g, "\\$&");
+  const s = String(buf || "");
+
+  const bracketedAscii = `\\[\\s*${esc}\\s*\\]`;
+  const bracketedFullwidth = `【\\s*${esc}\\s*】|［\\s*${esc}\\s*］`;
+  const anyBracketed = `(?:${bracketedAscii}|${bracketedFullwidth})`;
+
+  // Strict: marker must appear as its own line.
+  const strictRe = new RegExp(`(^|\\n)\\s*(?:${anyBracketed}|${esc})\\s*(\\r?\\n|$)`, "m");
+  if (strictRe.test(s)) {
+    // Best-effort classify the mode.
+    const strictBracketRe = new RegExp(`(^|\\n)\\s*(?:${anyBracketed})\\s*(\\r?\\n|$)`, "m");
+    return { found: true, mode: strictBracketRe.test(s) ? "strict_bracket" : "strict_bare" };
+  }
+
+  // Fallback: token detection bounded by ASCII word-ish chars.
+  // This is intentionally weaker and relies on prompt-echo guards.
+  const tokenBracketRe = new RegExp(`(^|[^A-Z0-9_])(?:${anyBracketed})([^A-Z0-9_]|$)`, "m");
+  if (tokenBracketRe.test(s)) return { found: true, mode: "token_bracket" };
+
+  const tokenBareRe = new RegExp(`(^|[^A-Z0-9_])${esc}([^A-Z0-9_]|$)`, "m");
+  if (tokenBareRe.test(s)) return { found: true, mode: "token_bare" };
+
+  return { found: false, mode: "none" };
+}
+
+function hasCompletionMarker(buf, markerName) {
+  return detectCompletionMarker(buf, markerName).found;
 }
 
 function getQaResult(buf) {
-  // Accept both strict and spaced variants: QA_RESULT=PASS, QA_RESULT = PASS
+  // Accept both strict and spaced variants. Do NOT require newline boundaries;
+  // TUIs may not emit newlines in captured transcripts.
   const s = String(buf || "");
-  if (/(^|\n)QA_RESULT\s*=\s*PASS(\r?\n|$)/m.test(s)) return "PASS";
-  if (/(^|\n)QA_RESULT\s*=\s*FAIL(\r?\n|$)/m.test(s)) return "FAIL";
+  if (/QA_RESULT\s*=\s*PASS\b/i.test(s)) return "PASS";
+  if (/QA_RESULT\s*=\s*FAIL\b/i.test(s)) return "FAIL";
   return undefined;
+}
+
+function detectQaCompletion(buf) {
+  // SPEC (Idx-029): tail-only (last 2 non-empty lines)
+  // - QA_RESULT 必須是最後一行
+  // - QA_DONE 必須是倒數第二行
+  // - 不接受順序顛倒（result 在前、done 在後）
+  // Returns: { ok: true, result: "PASS"|"FAIL" } or { ok: false, nearMiss?: {...} }
+
+  const s = String(buf || "");
+  const lines = s
+    .split(/\r?\n/)
+    .map((l) => String(l || "").trim())
+    .filter(Boolean);
+
+  // tail-only: only consider the last two non-empty lines
+  const tail = lines.slice(-2);
+
+  const nearMiss = {};
+  const lastLine = tail.length >= 1 ? tail[tail.length - 1] : "";
+  const secondLastLine = tail.length >= 2 ? tail[tail.length - 2] : "";
+
+  function isQaDoneLine(line) {
+    const v = String(line || "").trim();
+    // Allow common fullwidth bracket typo variants (low-risk, standalone-line only)
+    return (
+      /^\[\s*QA_DONE\s*\]$/i.test(v) ||
+      /^【\s*QA_DONE\s*】$/i.test(v) ||
+      /^［\s*QA_DONE\s*］$/i.test(v)
+    );
+  }
+
+  function parseQaResultLine(line) {
+    const m = String(line || "")
+      .trim()
+      .match(/^QA_RESULT\s*=\s*(PASS|FAIL)$/i);
+    if (!m) return undefined;
+    return String(m[1] || "").toUpperCase();
+  }
+
+  const lastIsDone = isQaDoneLine(lastLine);
+  const secondLastIsDone = isQaDoneLine(secondLastLine);
+  const lastResult = parseQaResultLine(lastLine);
+  const secondLastResult = parseQaResultLine(secondLastLine);
+
+  // Happy path (strict order): done in second-last, result in last.
+  if (tail.length === 2 && secondLastIsDone && lastResult) {
+    return { ok: true, result: lastResult };
+  }
+
+  // Near-miss: only one tail line available, but it contains a marker-ish output.
+  // This must be observable so the workflow can nudge instead of silently waiting.
+  if (tail.length === 1) {
+    if (lastIsDone) {
+      nearMiss.missingResult = true;
+      nearMiss.qaDoneLine = lastLine;
+      nearMiss.lastLine = lastLine;
+      return { ok: false, nearMiss };
+    }
+    if (lastResult) {
+      nearMiss.missingDone = true;
+      nearMiss.qaResultLine = lastLine;
+      nearMiss.lastLine = lastLine;
+      return { ok: false, nearMiss };
+    }
+
+    // Format-like single-line cases
+    if (/QA_DONE/i.test(lastLine)) {
+      nearMiss.qaDoneLike = true;
+      nearMiss.qaDoneLine = lastLine;
+      nearMiss.lastLine = lastLine;
+      return { ok: false, nearMiss };
+    }
+    if (/QA_RESULT/i.test(lastLine)) {
+      nearMiss.qaResultLike = true;
+      nearMiss.qaResultLine = lastLine;
+      nearMiss.lastLine = lastLine;
+      return { ok: false, nearMiss };
+    }
+
+    return { ok: false };
+  }
+
+  // Near-miss: swapped order (result then done)
+  if (tail.length === 2 && lastIsDone && secondLastResult) {
+    nearMiss.orderSwapped = true;
+    nearMiss.qaDoneLine = lastLine;
+    nearMiss.qaResultLine = secondLastLine;
+  }
+
+  // Near-miss: missing one of required lines
+  if (lastResult && !secondLastIsDone) {
+    nearMiss.missingDone = true;
+    nearMiss.qaResultLine = lastLine;
+    nearMiss.secondLastLine = secondLastLine;
+  }
+  if (secondLastIsDone && !lastResult) {
+    nearMiss.missingResult = true;
+    nearMiss.qaDoneLine = secondLastLine;
+    nearMiss.lastLine = lastLine;
+  }
+
+  // Near-miss: "looks like" done/result but formatting is off
+  const qaDoneLike = /QA_DONE/i;
+  if (
+    (qaDoneLike.test(lastLine) && !lastIsDone) ||
+    (qaDoneLike.test(secondLastLine) && !secondLastIsDone)
+  ) {
+    nearMiss.qaDoneLike = true;
+    nearMiss.qaDoneLine = qaDoneLike.test(lastLine) ? lastLine : secondLastLine;
+  }
+
+  const resultLike = /QA_RESULT/i;
+  if (
+    (resultLike.test(lastLine) && !lastResult) ||
+    (resultLike.test(secondLastLine) && !secondLastResult)
+  ) {
+    nearMiss.qaResultLike = true;
+    nearMiss.qaResultLine = resultLike.test(lastLine) ? lastLine : secondLastLine;
+  }
+
+  if (Object.keys(nearMiss).length > 0) {
+    return { ok: false, nearMiss };
+  }
+
+  return { ok: false };
 }
 
 function isScriptAvailable() {
@@ -393,11 +1397,19 @@ async function workflowSendInstructionWithRetry(cfg, terminalName, text) {
   const ackTimeoutMs = Math.max(500, Number(cfg.workflowSendAckTimeoutMs) || 3000);
   const retryDelayMs = Math.max(0, Number(cfg.workflowSendRetryDelayMs) || 1200);
   const primeEnterCount = Math.max(0, Number(cfg.workflowPrimeEnterCount) || 0);
+  const postSendEnterDelayMs = Math.max(0, Number(cfg.workflowPostSendEnterDelayMs) || 0);
+  const postSendEnterCount = Math.max(0, Number(cfg.workflowPostSendEnterCount) || 0);
   const effectivePrimeEnterCount = kind === "opencode" ? primeEnterCount : 0;
 
-  const payload = normalizeInstruction(text);
-  const payloadHash = sha256Hex(payload);
-  const payloadLen = payload.length;
+  // Codex CLI is particularly sensitive to bracketed-paste timing; treat submit as best-effort
+  // and ensure we send enough post-send Enters with sufficient delay.
+  const effectivePostSendEnterCount =
+    kind === "codex" ? Math.max(2, postSendEnterCount) : postSendEnterCount;
+
+  // Normalize per-terminal-kind. For opencode keep single-line behaviour; for codex keep newlines.
+  const payload = normalizeInstruction(text, kind);
+  // Use actualSentContent as base; we will finalize finalSentContent inside retry loop
+  let actualSentContent = payload;
 
   if (!rawLogAbs) {
     appendWorkflowEvent({ action: "send_failed", terminalName, kind, reason: "missing raw log" });
@@ -412,6 +1424,12 @@ async function workflowSendInstructionWithRetry(cfg, terminalName, text) {
   }
 
   for (let attempt = 1; attempt <= retryCount + 1; attempt += 1) {
+    // suffix for retries so human-readable note can be appended
+    const retrySuffix = attempt > 1 ? "（若你已開始處理請忽略此重送）" : "";
+    const finalSentContent = actualSentContent + retrySuffix;
+    const payloadHash = sha256Hex(finalSentContent);
+    const payloadLen = finalSentContent.length;
+
     const sizeBefore = safeGetFileSize(rawLogAbs);
     const fpBefore = getTailFingerprint(rawLogAbs);
 
@@ -426,19 +1444,227 @@ async function workflowSendInstructionWithRetry(cfg, terminalName, text) {
     });
 
     // Prime input focus by sending a few blank lines first.
-    for (let i = 0; i < effectivePrimeEnterCount; i += 1) {
+    if (effectivePrimeEnterCount > 0) {
+      await workflowSendEnter(terminalName, kind, effectivePrimeEnterCount);
+    }
+
+    // Codex-specific: try to disable bracketed paste before injecting a large prompt.
+    if (kind === "codex") {
+      const disabled = await workflowDisableBracketedPasteIfPossible(terminalName, kind);
+      if (disabled) {
+        appendWorkflowEvent({
+          action: "codex_bracketed_paste_disabled",
+          terminalName,
+          kind,
+          attempt,
+        });
+      }
+    }
+
+    // For codex, use chunked send to avoid very long single paste which triggers
+    // bracketed-paste UI and leads to [Pasted Content ...] artifacts.
+    let sendMode = "single";
+    let chunkCount = 1;
+    let chunkSize = actualSentContent.length;
+    if (kind === "codex") {
+      // chunk size tunable; choose conservative default
+      const CHUNK_SIZE = 500; // chars
+      if (actualSentContent.length > CHUNK_SIZE) {
+        sendMode = "chunked";
+        // split into reasonably sized chunks on newline boundaries where possible
+        const parts = [];
+        let remaining = actualSentContent;
+        while (remaining.length > 0) {
+          if (remaining.length <= CHUNK_SIZE) {
+            parts.push(remaining);
+            break;
+          }
+          // try to cut at last newline within chunk size
+          const slice = remaining.slice(0, CHUNK_SIZE);
+          const nl = slice.lastIndexOf("\n");
+          if (nl > Math.floor(CHUNK_SIZE * 0.4)) {
+            parts.push(slice.slice(0, nl + 1));
+            remaining = remaining.slice(nl + 1);
+          } else {
+            parts.push(slice);
+            remaining = remaining.slice(CHUNK_SIZE);
+          }
+        }
+        chunkCount = parts.length;
+        chunkSize = Math.max(0, Math.min(CHUNK_SIZE, Math.ceil(actualSentContent.length / chunkCount)));
+
+        appendWorkflowEvent({
+          action: "send_chunked_prepare",
+          terminalName,
+          kind,
+          attempt,
+          sendMode,
+          chunkCount,
+          chunkSize,
+        });
+
+        // Actually send chunks sequentially with a small delay
+        try {
+          for (let ci = 0; ci < parts.length; ci += 1) {
+            const piece = parts[ci];
+            // sendText without newline; submission handled by post-send Enter
+            const t = findTerminalByName(terminalName);
+            try {
+              t.show(true);
+            } catch {
+              // ignore
+            }
+            try {
+              t.sendText(String(piece), false);
+            } catch (err) {
+              appendWorkflowEvent({ action: "send_chunk_error", terminalName, kind, attempt, chunkIndex: ci });
+              throw err;
+            }
+            // small sleep to avoid overwhelming paste handling
+            await sleepMs(40 + Math.min(60, Math.round(chunkSize / 10)));
+          }
+          // If this is a retry, append the retry suffix as a final tiny chunk so the
+          // actual sent content matches reported payload hash/len.
+          if (attempt > 1 && retrySuffix) {
+            try {
+              const t2 = findTerminalByName(terminalName);
+              try {
+                t2.show(true);
+              } catch {}
+              t2.sendText(String(retrySuffix), false);
+              await sleepMs(40);
+            } catch (err) {
+              // ignore
+            }
+          }
+        } catch (err) {
+          appendWorkflowEvent({ action: "send_error_chunked", terminalName, kind, attempt });
+          return false;
+        }
+
+        // after chunked send, log chunked-sent event and include actual payload hash/len
+        appendWorkflowEvent({
+          action: "send_chunked_sent",
+          terminalName,
+          kind,
+          attempt,
+          sendMode,
+          chunkCount,
+          chunkSize,
+          payloadSha256: payloadHash,
+          payloadLen: payloadLen,
+        });
+      } else {
+        // small enough to send single
+        sendMode = "single";
+      }
+    }
+
+    let ok;
+    if (kind === "codex" && sendMode === "single") {
+      ok = workflowSendInstruction(terminalName, actualSentContent + (attempt > 1 ? "（若你已開始處理請忽略此重送）" : ""));
+    } else if (kind === "codex" && sendMode === "chunked") {
+      // already sent chunks above; mark as ok
+      ok = true;
+    } else {
+      // opencode or other: single-shot
+      ok = workflowSendInstruction(terminalName, actualSentContent + (attempt > 1 ? "（若你已開始處理請忽略此重送）" : ""));
+    }
+    if (!ok) {
+      appendWorkflowEvent({ action: "send_error", terminalName, kind, attempt });
+      return false;
+    }
+
+    // Some TUIs show a "Pasted Content ..." buffer and won't submit immediately.
+    // Send an additional Enter *after* a short delay to better simulate a real submit.
+    if (effectivePostSendEnterCount > 0) {
+      // Heuristic: bigger payloads need a longer delay before Enter, otherwise the Enter
+      // may be delivered while the terminal is still processing the bracketed paste.
+      const extraDelayMs =
+        kind === "codex"
+          ? payloadLen > 8000
+            ? 1800
+            : payloadLen > 2000
+              ? 1200
+              : payloadLen > 300
+                ? 900
+                : 600
+          : payloadLen > 15000
+            ? 1500
+            : payloadLen > 8000
+              ? 900
+              : payloadLen > 2000
+                ? 400
+                : 0;
+      const effectiveDelayMs = Math.max(0, postSendEnterDelayMs + extraDelayMs);
+
+      if (effectiveDelayMs > 0) {
+        await sleepMs(effectiveDelayMs);
+      }
       try {
-        const t = findTerminalByName(terminalName);
-        t?.sendText("", true);
+        await workflowSendEnter(terminalName, kind, effectivePostSendEnterCount);
+        appendWorkflowEvent({
+          action: "post_send_enter",
+          terminalName,
+          kind,
+          attempt,
+          postSendEnterDelayMs: effectiveDelayMs,
+          postSendEnterCount: effectivePostSendEnterCount,
+        });
       } catch {
         // ignore
       }
     }
 
-    const ok = workflowSendInstruction(terminalName, payload + (attempt > 1 ? "（若你已開始處理請忽略此重送）" : ""));
-    if (!ok) {
-      appendWorkflowEvent({ action: "send_error", terminalName, kind, attempt });
-      return false;
+    // Codex-specific: if the UI is still showing a paste buffer indicator, nudge submit again.
+    // This is intentionally best-effort; it only fires when transcript already changed.
+    if (kind === "codex") {
+      try {
+        await sleepMs(900);
+        const tail = cleanForTail(tailFile(rawLogAbs, 64 * 1024));
+        const pasteMatch = /\[Pasted Content\s+(\d+)\s+chars\]/i.exec(tail);
+        if (pasteMatch) {
+          const pastedChars = Number(pasteMatch[1] || 0);
+          // One more delayed Enter burst to ensure submit.
+          await sleepMs(1200);
+          await workflowSendEnter(terminalName, kind, 1);
+          await sleepMs(600);
+          await workflowSendEnter(terminalName, kind, 1);
+          appendWorkflowEvent({
+            action: "codex_submit_nudge",
+            terminalName,
+            kind,
+            attempt,
+            reason: "pasted_content_detected",
+            pastedChars,
+            sendMode: sendMode,
+            chunkCount: chunkCount,
+            chunkSize: chunkSize,
+          });
+
+          // If paste buffer indicator present, attempt one-time recovery sequence:
+          // send Escape, Ctrl+C, then re-submit Enter burst.
+          try {
+            const t = findTerminalByName(terminalName);
+            await sleepMs(80);
+            // ESC
+            await sendTerminalSequenceToActive("\u001b");
+            await sleepMs(40);
+            // Ctrl+C
+            await sendTerminalSequenceToActive("\u0003");
+            await sleepMs(120);
+            // Post-recovery submit nudges
+            await workflowSendEnter(terminalName, kind, 1);
+            await sleepMs(240);
+            await workflowSendEnter(terminalName, kind, 1);
+            appendWorkflowEvent({ action: "codex_submit_recovery", terminalName, kind, attempt, pastedChars });
+          } catch (err) {
+            // ignore
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
 
     // Weak ACK: wait for transcript to change (size or tail fingerprint).
@@ -624,7 +1850,7 @@ function detectQaPassEvidenceFromCaptureDir(cfg) {
 
   const tail = tailFile(qaRawAbs, 200000);
   const cleaned = stripAnsi(tail).replace(/\r/g, "\n");
-  const hasDone = hasMarkerLine(cleaned, WORKFLOW_MARKER_NAMES.qaDone);
+  const hasDone = hasCompletionMarker(cleaned, WORKFLOW_MARKER_NAMES.qaDone);
   const qaResult = getQaResult(cleaned);
 
   if (!hasDone || qaResult !== "PASS") {
@@ -792,7 +2018,10 @@ function workflowSendInstruction(terminalName, text) {
     return false;
   }
 
-  const payload = normalizeInstruction(text);
+  // Normalize according to terminal kind
+  const cfg = getConfig();
+  const kind = detectWorkflowTerminalKind(cfg, terminalName);
+  const payload = normalizeInstruction(text, kind);
 
   try {
     t.show(true);
@@ -801,10 +2030,10 @@ function workflowSendInstruction(terminalName, text) {
   }
 
   try {
-    // Send the instruction and then send an additional blank line.
-    // This helps CLIs that require a second Enter to submit after paste.
-    t.sendText(payload, true);
-    t.sendText("", true);
+    // Paste without implicit newline; submission is handled by workflowSendInstructionWithRetry
+    // via its post-send Enter (with adaptive delay for large pastes).
+    // For codex we may be sending already-chunked content; still call sendText for final single-shot.
+    t.sendText(payload, false);
     return true;
   } catch (err) {
     const msg = String(err || "");
@@ -815,51 +2044,193 @@ function workflowSendInstruction(terminalName, text) {
 }
 
 function buildEngineerPrompt(taskDescription) {
-  // IMPORTANT: do NOT include the literal bracketed marker in the prompt.
-  // Many CLIs echo the prompt; if the marker appears in the prompt, we'd false-trigger.
+  // Prompts may be echoed into transcripts; marker detection is guarded by pause + offset.
   return (
     "你是 Engineer（負責實作）。請遵守 repo 規範：不要在此終端執行 git 指令（git/pytest/ruff 請用 Project terminal）。" +
     ` 任務：${taskDescription}。` +
     " 請勿自行做 QA；只要完成實作即可。" +
-    " 完成時請在『最後一行』單獨輸出：左中括號 + ENGINEER_DONE + 右中括號。" +
-    "（提醒：除了最後一行以外，請不要提到/輸出 ENGINEER_DONE 或任何 marker 文字，以免誤判。）"
+    " 完成時請在『最後一行』單獨輸出：左中括號 + ENGINEER + 底線 + DONE + 右中括號（務必包含中括號，且不要加句點或其他文字）。" +
+    "（提醒：除了最後一行以外，請不要提到/輸出任何 marker 文字，以免誤判。）"
   );
 }
 
 function sanitizeSummaryForPrompt(summary) {
   // Summaries are injected into prompts that may be echoed into transcripts.
   // Remove any marker-like standalone lines to avoid false-positive detection.
-  const lines = String(summary || "").replace(/\r/g, "\n").split("\n");
+  let s = stripAnsi(String(summary || "")).replace(/\r/g, "\n");
+
+  // Remove marker tokens anywhere (not just standalone lines).
+  // Remove bracketed markers with optional surrounding spaces.
+  s = s.replace(/\[\s*ENGINEER_DONE\s*\]/g, "");
+  s = s.replace(/\[\s*FIX_DONE\s*\]/g, "");
+  s = s.replace(/\[\s*QA_DONE\s*\]/g, "");
+  // Fullwidth bracket variants.
+  s = s.replace(/［\s*ENGINEER_DONE\s*］/g, "");
+  s = s.replace(/［\s*FIX_DONE\s*］/g, "");
+  s = s.replace(/［\s*QA_DONE\s*］/g, "");
+  s = s.replace(/\bENGINEER_DONE\b/g, "");
+  s = s.replace(/\bFIX_DONE\b/g, "");
+  s = s.replace(/\bQA_DONE\b/g, "");
+  s = s.replace(/QA_RESULT\s*=\s*(PASS|FAIL)\b/gi, "");
+
+  // Then drop any remaining standalone marker-like lines.
+  const lines = s.split("\n");
   const kept = lines.filter((line) => {
     const t = String(line || "").trim();
     if (!t) return true;
     if (t === WORKFLOW_MARKERS.engineerDone) return false;
     if (t === WORKFLOW_MARKERS.fixDone) return false;
     if (t === WORKFLOW_MARKERS.qaDone) return false;
+    if (t === WORKFLOW_MARKER_NAMES.engineerDone) return false;
+    if (t === WORKFLOW_MARKER_NAMES.fixDone) return false;
+    if (t === WORKFLOW_MARKER_NAMES.qaDone) return false;
     if (/^QA_RESULT\s*=\s*(PASS|FAIL)\s*$/i.test(t)) return false;
     return true;
   });
   return kept.join("\n").trimEnd();
 }
 
-function buildQaPrompt(round, taskDescription, engineerSummary) {
+function summarizeEngineerOutputForQaPrompt(rawEngineerSummary, maxChars) {
+  const maxLen = Math.max(300, Number(maxChars) || 1800);
+  const original = String(rawEngineerSummary || "");
+
+  let s = stripAnsi(original).replace(/\r/g, "\n");
+  // Many TUIs redraw progress bars in-place; break common redraw separators into lines.
+  s = s.replace(/▣·+/g, "\n");
+  s = s.replace(/📁/g, "\n📁");
+  s = s.replace(/(修改檔案\s*：)/g, "\n$1");
+  s = s.replace(/(新增檔案\s*：)/g, "\n$1");
+  s = s.replace(/\s+-\s+/g, "\n- ");
+  s = s.replace(/[ \t]+\n/g, "\n");
+  s = s.replace(/\n{3,}/g, "\n\n");
+
+  const filePathExtractRe = /[A-Za-z0-9._/\-]+\.(?:py|md|toml|json|yml|yaml|txt|js|ts|css|html)\b/g;
+  const filePathTestRe = /[A-Za-z0-9._/\-]+\.(?:py|md|toml|json|yml|yaml|txt|js|ts|css|html)\b/;
+  const commandRe = /\b(?:python|pytest|ruff|pre-commit)\b[^\n]{0,180}/g;
+  const errorRe = /(Traceback\b|\bERROR\b|\bFAIL\b|Exception\b|AssertionError\b|ImportError\b|ModuleNotFoundError\b|KeyError\b)/i;
+
+  const files = Array.from(
+    new Set((s.match(filePathExtractRe) || []).map((p) => String(p || "").trim())),
+  )
+    .filter(Boolean)
+    .slice(0, 40);
+
+  const commands = Array.from(
+    new Set(
+      (s.match(commandRe) || [])
+        .map((c) => String(c || "").trim())
+        .filter(Boolean)
+        .map((c) => c.replace(/\s+/g, " ")),
+    ),
+  ).slice(0, 20);
+
+  const lines = s
+    .split("\n")
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+
+  const highlights = [];
+  const seen = new Set();
+  for (const line of lines) {
+    if (highlights.length >= 12) break;
+    if (line.length > 420) continue;
+    const key = line.toLowerCase();
+    if (seen.has(key)) continue;
+    const interesting =
+      errorRe.test(line) ||
+      filePathTestRe.test(line) ||
+      /\bpython\b|\bpytest\b|\bruff\b|\bpre-commit\b/i.test(line) ||
+      /檔案變更|變更清單|修改檔案|新增檔案/i.test(line);
+    if (!interesting) continue;
+    seen.add(key);
+    highlights.push(line);
+  }
+
+  const pieces = [];
+  pieces.push("（coordinator 摘要：已去除進度/重複；原始 transcript 仍在 .service/terminal_capture/）");
+  if (files.length > 0) {
+    pieces.push("\n【可能涉及的檔案】\n" + files.map((p) => `- ${p}`).join("\n"));
+  }
+  if (commands.length > 0) {
+    pieces.push("\n【可能的驗證指令】\n" + commands.map((c) => `- ${c}`).join("\n"));
+  }
+  if (highlights.length > 0) {
+    pieces.push("\n【關鍵輸出片段】\n" + highlights.map((h) => `- ${h}`).join("\n"));
+  }
+
+  let out = pieces.join("\n").trim();
+  if (!out) out = "(no engineer output captured)";
+  if (out.length > maxLen) {
+    out = out.slice(0, Math.max(0, maxLen - 20)).trimEnd() + "\n...(已截斷)";
+  }
+  return out;
+}
+
+function buildQaPrompt(round, taskDescription, engineerSummary, promptSentinel) {
   return (
     `你是 QA（第 ${round} 輪）。請審查 Engineer 的變更是否符合 plan/whitelist 與 repo 規範。\n` +
-    "完成時請輸出兩段標記（請各自獨立成行）：\n" +
-    "1) 左中括號 + QA_DONE + 右中括號\n" +
-    "2) QA_RESULT + 等號 + PASS 或 FAIL（等號前後不可有空白）\n\n" +
+    "完成時請『只』輸出兩行（請各自獨立成行，順序固定）：\n" +
+    "1) [QA_DONE]\n" +
+    "2) QA_RESULT={PASS|FAIL}（請把 {PASS|FAIL} 替換成 PASS 或 FAIL；等號前後允許空白，例如 QA_RESULT = PASS）\n" +
+    "（上面兩行必須是你輸出的『最後兩行』，不要在後面加任何文字）\n" +
+    "注意：不要輸出 [ENGINEER_DONE] 或 [FIX_DONE]。\n\n" +
     `任務背景：${taskDescription}\n\n` +
     "Engineer 輸出摘要（供你審查判斷）：\n" +
-    (engineerSummary ? engineerSummary : "(no engineer output captured)")
+    (engineerSummary ? engineerSummary : "(no engineer output captured)") +
+    (promptSentinel ? `\n\n${promptSentinel}` : "")
   );
+}
+
+function buildQaCorrectivePrompt(wrongMarkerType, promptSentinel) {
+  const wrongText =
+    wrongMarkerType === "ENGINEER_DONE"
+      ? "你剛才誤輸出了 Engineer 的完成標記。"
+      : wrongMarkerType === "FIX_DONE"
+        ? "你剛才誤輸出了 Fix 的完成標記。"
+        : "你剛才誤輸出了不屬於 QA 的完成標記。";
+
+  return (
+    wrongText +
+    "請現在『只』輸出兩行（各自獨立成行，順序固定；且必須是最後兩行）：\n" +
+    "1) [QA_DONE]\n" +
+    "2) QA_RESULT={PASS|FAIL}（把 {PASS|FAIL} 替換成 PASS 或 FAIL；等號前後允許空白）" +
+    (promptSentinel ? `\n\n${promptSentinel}` : "")
+  );
+}
+
+function buildQaNearMissNudgePrompt(nearMiss, promptSentinel) {
+  const parts = [
+    "你的輸出格式接近正確但不合規，請重新輸出『只包含』以下兩行（各自獨立成行，順序固定；且必須是最後兩行）：",
+    "1) [QA_DONE]",
+    "2) QA_RESULT={PASS|FAIL}（把 {PASS|FAIL} 替換成 PASS 或 FAIL；等號前後允許空白）",
+  ];
+
+  const hints = [];
+  if (nearMiss?.orderSwapped) hints.push("- 你目前的順序顛倒了：QA_RESULT 必須在最後一行。\n");
+  if (nearMiss?.missingDone) hints.push("- 你缺少 [QA_DONE] 這一行（必須是倒數第二行）。\n");
+  if (nearMiss?.missingResult) hints.push("- 你缺少 QA_RESULT 這一行（必須是最後一行）。\n");
+  if (nearMiss?.qaDoneLike && nearMiss?.qaDoneLine)
+    hints.push(`- 你目前的 QA_DONE 行看起來像：${nearMiss.qaDoneLine}\n`);
+  if (nearMiss?.qaResultLike && nearMiss?.qaResultLine)
+    hints.push(`- 你目前的 QA_RESULT 行看起來像：${nearMiss.qaResultLine}\n`);
+
+  if (hints.length > 0) {
+    parts.push("\n提示：\n" + hints.join(""));
+  }
+
+  if (promptSentinel) {
+    parts.push(`\n${promptSentinel}`);
+  }
+
+  return parts.join("\n");
 }
 
 function buildFixPrompt(round, qaSummary) {
   return (
     `QA 第 ${round} 輪結果為 FAIL，請依以下 QA 摘要修正：\n\n` +
     qaSummary +
-    "\n\n修正完成時請在『最後一行』單獨輸出：左中括號 + FIX_DONE + 右中括號。" +
-    "（提醒：除了最後一行以外，請不要提到/輸出 FIX_DONE 或任何 marker 文字，以免誤判。）"
+    "\n\n修正完成時請在『最後一行』單獨輸出：左中括號 + FIX + 底線 + DONE + 右中括號（務必包含中括號，且不要加句點或其他文字）。" +
+    "（提醒：除了最後一行以外，請不要提到/輸出任何 marker 文字，以免誤判。）"
   );
 }
 
@@ -905,35 +2276,64 @@ async function workflowTick(cfg) {
 
       if (
         workflowLoopState.phase === WORKFLOW_PHASE.waitEngineerDone &&
-        hasMarkerLine(workflowLoopState.engineerMarkerBuf, WORKFLOW_MARKER_NAMES.engineerDone)
+        hasCompletionMarker(workflowLoopState.engineerMarkerBuf, WORKFLOW_MARKER_NAMES.engineerDone)
       ) {
         logLine("[workflow] detected ENGINEER_DONE");
+        const match = detectCompletionMarker(
+          workflowLoopState.engineerMarkerBuf,
+          WORKFLOW_MARKER_NAMES.engineerDone,
+        );
+        appendWorkflowEvent({
+          action: "engineer_done_detected",
+          terminalName: workflowLoopState.engineerTerminalName,
+          fromPhase: WORKFLOW_PHASE.waitEngineerDone,
+          toPhase: WORKFLOW_PHASE.waitQaDone,
+          round: workflowLoopState.round,
+          matchMode: match.mode,
+          engineerOffset: workflowLoopState.engineerOffset,
+          engineerRawLogSize: workflowLoopState.engineerRawLogAbs
+            ? safeGetFileSize(workflowLoopState.engineerRawLogAbs)
+            : undefined,
+        });
         const engineerSummary = fs.existsSync(workflowLoopState.engineerLogAbs)
           ? fs.readFileSync(workflowLoopState.engineerLogAbs, "utf8")
           : "";
 
+        const engineerSummarySanitized = sanitizeSummaryForPrompt(engineerSummary);
+        const engineerSummaryForQa = summarizeEngineerOutputForQaPrompt(
+          engineerSummarySanitized,
+          cfg.workflowQaEngineerSummaryMaxChars,
+        );
+        appendWorkflowEvent({
+          action: "qa_prompt_summarized",
+          round: workflowLoopState.round,
+          engineerSummaryLen: String(engineerSummarySanitized || "").length,
+          qaSummaryLen: String(engineerSummaryForQa || "").length,
+          maxChars: Number(cfg.workflowQaEngineerSummaryMaxChars) || 1800,
+        });
+
         workflowLoopState.phase = WORKFLOW_PHASE.waitQaDone;
-        workflowLoopState.qaPauseUntilMs = Date.now() + 600;
+        workflowLoopState.qaWrongMarkerNudgedRound = 0;
+        workflowLoopState.qaNudgeCount = 0;
+        workflowLoopState.qaPromptSentinel = `PROMPT_END_ID=qa_${workflowLoopState.round}_${Date.now()}`;
+        workflowLoopState.qaSeenPromptSentinel = false;
+        workflowLoopState.qaPauseUntilMs = Date.now() + 2000;
         await workflowSendInstructionWithRetry(
           cfg,
           workflowLoopState.qaTerminalName,
           buildQaPrompt(
             workflowLoopState.round,
             workflowLoopState.taskDescription,
-            sanitizeSummaryForPrompt(engineerSummary),
+            engineerSummaryForQa,
+            workflowLoopState.qaPromptSentinel,
           ),
         );
-        // Fast-forward QA offset after prompt echo is likely written.
-        if (workflowLoopState.qaRawLogAbs) {
-          workflowLoopState.qaOffset = safeGetFileSize(workflowLoopState.qaRawLogAbs);
-          workflowLoopState.qaMarkerBuf = "";
-        }
         return;
       }
 
       if (
         workflowLoopState.phase === WORKFLOW_PHASE.waitFixDone &&
-        hasMarkerLine(workflowLoopState.engineerMarkerBuf, WORKFLOW_MARKER_NAMES.fixDone)
+        hasCompletionMarker(workflowLoopState.engineerMarkerBuf, WORKFLOW_MARKER_NAMES.fixDone)
       ) {
         logLine("[workflow] detected FIX_DONE");
         workflowLoopState.round += 1;
@@ -946,22 +2346,37 @@ async function workflowTick(cfg) {
           ? fs.readFileSync(workflowLoopState.engineerLogAbs, "utf8")
           : "";
 
+        const engineerSummarySanitized = sanitizeSummaryForPrompt(engineerSummary);
+        const engineerSummaryForQa = summarizeEngineerOutputForQaPrompt(
+          engineerSummarySanitized,
+          cfg.workflowQaEngineerSummaryMaxChars,
+        );
+        appendWorkflowEvent({
+          action: "qa_prompt_summarized",
+          round: workflowLoopState.round,
+          engineerSummaryLen: String(engineerSummarySanitized || "").length,
+          qaSummaryLen: String(engineerSummaryForQa || "").length,
+          maxChars: Number(cfg.workflowQaEngineerSummaryMaxChars) || 1800,
+        });
+
         workflowLoopState.phase = WORKFLOW_PHASE.waitQaDone;
-        workflowLoopState.qaPauseUntilMs = Date.now() + 600;
+        workflowLoopState.qaWrongMarkerNudgedRound = 0;
+        workflowLoopState.qaNudgeCount = 0;
+        workflowLoopState.qaPromptSentinel = `PROMPT_END_ID=qa_${workflowLoopState.round}_${Date.now()}`;
+        workflowLoopState.qaSeenPromptSentinel = false;
+        workflowLoopState.qaPauseUntilMs = Date.now() + 2000;
         await workflowSendInstructionWithRetry(
           cfg,
           workflowLoopState.qaTerminalName,
           buildQaPrompt(
             workflowLoopState.round,
             workflowLoopState.taskDescription,
-            sanitizeSummaryForPrompt(engineerSummary),
+            engineerSummaryForQa,
+            workflowLoopState.qaPromptSentinel,
           ),
         );
 
-        if (workflowLoopState.qaRawLogAbs) {
-          workflowLoopState.qaOffset = safeGetFileSize(workflowLoopState.qaRawLogAbs);
-          workflowLoopState.qaMarkerBuf = "";
-        }
+        // Do not fast-forward offsets; we rely on qaPromptSentinel gating.
       }
     }
     return;
@@ -986,10 +2401,134 @@ async function workflowTick(cfg) {
     const cleaned = stripAnsi(text).replace(/\r/g, "\n");
     workflowLoopState.qaMarkerBuf = (workflowLoopState.qaMarkerBuf + cleaned).slice(-40000);
 
-    const hasDone = hasMarkerLine(workflowLoopState.qaMarkerBuf, WORKFLOW_MARKER_NAMES.qaDone);
-    const qaResult = getQaResult(workflowLoopState.qaMarkerBuf);
-    if (!hasDone || !qaResult) return;
+    // Gate marker parsing until we see the end-of-prompt sentinel.
+    if (!workflowLoopState.qaSeenPromptSentinel) {
+      const sentinel = String(workflowLoopState.qaPromptSentinel || "").trim();
+      if (!sentinel) {
+        // Fallback: if no sentinel was set, proceed as before.
+        workflowLoopState.qaSeenPromptSentinel = true;
+      } else {
+        const idx = workflowLoopState.qaMarkerBuf.lastIndexOf(sentinel);
+        if (idx === -1) return;
 
+        workflowLoopState.qaSeenPromptSentinel = true;
+        appendWorkflowEvent({
+          action: "qa_prompt_sentinel_seen",
+          round: workflowLoopState.round,
+          sentinel,
+        });
+        workflowLoopState.qaMarkerBuf = workflowLoopState.qaMarkerBuf
+          .slice(idx + sentinel.length)
+          .trimStart();
+      }
+    }
+
+    // Wrong-marker detection (QA 輸出 Engineer/Fix markers)
+    const wrongEngineerDone = hasCompletionMarker(workflowLoopState.qaMarkerBuf, WORKFLOW_MARKER_NAMES.engineerDone);
+    const wrongFixDone = hasCompletionMarker(workflowLoopState.qaMarkerBuf, WORKFLOW_MARKER_NAMES.fixDone);
+    if (wrongEngineerDone || wrongFixDone) {
+      if (!workflowLoopState.qaTerminalName) return;
+
+      if (workflowLoopState.qaNudgeCount >= workflowLoopState.qaNudgeMaxPerRound) {
+        appendWorkflowEvent({
+          action: "workflow_stop",
+          reason: "qa_completion_unstable",
+          round: workflowLoopState.round,
+          detail: "QA repeatedly output wrong markers despite corrections",
+          wrongEngineerDone,
+          wrongFixDone,
+          nudgeCount: workflowLoopState.qaNudgeCount,
+        });
+        stopWorkflowLoop("QA completion unstable (wrong markers)");
+        return;
+      }
+
+      workflowLoopState.qaNudgeCount += 1;
+      workflowLoopState.qaWrongMarkerNudgedRound = workflowLoopState.round;
+      appendWorkflowEvent({
+        action: "qa_wrong_marker_detected",
+        round: workflowLoopState.round,
+        wrongEngineerDone,
+        wrongFixDone,
+        nudgeAttempt: workflowLoopState.qaNudgeCount,
+      });
+
+      const wrongMarkerType = wrongEngineerDone ? "ENGINEER_DONE" : "FIX_DONE";
+      const sentinel = generatePromptSentinel(
+        "qa_corrective",
+        workflowLoopState.round,
+        workflowLoopState.qaNudgeCount,
+      );
+      workflowLoopState.qaPromptSentinel = sentinel;
+      workflowLoopState.qaSeenPromptSentinel = false;
+      workflowLoopState.qaPauseUntilMs = Date.now() + 1500;
+      await workflowSendInstructionWithRetry(
+        cfg,
+        workflowLoopState.qaTerminalName,
+        buildQaCorrectivePrompt(wrongMarkerType, sentinel),
+      );
+      return;
+    }
+
+    // Completion / near-miss detection (Idx-029 SPEC)
+    const completion = detectQaCompletion(workflowLoopState.qaMarkerBuf);
+    if (!completion.ok) {
+      if (completion.nearMiss) {
+        if (!workflowLoopState.qaTerminalName) return;
+
+        if (workflowLoopState.qaNudgeCount >= workflowLoopState.qaNudgeMaxPerRound) {
+          appendWorkflowEvent({
+            action: "workflow_stop",
+            reason: "qa_completion_unstable",
+            round: workflowLoopState.round,
+            detail: "QA completion format errors persist despite nudges",
+            nearMiss: {
+              orderSwapped: !!completion.nearMiss.orderSwapped,
+              missingDone: !!completion.nearMiss.missingDone,
+              missingResult: !!completion.nearMiss.missingResult,
+              qaDoneLike: !!completion.nearMiss.qaDoneLike,
+              qaResultLike: !!completion.nearMiss.qaResultLike,
+            },
+            nudgeCount: workflowLoopState.qaNudgeCount,
+          });
+          stopWorkflowLoop("QA completion unstable (format errors)");
+          return;
+        }
+
+        workflowLoopState.qaNudgeCount += 1;
+        appendWorkflowEvent({
+          action: "qa_completion_format_error_detected",
+          round: workflowLoopState.round,
+          nearMiss: {
+            orderSwapped: !!completion.nearMiss.orderSwapped,
+            missingDone: !!completion.nearMiss.missingDone,
+            missingResult: !!completion.nearMiss.missingResult,
+            qaDoneLike: !!completion.nearMiss.qaDoneLike,
+            qaResultLike: !!completion.nearMiss.qaResultLike,
+          },
+          nudgeAttempt: workflowLoopState.qaNudgeCount,
+        });
+
+        const sentinel = generatePromptSentinel(
+          "qa_nudge",
+          workflowLoopState.round,
+          workflowLoopState.qaNudgeCount,
+        );
+        workflowLoopState.qaPromptSentinel = sentinel;
+        workflowLoopState.qaSeenPromptSentinel = false;
+        workflowLoopState.qaPauseUntilMs = Date.now() + 1500;
+        await workflowSendInstructionWithRetry(
+          cfg,
+          workflowLoopState.qaTerminalName,
+          buildQaNearMissNudgePrompt(completion.nearMiss, sentinel),
+        );
+        return;
+      }
+
+      return;
+    }
+
+    const qaResult = completion.result;
     if (qaResult === "PASS") {
       logLine("[workflow] detected QA PASS");
       appendWorkflowEvent({ action: "qa_pass_detected" });
@@ -1007,6 +2546,7 @@ async function workflowTick(cfg) {
     }
 
     logLine("[workflow] detected QA FAIL");
+    appendWorkflowEvent({ action: "qa_fail_detected" });
 
     if (workflowLoopState.round >= workflowLoopState.maxRounds) {
       stopWorkflowLoop("FAIL (max rounds reached)");
@@ -1030,7 +2570,7 @@ async function workflowTick(cfg) {
       workflowLoopState.engineerMarkerBuf = "";
     }
   }
-  } finally {
+} finally {
     workflowLoopState.tickBusy = false;
   }
 }
@@ -1148,7 +2688,7 @@ async function startWorkflowLoop(context) {
     qaOffset: 0,
     engineerMarkerBuf: "",
     qaMarkerBuf: "",
-    pollIntervalMs: Math.max(200, Number(cfg.workflowPollIntervalMs) || 5000),
+    pollIntervalMs: Math.max(200, Number(cfg.workflowPollIntervalMs) || 10000),
     maxRounds: Math.max(1, Number(cfg.workflowMaxRounds) || 10),
     timeoutMs: Math.max(1000, Number(cfg.workflowTimeoutMs) || 1800000),
     timer: undefined,
@@ -1223,7 +2763,7 @@ async function startWorkflowLoop(context) {
   );
 
   // Avoid false-positive marker detection from transcript echo of our own prompt.
-  workflowLoopState.engineerPauseUntilMs = Date.now() + 600;
+  workflowLoopState.engineerPauseUntilMs = Date.now() + 2000;
   const firstSendOk = await workflowSendInstructionWithRetry(
     cfg,
     workflowLoopState.engineerTerminalName,
@@ -1235,6 +2775,8 @@ async function startWorkflowLoop(context) {
   }
 
   if (workflowLoopState.engineerRawLogAbs) {
+    // Give the TUI a brief moment to finish echoing input before fast-forwarding.
+    await sleepMs(400);
     workflowLoopState.engineerOffset = safeGetFileSize(workflowLoopState.engineerRawLogAbs);
     workflowLoopState.engineerMarkerBuf = "";
   }
@@ -1479,6 +3021,13 @@ function activate(context) {
   logLine(
     `[activate] Proposed API onDidWriteTerminalData available: ${terminalDataWriteEventAvailable}`,
   );
+
+  // Start localhost-only HTTP bridge server for Coordinator automation.
+  try {
+    startSendtextBridgeServer(context);
+  } catch (err) {
+    logLine(`[bridge] failed to start: ${String(err || "")}`);
+  }
 
   // Stable fallback: shell integration stream.
   // This only works if we attach right when `codex` is started from the shell.
@@ -1896,7 +3445,21 @@ function activate(context) {
   }
 }
 
-function deactivate() {}
+function stopSendtextBridgeServer() {
+  const s = sendtextBridgeServer;
+  sendtextBridgeServer = undefined;
+  if (!s) return;
+  try {
+    s.close();
+    logLine("[bridge] server stopped");
+  } catch {
+    // ignore
+  }
+}
+
+function deactivate() {
+  stopSendtextBridgeServer();
+}
 
 module.exports = {
   activate,

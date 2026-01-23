@@ -4,7 +4,184 @@
 - 自動啟動並維持兩個「可見的互動 VS Code terminal」：
   - `Codex CLI`
   - `OpenCode CLI`
+- **提供 SendText Bridge（HTTP API）**：允許 Coordinator（如 GitHub Copilot Chat）透過 HTTP 對這些終端注入指令
 - **所有對這兩個 terminal 的啟動/指令下達都透過 `terminal.sendText()`**（避免 terminal collision 的覆寫問題）。
+
+---
+
+## HTTP SendText Bridge
+
+### 功能
+
+SendText Bridge 是一個 **localhost-only HTTP API**，讓 Coordinator 可以透過 HTTP 請求對 Codex/OpenCode 終端注入指令。
+
+**安全性**：
+- **localhost-only**：僅監聽 `127.0.0.1`（硬規則）
+- **Token 認證**：所有 API 請求必須提供 Bearer token
+- **Terminal 白名單**：僅允許對 `Codex CLI` / `OpenCode CLI` 注入
+- **Rate Limiting**：預設 1 req/sec（burst 2）
+- **Fail-closed**：任何配置/認證失敗都會拒絕所有請求
+
+### 設定
+
+**Token 來源（按優先順序）**：
+1. 環境變數：`IVY_SENDTEXT_BRIDGE_TOKEN`
+2. Token 檔案：`.service/sendtext_bridge/token`
+
+**Workspace Settings**：
+- `ivyhouseTerminalOrchestrator.sendtextBridgeEnabled`（預設 `true`）
+- `ivyhouseTerminalOrchestrator.sendtextBridgeHost`（固定 `127.0.0.1`）
+- `ivyhouseTerminalOrchestrator.sendtextBridgePort`（預設 `8765`）
+- `ivyhouseTerminalOrchestrator.sendtextBridgeMaxPayloadBytes`（預設 `32768`，32 KiB）
+- `ivyhouseTerminalOrchestrator.sendtextBridgeMaxRequestBytes`（預設 `65536`，64 KiB）
+- `ivyhouseTerminalOrchestrator.sendtextBridgeRateLimit`（預設 `1.0`，每秒請求數）
+- `ivyhouseTerminalOrchestrator.sendtextBridgeRateBurst`（預設 `2`）
+
+### API Endpoints
+
+#### `GET /healthz`
+健康檢查。
+
+**Response**：
+```json
+{
+  "status": "ok",
+  "ts": "2026-01-22T12:00:00.000Z"
+}
+```
+
+#### `POST /send`
+對指定終端注入文字（使用 Idx-024 normalize + chunk pipeline）。
+
+**Request**：
+```json
+{
+  "terminalKind": "codex",
+  "text": "請完成 Idx-025 的實作",
+  "submit": false,
+  "mode": "single"
+}
+```
+
+**Parameters**：
+- `terminalKind`（必填）：`"codex"` 或 `"opencode"`
+- `text`（必填）：要傳送的文字
+- `submit`（選填，預設 `false`）：是否在傳送後按 Enter
+- `mode`（選填，預設 `"single"`）：`"single"` 或 `"chunked"`（chunked 模式會自動切分超長文字）
+
+**Headers**：
+- `Authorization: Bearer <token>` 或 `X-Ivy-Token: <token>`
+
+**Response**：
+```json
+{
+  "status": "sent",
+  "terminalKind": "codex",
+  "textBytes": 72
+}
+```
+
+#### `POST /workflow/start`
+從 Plan 啟動 workflow（提取 Goal（目標）與 SPEC 章節，包含 Goal/Non-goals 子章節）。
+
+**Request**：
+```json
+{
+  "planId": "Idx-025",
+  "scope": "workflow"
+}
+```
+
+**Scope 說明**：
+- `workflow`：`.agent/plans/Idx-XXX_plan.md`
+- `project`：`doc/plans/Idx-XXX_plan.md`
+
+**Response**：
+```json
+{
+  "status": "started",
+  "workflowRunId": "wf_20260122120000_abc123",
+  "planId": "Idx-025",
+  "extractedSections": "..."
+}
+```
+
+#### `GET /workflow/status`
+取得 workflow 狀態。
+
+**Response**：
+```json
+{
+  "workflowRunId": "wf_20260122120000_abc123",
+  "planId": "Idx-025",
+  "state": "running",
+  "startedAtIso": "2026-01-22T12:00:00.000Z",
+  "lastOutputTs": "2026-01-22T12:05:00.000Z",
+  "lastRawLogSizeBytes": 123456,
+  "lastOutputSource": "active_engineer"
+}
+```
+
+**State 值**：
+- `starting`: 正在啟動
+- `running`: 執行中
+- `paused`: 已暫停（例如 timeout 等待用戶選擇）
+- `idle`: 閒置
+- `completed`: 已完成
+- `error`: 錯誤
+- `interrupted`: 被中斷（例如 reload）
+
+**lastOutputSource 值**：
+- `active_engineer`: 使用 active workflow 的 engineer raw log
+- `active_qa`: 使用 active workflow 的 QA raw log
+- `persisted_engineer`: 使用 persisted 的 engineer raw log（same workflowRunId）
+- `persisted_qa`: 使用 persisted 的 QA raw log（same workflowRunId）
+- `raw_log_not_found`: 找不到 raw log
+- `none`: 無 raw log 資訊
+
+### Python 客戶端
+
+使用 `scripts/sendtext_bridge_client.py`：
+
+```bash
+# Health check
+python scripts/sendtext_bridge_client.py healthz
+
+# 對終端注入文字（預設不按 Enter）
+python scripts/sendtext_bridge_client.py send \
+  --terminal-kind codex \
+  --text "請完成 Idx-025 的實作"
+
+# 對終端注入文字並按 Enter
+python scripts/sendtext_bridge_client.py send \
+  --terminal-kind codex \
+  --text "請完成 Idx-025 的實作" \
+  --submit
+
+# 對終端注入文字（chunked 模式，適合長文字）
+python scripts/sendtext_bridge_client.py send \
+  --terminal-kind codex \
+  --text "很長的文字..." \
+  --mode chunked
+
+# 從 Plan 啟動 workflow
+python scripts/sendtext_bridge_client.py workflow-start \
+  --plan-id Idx-025 \
+  --scope workflow
+
+# 查詢 workflow 狀態
+python scripts/sendtext_bridge_client.py workflow-status
+```
+
+### Audit Log
+
+所有 bridge 請求都會記錄在 `.service/terminal_capture/sendtext_bridge_events.jsonl`，格式：
+
+```jsonl
+{"ts":"2026-01-22T12:00:00.000Z","endpoint":"/send","result":"success","requestId":"req_abc123","terminalKind":"codex","submit":false,"mode":"single","textBytes":72,"payloadSha256":"abc123...","tokenHash":"def456...","ip":"127.0.0.1"}
+```
+
+---
 
 ## 安裝（Dev Container / VS Code Server）
 
@@ -44,7 +221,7 @@ Workspace Settings：
 - `ivyhouseTerminalOrchestrator.captureSilenceMs`（預設 `800`）
 - `ivyhouseTerminalOrchestrator.captureMaxBytes`（預設 `65536`）
 - `ivyhouseTerminalOrchestrator.captureDir`（預設 `.service/terminal_capture`）
-- `ivyhouseTerminalOrchestrator.workflowPollIntervalMs`（預設 `5000`）
+- `ivyhouseTerminalOrchestrator.workflowPollIntervalMs`（預設 `10000`）
 - `ivyhouseTerminalOrchestrator.workflowMaxRounds`（預設 `10`）
 - `ivyhouseTerminalOrchestrator.workflowTimeoutMs`（預設 `1800000`）
 - `ivyhouseTerminalOrchestrator.workflowTailLines`（預設 `200`）
@@ -142,9 +319,9 @@ extension 會改用 **Shell Integration** 的 execution stream 來擷取 *codex 
 Workflow Loop 是一個自動化編排功能，可以：
 - 自動協調 Engineer 終端（實作）和 QA 終端（審查）的工作流程
 - 透過 `terminal.sendText()` 注入指令，並監控輸出檔案（log polling）
-- 偵測特定 marker（`[ENGINEER_DONE]`、`[QA_DONE]`、`[FIX_DONE]`）來推進狀態機
-- 當 QA 回報 `FAIL` 時，自動將問題摘要送回 Engineer 要求修正
-- 直到 QA 回報 `PASS`，或達到 timeout/max rounds 上限
+- 偵測特定 marker（`WORKFLOW_MARKERS.engineerDone`、`WORKFLOW_MARKERS.qaDone`、`WORKFLOW_MARKERS.fixDone`）來推進狀態機
+- 當 QA 回報不通過（對應 `WORKFLOW_MARKERS.qaFail`）時，自動將問題摘要送回 Engineer 要求修正
+- 直到 QA 回報通過（對應 `WORKFLOW_MARKERS.qaPass`），或達到 timeout/max rounds 上限
 
 ### 使用方式
 
@@ -162,12 +339,13 @@ Workflow Loop 是一個自動化編排功能，可以：
 3. **停止 Workflow Loop**：
    - Command Palette → `IvyHouse: Stop Workflow Loop`
    - 安全停止 polling，不會強制關閉 terminal
+   - 注意：若在 window reload 後重新啟動 extension，會自動將先前的 workflow 標記為 `interrupted_by_reload`
 
 4. **（收尾）清空 `.service/terminal_capture/`**：
-  - 自動提示：當你在啟動 Workflow Loop 時於「Associated Idx」欄位填入 `Idx-XXX`，且在執行中偵測到 QA `PASS`，若 `.agent/logs/Idx-XXX_log.md` 已存在，extension 會自動彈出 modal 提示是否清空 `.service/terminal_capture/`（此行為可透過設定 `ivyhouseTerminalOrchestrator.workflowPromptClearCaptureOnPass` 關閉）。
-  - 前提：QA 已回報 `PASS`，且對應的 log 已確定建立（例如 `.agent/logs/Idx-024_log.md`）。
+  - 自動提示：當你在啟動 Workflow Loop 時於「Associated Idx」欄位填入 `Idx-XXX`，且在執行中偵測到 QA 通過（對應 `WORKFLOW_MARKERS.qaPass`），若 `.agent/logs/Idx-XXX_log.md` 已存在，extension 會自動彈出 modal 提示是否清空 `.service/terminal_capture/`（此行為可透過設定 `ivyhouseTerminalOrchestrator.workflowPromptClearCaptureOnPass` 關閉）。
+  - 前提：QA 已回報通過（對應 `WORKFLOW_MARKERS.qaPass`），且對應的 log 已確定建立（例如 `.agent/logs/Idx-024_log.md`）。
   - Command Palette → `IvyHouse: Clear .service/terminal_capture (after QA PASS + log)`
-  - 這個命令會先檢查 `.agent/logs/<Idx-XXX>_log.md` 是否存在，並嘗試從最新的 `qa_<timestamp>_raw.log` 偵測 `[QA_DONE]` 與 `QA_RESULT=PASS`；若找不到，會要求你手動再次確認後才能繼續。
+  - 這個命令會先檢查 `.agent/logs/<Idx-XXX>_log.md` 是否存在，並嘗試從最新的 `qa_<timestamp>_raw.log` 偵測 `WORKFLOW_MARKERS.qaDone` 與 `WORKFLOW_MARKERS.qaPass`；若找不到，會要求你手動再次確認後才能繼續。
 
 ### Marker 規範
 
@@ -175,16 +353,16 @@ Workflow Loop 依賴工具輸出特定 marker 來判斷完成狀態：
 
 | 角色 | 完成標記 | 說明 |
 |------|----------|------|
-| Engineer | `[ENGINEER_DONE]` | 實作完成後必須輸出 |
-| Engineer (Fix) | `[FIX_DONE]` | 修正完成後必須輸出 |
-| QA | `[QA_DONE]` | 審查完成後必須輸出 |
-| QA | `QA_RESULT=PASS` 或 `QA_RESULT=FAIL` | 跟在 `[QA_DONE]` 後面，表示審查結果 |
+| Engineer | `WORKFLOW_MARKERS.engineerDone` | 實作完成後必須輸出 |
+| Engineer (Fix) | `WORKFLOW_MARKERS.fixDone` | 修正完成後必須輸出 |
+| QA | `WORKFLOW_MARKERS.qaDone` | 審查完成後必須輸出 |
+| QA | `WORKFLOW_MARKERS.qaPass` 或 `WORKFLOW_MARKERS.qaFail` | 必須在 `WORKFLOW_MARKERS.qaDone` 下一行，表示審查結果 |
 
 > ⚠️ **重要**：工具必須輸出這些 marker，否則 workflow loop 會一直等待（直到 timeout）
 
 額外限制（為避免 prompt echo 誤判）：
-- marker 必須是「獨立成行」的輸出（例如最後一行單獨輸出 `[ENGINEER_DONE]`）
-- 除了 marker 那一行之外，請避免在其他文字中提到 `ENGINEER_DONE` / `QA_DONE` / `FIX_DONE`
+- marker 必須是「獨立成行」的輸出（例如最後一行單獨輸出 `WORKFLOW_MARKERS.engineerDone` 對應的 marker）
+- 除了 marker 的獨立行之外，請避免在其他文字中提到任何 marker（降低誤判風險）
 
 ### 設定參數
 
@@ -192,7 +370,7 @@ Workflow Loop 依賴工具輸出特定 marker 來判斷完成狀態：
 
 | 設定 | 預設值 | 說明 |
 |------|--------|------|
-| `ivyhouseTerminalOrchestrator.workflowPollIntervalMs` | `5000` | 每 N 毫秒掃描 log 檔案一次 |
+| `ivyhouseTerminalOrchestrator.workflowPollIntervalMs` | `10000` | 每 N 毫秒掃描 log 檔案一次 |
 | `ivyhouseTerminalOrchestrator.workflowMaxRounds` | `10` | 最多允許幾輪 QA（防止無限循環） |
 | `ivyhouseTerminalOrchestrator.workflowTimeoutMs` | `1800000` | 總超時時間（預設 30 分鐘） |
 | `ivyhouseTerminalOrchestrator.workflowTailLines` | `200` | compact tail log 保留最後 N 行 |
@@ -237,14 +415,25 @@ events log 會記錄：
 ```
 IDLE → ENGINEERING → WAIT_ENGINEER_DONE
   → QA → WAIT_QA_DONE
-    → (PASS) DONE
-    → (FAIL) FIXING → WAIT_FIX_DONE → (back to QA)
+    → (QA 通過) DONE
+    → (QA 不通過) FIXING → WAIT_FIX_DONE → (back to QA)
 ```
+
+### Timeout 行為
+
+當 workflow 達到 timeout（預設 30 分鐘）時：
+- **不會自動停止 workflow**，而是暫停 polling 並彈出 VS Code modal
+- Modal 提供三個選項：
+  1. **Abort**：中止 workflow
+  2. **Allow +5m**：延長 5 分鐘超時時間
+  3. **Allow +30m (this run)**：延長 30 分鐘超時時間（僅限本次執行）
+- 選擇後會記錄到 workflow events log
+- 這個設計避免在工具仍在執行時強制中止，造成狀態不一致
 
 ### Troubleshooting
 
 **問題：Workflow loop 一直卡在等待狀態**
-- 確認工具有正確輸出 marker（例如 `[ENGINEER_DONE]`）
+- 確認工具有正確輸出 marker（例如 `WORKFLOW_MARKERS.engineerDone` 對應的 marker）
 - 用 `IvyHouse: Show Workflow Status` 查看當前狀態
 - 手動檢查 `.service/terminal_capture/*.log` 內容
 - 優先檢查 `.service/terminal_capture/workflow_<timestamp>_events.jsonl`：
@@ -253,11 +442,11 @@ IDLE → ENGINEERING → WAIT_ENGINEER_DONE
 - 若確認無法繼續，用 `IvyHouse: Stop Workflow Loop` 停止
 
 **問題：QA 結果無法正確偵測**
-- 確認 QA 工具同時輸出 `[QA_DONE]` 和 `QA_RESULT=PASS` 或 `QA_RESULT=FAIL`
-- 這兩個標記必須在同一次輸出中出現，且各自獨立成行
+- 確認 QA 工具有輸出 `WORKFLOW_MARKERS.qaDone` 與（下一行）`WORKFLOW_MARKERS.qaPass` / `WORKFLOW_MARKERS.qaFail`
+- 這兩個標記必須是尾端輸出，且各自獨立成行
 
 **問題：達到 max rounds 上限**
-- 檢查是否陷入 FAIL 循環（修正後仍然 FAIL）
+- 檢查是否陷入不通過循環（修正後仍然不通過）
 - 考慮調高 `workflowMaxRounds`，或手動介入修正
 
 **問題：Log 檔案沒有內容**
