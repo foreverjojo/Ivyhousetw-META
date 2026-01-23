@@ -31,7 +31,7 @@
 - `.agent/logs/Idx-030_log.md`
 
 ### 判定
-- Result：TBD（待 Idx-031 收尾 commit 完成後，以 `git status` / `git diff` 最終確認）
+- Result：PASS（已完成 commit/push，且 `git status --porcelain` 為空）
 
 ---
 
@@ -48,8 +48,10 @@
 ## 🧾 Commit / Push
 
 - Commit A（含主要變更）：f9f003e
-- Commit B（回填 commit_hash）：pending
+- Commit B（回填 commit_hash）：20fbb59
 - Pushed branch：`feature/idx-024-clear-on-pass`
+
+Push 結果：✅ 已推送至 `origin/feature/idx-024-clear-on-pass`（HEAD=20fbb59）
 
 ---
 

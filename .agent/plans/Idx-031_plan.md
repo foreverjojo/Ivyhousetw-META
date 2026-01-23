@@ -153,7 +153,7 @@ executor_tool: manual
 executor_tool_version: N/A
 executor_user: GitHub Copilot (VS Code)
 executor_start: 2026-01-23 05:40:00+00:00
-executor_end: [TBD]
+executor_end: 2026-01-23T05:50:01+00:00
 session_id: N/A
 last_change_tool: manual
 
@@ -161,14 +161,14 @@ last_change_tool: manual
 qa_tool: manual
 qa_tool_version: N/A
 qa_user: GitHub Copilot (VS Code)
-qa_start: [TBD]
-qa_end: [TBD]
-qa_result: [TBD]
+qa_start: 2026-01-23T05:50:01+00:00
+qa_end: 2026-01-23T05:50:01+00:00
+qa_result: PASS_WITH_RISK
 qa_compliance: ⚠️ 例外：本次為治理/文件/設定收斂，未走 codex/opencode 交叉終端 QA
 
 # 收尾
 log_file_path: .agent/logs/Idx-031_log.md
-commit_hash: f9f003e
+commit_hash: 20fbb59
 rollback_at: N/A
 rollback_reason: N/A
 rollback_files: N/A
