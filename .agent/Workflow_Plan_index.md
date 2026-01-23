@@ -29,15 +29,18 @@
 | Idx-018 | Dev-Team Folder Segregation & File Ownership (Dual Index) | P0 | ✅ 已完成 | OpenCode | PASS | 1.0.0 | `.agent/logs/Idx-018_log.md` | segregate dev-team files from project (方案 B) |
 | Idx-019 | Sync Template Repo with Ivyhousetw-META Workflow (Remove SendText Bridge) | P1 | ✅ 已完成 | codex-cli | PASS | 2026-01-19-v1 | `.agent/logs/Idx-019_log.md` | QA PASS（Round 2）：blocking issues 已於 template commit `3d61350` 修復；已建立 PR，可進入 Cross-QA |
 | Idx-020 | Auto-start Codex/OpenCode in visible interactive terminals via sendText | P1 | ✅ 已完成 | GitHub Copilot | PASS | 2026-01-20-v1 | `.agent/logs/Idx-020_log.md` | local VS Code extension：自動啟動兩個專屬 terminal，指令下達僅使用 terminal.sendText；提供安裝腳本 |
-| Idx-021 | Restore service_manager --pty + add OpenCode retry recovery | P0 | ✅ 已完成 | opencode | PASS | 2026-01-20-v1 | （缺失） | 原預期 log：.agent/logs/Idx-021_log.md（目前 repo 未包含） |
+| Idx-021 | Restore service_manager --pty + add OpenCode retry recovery | P0 | ✅ 已完成 | opencode | PASS | 2026-01-20-v1 | `.agent/logs/Idx-021_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |
 | Idx-022 | SendText + read terminal output (Codex /status capture) | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-20-v1 | （尚未產出） | 原預期 log：.agent/logs/Idx-022_log.md |
-| Idx-023 | Workflow Loop：sendText 編排（Engineer→QA→Fix 直到 PASS）+ 落檔輪詢 | P0 | ✅ 已完成 | opencode | PASS | 2026-01-20-v1 | （缺失） | 原預期 log：.agent/logs/Idx-023_log.md（目前 repo 未包含） |
+| Idx-023 | Workflow Loop：sendText 編排（Engineer→QA→Fix 直到 PASS）+ 落檔輪詢 | P0 | ✅ 已完成 | opencode | PASS | 2026-01-20-v1 | `.agent/logs/Idx-023_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |
 | Idx-024 | Workflow Loop Reliability Hardening（ready/retry/observability） | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-21-v1 | `.agent/logs/Idx-024_log.md` | 修補 workflow loop：以 ready gate 取代固定 sleep，加入注入重試與 events log，降低「停在啟動畫面不執行」風險 |
-| Idx-025 | Restore/Standardize HTTP SendText Bridge (Chat→sendText) | P0 | ✅ 已完成 | opencode | PASS | 2026-01-21-v1 | （缺失） | 原預期 log：.agent/logs/Idx-025_log.md（目前 repo 未包含；治理資料不完整） |
+| Idx-025 | Restore/Standardize HTTP SendText Bridge (Chat→sendText) | P0 | ✅ 已完成 | opencode | PASS | 2026-01-21-v1 | `.agent/logs/Idx-025_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |
 | Idx-026 | SendText Bridge Hardening + Evidence/Docs Consistency | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-22-v1 | （尚未產出） | 原預期 log：.agent/logs/Idx-026_log.md |
-| Idx-027 | Workflow Marker Detection Hardening（避免誤判） | P0 | ✅ 已完成 | opencode | PASS | 2026-01-22-v1 | （缺失） | 原預期 log：.agent/logs/Idx-027_log.md（目前 repo 未包含；治理資料不完整） |
-| Idx-028 | Coordinator 主動盯進度 + Stop Workflow Loop 規則落地 | P1 | ⚠️ 有風險 | GitHub Copilot | PASS WITH RISK | 2026-01-22-v1 | （缺失） | 原預期 log：.agent/logs/Idx-028_log.md（目前 repo 未包含；治理資料不完整） |
+| Idx-027 | Workflow Marker Detection Hardening（避免誤判） | P0 | ✅ 已完成 | opencode | PASS | 2026-01-22-v1 | `.agent/logs/Idx-027_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |
+| Idx-028 | Coordinator 主動盯進度 + Stop Workflow Loop 規則落地 | P1 | ⚠️ 有風險 | GitHub Copilot | PASS WITH RISK | 2026-01-22-v1 | `.agent/logs/Idx-028_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |
 | Idx-029 | Workflow Loop：QA 完成判定韌性補強（防 wrong marker / near-miss） | P0 | ✅ 已完成 | opencode | PASS | 2026-01-22-v1 | `.agent/logs/Idx-029_log.md` | Codex CLI QA 報告：PASS（strict scope 通過）；已回填 log/index |
+| Idx-030 | Workflow Loop：統一 Completion 判定（tail-only + timestamp + nonce/env） | P0 | ✅ 已完成 | opencode | PASS | 2026-01-23-v1 | `.agent/logs/Idx-030_log.md` | Plan：`.agent/plans/Idx-030_plan.md` |
+
+| Idx-031 | 治理閉環：commit/push + log 不再追溯占位 + tasks 跨平台 | P0 | 🔄 進行中 | manual | T.B.D. | 2026-01-23-v1 | （尚未產出） | Plan：`.agent/plans/Idx-031_plan.md` |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)

@@ -304,7 +304,7 @@ extension 會改用 **Shell Integration** 的 execution stream 來擷取 *codex 
 
 ### 技術債
 
-- **extension.js 檔案長度**：目前 ~1000 行，已超過建議的主程式上限（800 行）。未來應考慮拆分為：
+- **extension.js 檔案長度**：目前 ~3400 行，已超過建議的主程式上限（800 行）。未來應考慮拆分為：
   - `workflow-loop.js`（Workflow Loop 狀態機）
   - `capture.js`（Terminal 輸出擷取）
   - `commands.js`（Command 註冊）
@@ -347,22 +347,101 @@ Workflow Loop 是一個自動化編排功能，可以：
   - Command Palette → `IvyHouse: Clear .service/terminal_capture (after QA PASS + log)`
   - 這個命令會先檢查 `.agent/logs/<Idx-XXX>_log.md` 是否存在，並嘗試從最新的 `qa_<timestamp>_raw.log` 偵測 `WORKFLOW_MARKERS.qaDone` 與 `WORKFLOW_MARKERS.qaPass`；若找不到，會要求你手動再次確認後才能繼續。
 
-### Marker 規範
+### Marker 規範（Idx-030 統一格式）
 
-Workflow Loop 依賴工具輸出特定 marker 來判斷完成狀態：
+Workflow Loop 依賴工具輸出特定 marker 來判斷完成狀態。
 
-| 角色 | 完成標記 | 說明 |
-|------|----------|------|
-| Engineer | `WORKFLOW_MARKERS.engineerDone` | 實作完成後必須輸出 |
-| Engineer (Fix) | `WORKFLOW_MARKERS.fixDone` | 修正完成後必須輸出 |
-| QA | `WORKFLOW_MARKERS.qaDone` | 審查完成後必須輸出 |
-| QA | `WORKFLOW_MARKERS.qaPass` 或 `WORKFLOW_MARKERS.qaFail` | 必須在 `WORKFLOW_MARKERS.qaDone` 下一行，表示審查結果 |
+**格式版本**：Idx-030（統一 5 行格式）
 
-> ⚠️ **重要**：工具必須輸出這些 marker，否則 workflow loop 會一直等待（直到 timeout）
+#### Engineer / QA / Fix 統一完成格式
 
-額外限制（為避免 prompt echo 誤判）：
-- marker 必須是「獨立成行」的輸出（例如最後一行單獨輸出 `WORKFLOW_MARKERS.engineerDone` 對應的 marker）
-- 除了 marker 的獨立行之外，請避免在其他文字中提到任何 marker（降低誤判風險）
+所有角色（Engineer、QA、Fix）現在使用統一的 **5 行格式**：
+
+```
+<COMPLETION_MARKER>  // Engineer: WORKFLOW_MARKERS.engineerDone
+                     // QA: WORKFLOW_MARKERS.qaDone
+                     // Fix: WORKFLOW_MARKERS.fixDone
+TIMESTAMP=YYYY-MM-DDTHH:mm:ssZ
+NONCE=<8-16位16進位字符>
+TASK_ID=Idx-XXX
+<角色特定結果行>
+```
+
+> **註**：實際輸出時，第 1 行必須是對應的 marker（帶方括號），但此 README 不直接展示字面值以避免污染 marker buffer。請參考 extension.js 中的 `WORKFLOW_MARKERS` 常數定義。
+
+**角色特定結果行**：
+- Engineer: `ENGINEER_RESULT=COMPLETE`
+- QA: `QA_RESULT=PASS` 或 `QA_RESULT=FAIL`
+- Fix: `FIX_ROUND=N`（N 為當前修正輪次）
+
+**範例**：
+
+> **重要**：以下範例中的 `<MARKER>` 占位符代表實際的 completion marker。實際輸出時必須使用對應的 marker 常數（見 `WORKFLOW_MARKERS` 定義），但為避免污染 marker buffer，此 README 不直接展示字面值。
+
+**Engineer 完成**：
+```
+<WORKFLOW_MARKERS.engineerDone>
+TIMESTAMP=2026-01-23T14:30:00Z
+NONCE=a3f9d8e2c4b5e6f7
+TASK_ID=Idx-030
+ENGINEER_RESULT=COMPLETE
+```
+
+**QA 通過**：
+```
+<WORKFLOW_MARKERS.qaDone>
+TIMESTAMP=2026-01-23T14:35:00Z
+NONCE=a3f9d8e2c4b5e6f7
+TASK_ID=Idx-030
+QA_RESULT=PASS
+```
+
+**Fix 完成**：
+```
+<WORKFLOW_MARKERS.fixDone>
+TIMESTAMP=2026-01-23T14:40:00Z
+NONCE=a3f9d8e2c4b5e6f7
+TASK_ID=Idx-030
+FIX_ROUND=1
+```
+
+#### 重要規則
+
+> ⚠️ **關鍵要求**：
+> 1. 這 5 行必須是輸出的**最後 5 個非空行**
+> 2. 每一行必須**獨立成行**（不要合併）
+> 3. TIMESTAMP 必須是 **UTC 時區**（以 `Z` 結尾）
+> 4. NONCE 必須與 session nonce **完全一致**（系統會在 workflow 啟動時通過環境變數 `WORKFLOW_SESSION_NONCE` 注入）
+>    - ⚠️ **禁止輸出字面值**：不要輸出 `$WORKFLOW_SESSION_NONCE` 或 `<nonce>` 等 placeholder，必須輸出實際的 hex 值
+> 5. TASK_ID 必須匹配當前任務 ID
+> 6. 除了最後 5 行以外，**不要在其他地方提到任何 marker 文字**（避免誤判）
+
+#### Session Nonce 機制
+
+- 每次 workflow 啟動時，系統會生成一個隨機的 8-16 字元 hex nonce（例如 `a3f9d8e2c4b5e6f7`）
+- 此 nonce 會通過環境變數 `WORKFLOW_SESSION_NONCE` 注入到 Engineer 和 QA 終端
+- 工具必須從環境變數讀取並在完成格式中回顯此 nonce
+- 這個機制用於：
+  - **隔離不同 workflow session**：防止舊 log 中的 marker 被新 session 誤判
+  - **延遲驗證**：系統會在首次檢測到完成格式時驗證 env 是否正確注入
+
+#### Near-Miss Detection 與 Nudge 機制
+
+當工具輸出接近正確格式但有錯誤時（near-miss），系統會：
+1. 偵測具體問題（例如：缺少 TIMESTAMP、NONCE 不匹配等）
+2. 向工具發送**糾正提示（nudge）**，說明具體問題
+3. 最多 nudge **3 次**（每個階段獨立計數）
+4. 若 3 次後仍未正確，workflow 停止並標記為 phase-specific reason：
+   - Engineer 階段：`engineer_completion_verification_exhausted`
+   - QA 階段：`qa_completion_verification_exhausted`
+   - Fix 階段：`fix_completion_verification_exhausted`
+
+**常見 near-miss 類型**：
+- 缺少某一行（例如缺少 TIMESTAMP）
+- 格式錯誤（例如 TIMESTAMP 不是 ISO 8601 格式）
+- NONCE 不匹配
+- TASK_ID 不匹配
+- 結果值無效（例如 QA_RESULT 不是 PASS 或 FAIL）
 
 ### 設定參數
 
@@ -442,8 +521,10 @@ IDLE → ENGINEERING → WAIT_ENGINEER_DONE
 - 若確認無法繼續，用 `IvyHouse: Stop Workflow Loop` 停止
 
 **問題：QA 結果無法正確偵測**
-- 確認 QA 工具有輸出 `WORKFLOW_MARKERS.qaDone` 與（下一行）`WORKFLOW_MARKERS.qaPass` / `WORKFLOW_MARKERS.qaFail`
-- 這兩個標記必須是尾端輸出，且各自獨立成行
+- 確認 QA 工具有輸出完整的 Idx-030 格式（5 行）
+- 檢查輸出的最後 5 個非空行是否符合格式（可查看 `.service/terminal_capture/qa_<timestamp>_raw.log`）
+- 確認 NONCE 是否匹配（從環境變數讀取，不是字面值 `$WORKFLOW_SESSION_NONCE`）
+- 若系統發送 nudge，請依照提示修正後重新輸出
 
 **問題：達到 max rounds 上限**
 - 檢查是否陷入不通過循環（修正後仍然不通過）

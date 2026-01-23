@@ -4,7 +4,16 @@
     {
       "label": "Run Python (Active File) via .venv",
       "type": "shell",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": {
+        "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+      },
+      "linux": {
+        "command": "${workspaceFolder}/.venv/bin/python"
+      },
+      "osx": {
+        "command": "${workspaceFolder}/.venv/bin/python"
+      },
       "args": ["${file}"],
       "options": {
         "cwd": "${workspaceFolder}"

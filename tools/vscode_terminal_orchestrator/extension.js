@@ -341,6 +341,9 @@ async function startWorkflowLoopCore(context, params) {
   fs.writeFileSync(paths.qaRawLogAbs, "", "utf8");
   fs.writeFileSync(paths.eventLogAbs, "", "utf8");
 
+  // Idx-030: generate session nonce (8 bytes = 16 hex chars)
+  const sessionNonce = crypto.randomBytes(8).toString("hex");
+
   const scriptOk = isScriptAvailable();
   let captureMode = "none";
   if (scriptOk) {
@@ -384,6 +387,15 @@ async function startWorkflowLoopCore(context, params) {
     timeoutMs: Math.max(1000, Number(cfg.workflowTimeoutMs) || 1800000),
     timer: undefined,
     tickBusy: false,
+    // Idx-030: unified completion detection fields
+    sessionNonce,
+    engineerNudgeCount: 0,
+    engineerNudgeMaxPerRound: 3,
+    fixNudgeCount: 0,
+    fixNudgeMaxPerRound: 3,
+    qaNudgeCount: 0,
+    qaNudgeMaxPerRound: 3,
+    envVerified: false,
   };
 
   appendWorkflowEvent({
@@ -426,8 +438,10 @@ async function startWorkflowLoopCore(context, params) {
     throw new Error("unsupported terminal selection");
   }
 
-  const engineerTerm = getOrCreateTerminal(engineerTerminalName);
-  const qaTerm = getOrCreateTerminal(qaTerminalName);
+  // Idx-030: inject session nonce via terminal env
+  const workflowEnv = { WORKFLOW_SESSION_NONCE: sessionNonce };
+  const engineerTerm = getOrCreateTerminal(engineerTerminalName, workflowEnv);
+  const qaTerm = getOrCreateTerminal(qaTerminalName, workflowEnv);
   workflowLoopState.engineerTerminal = engineerTerm;
   workflowLoopState.qaTerminal = qaTerm;
 
@@ -828,10 +842,14 @@ function findTerminalByName(name) {
   return vscode.window.terminals.find((t) => t.name === name);
 }
 
-function getOrCreateTerminal(name) {
+function getOrCreateTerminal(name, env = undefined) {
   const existing = findTerminalByName(name);
   if (existing) return existing;
-  return vscode.window.createTerminal({ name });
+  const options = { name };
+  if (env && typeof env === "object") {
+    options.env = env;
+  }
+  return vscode.window.createTerminal(options);
 }
 
 function sleepMs(ms) {
@@ -1033,6 +1051,13 @@ let workflowLoopState = {
   timeoutMs: 1800000,
   timer: undefined,
   tickBusy: false,
+  // Idx-030: unified completion detection
+  sessionNonce: undefined, // 16-char hex nonce for session isolation
+  engineerNudgeCount: 0, // near-miss nudge counter for Engineer phase
+  engineerNudgeMaxPerRound: 3, // max nudges before exhaustion
+  fixNudgeCount: 0, // near-miss nudge counter for Fix phase
+  fixNudgeMaxPerRound: 3,
+  envVerified: false, // delayed env verification flag
 };
 
 function normalizeInstruction(text, kind = "opencode") {
@@ -1128,130 +1153,201 @@ function getQaResult(buf) {
   return undefined;
 }
 
-function detectQaCompletion(buf) {
-  // SPEC (Idx-029): tail-only (last 2 non-empty lines)
-  // - QA_RESULT 必須是最後一行
-  // - QA_DONE 必須是倒數第二行
-  // - 不接受順序顛倒（result 在前、done 在後）
-  // Returns: { ok: true, result: "PASS"|"FAIL" } or { ok: false, nearMiss?: {...} }
-
+/**
+ * Idx-030: Unified completion detection for Engineer/QA/Fix phases.
+ *
+ * Format (5 lines, tail-only):
+ *   [ENGINEER_DONE] | [QA_DONE] | [FIX_DONE]
+ *   TIMESTAMP=YYYY-MM-DDTHH:mm:ssZ
+ *   NONCE=<16-char-hex>
+ *   TASK_ID=Idx-NNN
+ *   ENGINEER_RESULT=COMPLETE | QA_RESULT=PASS|FAIL | FIX_ROUND=N
+ *
+ * @param {string} buf - raw terminal buffer
+ * @param {string} phase - one of: "ENGINEER", "QA", "FIX"
+ * @param {string} expectedNonce - session nonce from workflowLoopState
+ * @param {string} expectedTaskId - e.g. "Idx-030"
+ * @returns {{ ok: true, result: string } | { ok: false, nearMiss?: {...} }}
+ */
+function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTaskId) {
   const s = String(buf || "");
   const lines = s
     .split(/\r?\n/)
     .map((l) => String(l || "").trim())
     .filter(Boolean);
 
-  // tail-only: only consider the last two non-empty lines
-  const tail = lines.slice(-2);
-
-  const nearMiss = {};
-  const lastLine = tail.length >= 1 ? tail[tail.length - 1] : "";
-  const secondLastLine = tail.length >= 2 ? tail[tail.length - 2] : "";
-
-  function isQaDoneLine(line) {
-    const v = String(line || "").trim();
-    // Allow common fullwidth bracket typo variants (low-risk, standalone-line only)
-    return (
-      /^\[\s*QA_DONE\s*\]$/i.test(v) ||
-      /^【\s*QA_DONE\s*】$/i.test(v) ||
-      /^［\s*QA_DONE\s*］$/i.test(v)
-    );
-  }
-
-  function parseQaResultLine(line) {
-    const m = String(line || "")
-      .trim()
-      .match(/^QA_RESULT\s*=\s*(PASS|FAIL)$/i);
-    if (!m) return undefined;
-    return String(m[1] || "").toUpperCase();
-  }
-
-  const lastIsDone = isQaDoneLine(lastLine);
-  const secondLastIsDone = isQaDoneLine(secondLastLine);
-  const lastResult = parseQaResultLine(lastLine);
-  const secondLastResult = parseQaResultLine(secondLastLine);
-
-  // Happy path (strict order): done in second-last, result in last.
-  if (tail.length === 2 && secondLastIsDone && lastResult) {
-    return { ok: true, result: lastResult };
-  }
-
-  // Near-miss: only one tail line available, but it contains a marker-ish output.
-  // This must be observable so the workflow can nudge instead of silently waiting.
-  if (tail.length === 1) {
-    if (lastIsDone) {
-      nearMiss.missingResult = true;
-      nearMiss.qaDoneLine = lastLine;
-      nearMiss.lastLine = lastLine;
-      return { ok: false, nearMiss };
-    }
-    if (lastResult) {
-      nearMiss.missingDone = true;
-      nearMiss.qaResultLine = lastLine;
-      nearMiss.lastLine = lastLine;
-      return { ok: false, nearMiss };
-    }
-
-    // Format-like single-line cases
-    if (/QA_DONE/i.test(lastLine)) {
-      nearMiss.qaDoneLike = true;
-      nearMiss.qaDoneLine = lastLine;
-      nearMiss.lastLine = lastLine;
-      return { ok: false, nearMiss };
-    }
-    if (/QA_RESULT/i.test(lastLine)) {
-      nearMiss.qaResultLike = true;
-      nearMiss.qaResultLine = lastLine;
-      nearMiss.lastLine = lastLine;
-      return { ok: false, nearMiss };
-    }
-
+  // Tail-only: last 5 non-empty lines
+  const tail = lines.slice(-5);
+  if (tail.length < 5) {
+    // Not enough lines => incomplete output (not a near-miss yet)
     return { ok: false };
   }
 
-  // Near-miss: swapped order (result then done)
-  if (tail.length === 2 && lastIsDone && secondLastResult) {
-    nearMiss.orderSwapped = true;
-    nearMiss.qaDoneLine = lastLine;
-    nearMiss.qaResultLine = secondLastLine;
+  const nearMiss = {};
+
+  // Line 1: marker
+  const expectedMarker = phase === "ENGINEER" ? "[ENGINEER_DONE]" :
+                         phase === "QA" ? "[QA_DONE]" :
+                         "[FIX_DONE]";
+
+  function isMarkerLine(line, marker) {
+    const v = String(line || "").trim();
+    const esc = marker.replace(/[[\]]/g, "\\$&");
+    return new RegExp(`^${esc}$`, "i").test(v) ||
+           new RegExp(`^【${marker.slice(1, -1)}】$`, "i").test(v) ||
+           new RegExp(`^［${marker.slice(1, -1)}］$`, "i").test(v);
   }
 
-  // Near-miss: missing one of required lines
-  if (lastResult && !secondLastIsDone) {
-    nearMiss.missingDone = true;
-    nearMiss.qaResultLine = lastLine;
-    nearMiss.secondLastLine = secondLastLine;
-  }
-  if (secondLastIsDone && !lastResult) {
-    nearMiss.missingResult = true;
-    nearMiss.qaDoneLine = secondLastLine;
-    nearMiss.lastLine = lastLine;
+  const line1 = tail[0];
+  const hasMarker = isMarkerLine(line1, expectedMarker);
+
+  if (!hasMarker) {
+    // Check if marker-like but malformed
+    const markerName = expectedMarker.slice(1, -1); // remove brackets
+    if (new RegExp(markerName, "i").test(line1)) {
+      nearMiss.markerMalformed = true;
+      nearMiss.line1 = line1;
+      return { ok: false, nearMiss };
+    }
+
+    // Fix #4: Check for extraTailNoise - marker present but not in final 5 lines
+    // Scan last 20 non-empty lines to detect if marker appears elsewhere
+    const widerTail = lines.slice(-20);
+    let markerFoundAtIndex = -1;
+    for (let i = 0; i < widerTail.length; i++) {
+      if (isMarkerLine(widerTail[i], expectedMarker)) {
+        markerFoundAtIndex = i;
+        break; // Find first occurrence (earliest in the window)
+      }
+    }
+
+    // If marker found in wider window but not at correct position (last 5 lines, line 1)
+    // => Tool outputted completion then added extra text
+    if (markerFoundAtIndex !== -1) {
+      const correctPosition = widerTail.length - 5; // Where it should be in wider window
+      if (markerFoundAtIndex < correctPosition) {
+        nearMiss.extraTailNoise = true;
+        nearMiss.markerFoundAt = markerFoundAtIndex;
+        nearMiss.expectedAt = correctPosition;
+        return { ok: false, nearMiss };
+      }
+    }
+
+    // Not even close
+    return { ok: false };
   }
 
-  // Near-miss: "looks like" done/result but formatting is off
-  const qaDoneLike = /QA_DONE/i;
-  if (
-    (qaDoneLike.test(lastLine) && !lastIsDone) ||
-    (qaDoneLike.test(secondLastLine) && !secondLastIsDone)
-  ) {
-    nearMiss.qaDoneLike = true;
-    nearMiss.qaDoneLine = qaDoneLike.test(lastLine) ? lastLine : secondLastLine;
+  // Line 2: TIMESTAMP
+  const line2 = tail[1];
+  const timestampMatch = line2.match(/^TIMESTAMP\s*=\s*(.+)$/i);
+  if (!timestampMatch) {
+    nearMiss.missingTimestamp = true;
+    nearMiss.line2 = line2;
+    return { ok: false, nearMiss };
   }
-
-  const resultLike = /QA_RESULT/i;
-  if (
-    (resultLike.test(lastLine) && !lastResult) ||
-    (resultLike.test(secondLastLine) && !secondLastResult)
-  ) {
-    nearMiss.qaResultLike = true;
-    nearMiss.qaResultLine = resultLike.test(lastLine) ? lastLine : secondLastLine;
-  }
-
-  if (Object.keys(nearMiss).length > 0) {
+  const timestamp = timestampMatch[1].trim();
+  // Validate ISO 8601 UTC format: YYYY-MM-DDTHH:mm:ssZ
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(timestamp)) {
+    nearMiss.timestampInvalid = true;
+    nearMiss.timestamp = timestamp;
+    nearMiss.line2 = line2;
     return { ok: false, nearMiss };
   }
 
-  return { ok: false };
+  // Line 3: NONCE
+  const line3 = tail[2];
+  const nonceMatch = line3.match(/^NONCE\s*=\s*(.+)$/i);
+  if (!nonceMatch) {
+    nearMiss.missingNonce = true;
+    nearMiss.line3 = line3;
+    return { ok: false, nearMiss };
+  }
+  const nonce = nonceMatch[1].trim();
+
+  // Fix #5: Detect literal placeholders (env var or angle brackets)
+  const nonceLooksLikeLiteral =
+    nonce === "$WORKFLOW_SESSION_NONCE" ||
+    nonce === "${WORKFLOW_SESSION_NONCE}" ||
+    /^<[^>]+>$/.test(nonce); // e.g., "<nonce>", "<16-char-hex>"
+
+  if (nonceLooksLikeLiteral) {
+    nearMiss.nonceLooksLikeEnvVar = true;
+    nearMiss.nonce = nonce;
+    nearMiss.expectedNonce = expectedNonce;
+    nearMiss.line3 = line3;
+    return { ok: false, nearMiss };
+  }
+
+  if (nonce !== expectedNonce) {
+    nearMiss.nonceMismatch = true;
+    nearMiss.nonce = nonce;
+    nearMiss.expectedNonce = expectedNonce;
+    nearMiss.line3 = line3;
+    return { ok: false, nearMiss };
+  }
+
+  // Line 4: TASK_ID
+  const line4 = tail[3];
+  const taskIdMatch = line4.match(/^TASK_ID\s*=\s*(.+)$/i);
+  if (!taskIdMatch) {
+    nearMiss.missingTaskId = true;
+    nearMiss.line4 = line4;
+    return { ok: false, nearMiss };
+  }
+  const taskId = taskIdMatch[1].trim();
+  // Normalize comparison (case-insensitive, flexible hyphen/underscore)
+  const normalizeId = (id) => String(id || "").toLowerCase().replace(/[-_]/g, "");
+  if (normalizeId(taskId) !== normalizeId(expectedTaskId)) {
+    nearMiss.taskIdMismatch = true;
+    nearMiss.taskId = taskId;
+    nearMiss.expectedTaskId = expectedTaskId;
+    nearMiss.line4 = line4;
+    return { ok: false, nearMiss };
+  }
+
+  // Line 5: phase-specific result
+  const line5 = tail[4];
+  let result;
+  if (phase === "ENGINEER") {
+    const m = line5.match(/^ENGINEER_RESULT\s*=\s*(.+)$/i);
+    if (!m) {
+      nearMiss.missingEngineerResult = true;
+      nearMiss.line5 = line5;
+      return { ok: false, nearMiss };
+    }
+    result = m[1].trim().toUpperCase();
+    if (result !== "COMPLETE") {
+      nearMiss.engineerResultInvalid = true;
+      nearMiss.engineerResult = result;
+      nearMiss.line5 = line5;
+      return { ok: false, nearMiss };
+    }
+  } else if (phase === "QA") {
+    const m = line5.match(/^QA_RESULT\s*=\s*(.+)$/i);
+    if (!m) {
+      nearMiss.missingQaResult = true;
+      nearMiss.line5 = line5;
+      return { ok: false, nearMiss };
+    }
+    result = m[1].trim().toUpperCase();
+    if (result !== "PASS" && result !== "FAIL") {
+      nearMiss.qaResultInvalid = true;
+      nearMiss.qaResult = result;
+      nearMiss.line5 = line5;
+      return { ok: false, nearMiss };
+    }
+  } else if (phase === "FIX") {
+    const m = line5.match(/^FIX_ROUND\s*=\s*(\d+)$/i);
+    if (!m) {
+      nearMiss.missingFixRound = true;
+      nearMiss.line5 = line5;
+      return { ok: false, nearMiss };
+    }
+    result = m[1].trim();
+  }
+
+  // All checks passed
+  return { ok: true, result, timestamp, nonce, taskId };
 }
 
 function isScriptAvailable() {
@@ -2044,13 +2140,23 @@ function workflowSendInstruction(terminalName, text) {
 }
 
 function buildEngineerPrompt(taskDescription) {
-  // Prompts may be echoed into transcripts; marker detection is guarded by pause + offset.
+  // Idx-030: Updated prompt with 5-line completion format (no line numbers to avoid inducing numbered output)
+  const nonce = workflowLoopState?.sessionNonce || "<nonce>";
+  const taskId = workflowLoopState?.idxName || "Idx-XXX";
+
   return (
     "你是 Engineer（負責實作）。請遵守 repo 規範：不要在此終端執行 git 指令（git/pytest/ruff 請用 Project terminal）。" +
     ` 任務：${taskDescription}。` +
     " 請勿自行做 QA；只要完成實作即可。" +
-    " 完成時請在『最後一行』單獨輸出：左中括號 + ENGINEER + 底線 + DONE + 右中括號（務必包含中括號，且不要加句點或其他文字）。" +
-    "（提醒：除了最後一行以外，請不要提到/輸出任何 marker 文字，以免誤判。）"
+    " 完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出：\n\n" +
+    "```\n" +
+    "[ENGINEER_DONE]\n" +
+    "TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>\n" +
+    `NONCE=${nonce}\n` +
+    `TASK_ID=${taskId}\n` +
+    "ENGINEER_RESULT=COMPLETE\n" +
+    "```\n\n" +
+    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。"
   );
 }
 
@@ -2072,6 +2178,12 @@ function sanitizeSummaryForPrompt(summary) {
   s = s.replace(/\bFIX_DONE\b/g, "");
   s = s.replace(/\bQA_DONE\b/g, "");
   s = s.replace(/QA_RESULT\s*=\s*(PASS|FAIL)\b/gi, "");
+  // Idx-030: Remove additional completion format lines
+  s = s.replace(/TIMESTAMP\s*=\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/gi, "");
+  s = s.replace(/NONCE\s*=\s*[a-f0-9]{8,16}/gi, ""); // Fix #6: Support 8-16 char nonces
+  s = s.replace(/TASK_ID\s*=\s*Idx-\d+/gi, "");
+  s = s.replace(/ENGINEER_RESULT\s*=\s*COMPLETE/gi, "");
+  s = s.replace(/FIX_ROUND\s*=\s*\d+/gi, "");
 
   // Then drop any remaining standalone marker-like lines.
   const lines = s.split("\n");
@@ -2085,6 +2197,12 @@ function sanitizeSummaryForPrompt(summary) {
     if (t === WORKFLOW_MARKER_NAMES.fixDone) return false;
     if (t === WORKFLOW_MARKER_NAMES.qaDone) return false;
     if (/^QA_RESULT\s*=\s*(PASS|FAIL)\s*$/i.test(t)) return false;
+    // Idx-030: Filter standalone Idx-030 completion lines
+    if (/^TIMESTAMP\s*=\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\s*$/i.test(t)) return false;
+    if (/^NONCE\s*=\s*[a-f0-9]{8,16}\s*$/i.test(t)) return false; // Fix #6: Support 8-16 char nonces
+    if (/^TASK_ID\s*=\s*Idx-\d+\s*$/i.test(t)) return false;
+    if (/^ENGINEER_RESULT\s*=\s*COMPLETE\s*$/i.test(t)) return false;
+    if (/^FIX_ROUND\s*=\s*\d+\s*$/i.test(t)) return false;
     return true;
   });
   return kept.join("\n").trimEnd();
@@ -2167,12 +2285,21 @@ function summarizeEngineerOutputForQaPrompt(rawEngineerSummary, maxChars) {
 }
 
 function buildQaPrompt(round, taskDescription, engineerSummary, promptSentinel) {
+  // Idx-030: Updated prompt with 5-line completion format (no line numbers)
+  const nonce = workflowLoopState?.sessionNonce || "<nonce>";
+  const taskId = workflowLoopState?.idxName || "Idx-XXX";
+
   return (
     `你是 QA（第 ${round} 輪）。請審查 Engineer 的變更是否符合 plan/whitelist 與 repo 規範。\n` +
-    "完成時請『只』輸出兩行（請各自獨立成行，順序固定）：\n" +
-    "1) [QA_DONE]\n" +
-    "2) QA_RESULT={PASS|FAIL}（請把 {PASS|FAIL} 替換成 PASS 或 FAIL；等號前後允許空白，例如 QA_RESULT = PASS）\n" +
-    "（上面兩行必須是你輸出的『最後兩行』，不要在後面加任何文字）\n" +
+    "完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出：\n\n" +
+    "```\n" +
+    "[QA_DONE]\n" +
+    "TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>\n" +
+    `NONCE=${nonce}\n` +
+    `TASK_ID=${taskId}\n` +
+    "QA_RESULT=<PASS 或 FAIL>\n" +
+    "```\n\n" +
+    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。\n" +
     "注意：不要輸出 [ENGINEER_DONE] 或 [FIX_DONE]。\n\n" +
     `任務背景：${taskDescription}\n\n` +
     "Engineer 輸出摘要（供你審查判斷）：\n" +
@@ -2182,6 +2309,10 @@ function buildQaPrompt(round, taskDescription, engineerSummary, promptSentinel) 
 }
 
 function buildQaCorrectivePrompt(wrongMarkerType, promptSentinel) {
+  // Idx-030 Fix: Update to 5-line format, no line numbers
+  const nonce = workflowLoopState?.sessionNonce || "<nonce>";
+  const taskId = workflowLoopState?.idxName || "Idx-XXX";
+
   const wrongText =
     wrongMarkerType === "ENGINEER_DONE"
       ? "你剛才誤輸出了 Engineer 的完成標記。"
@@ -2191,46 +2322,122 @@ function buildQaCorrectivePrompt(wrongMarkerType, promptSentinel) {
 
   return (
     wrongText +
-    "請現在『只』輸出兩行（各自獨立成行，順序固定；且必須是最後兩行）：\n" +
-    "1) [QA_DONE]\n" +
-    "2) QA_RESULT={PASS|FAIL}（把 {PASS|FAIL} 替換成 PASS 或 FAIL；等號前後允許空白）" +
+    "請現在精確輸出以下 5 行作為你的最後 5 行輸出：\n\n" +
+    "```\n" +
+    "[QA_DONE]\n" +
+    "TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>\n" +
+    `NONCE=${nonce}\n` +
+    `TASK_ID=${taskId}\n` +
+    "QA_RESULT=<PASS 或 FAIL>\n" +
+    "```\n\n" +
+    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。" +
     (promptSentinel ? `\n\n${promptSentinel}` : "")
   );
 }
 
-function buildQaNearMissNudgePrompt(nearMiss, promptSentinel) {
+/**
+ * Idx-030: Build nudge prompt for Engineer/QA/Fix near-miss completion.
+ */
+function buildIdx030NearMissNudgePrompt(phase, nearMiss, expectedNonce, expectedTaskId, promptSentinel) {
+  const markerName = phase === "ENGINEER" ? "[ENGINEER_DONE]" :
+                     phase === "QA" ? "[QA_DONE]" :
+                     "[FIX_DONE]";
+
+  const resultLine = phase === "ENGINEER" ? "ENGINEER_RESULT=COMPLETE" :
+                     phase === "QA" ? "QA_RESULT=<PASS 或 FAIL>" :
+                     `FIX_ROUND=${workflowLoopState.round}`;
+
   const parts = [
-    "你的輸出格式接近正確但不合規，請重新輸出『只包含』以下兩行（各自獨立成行，順序固定；且必須是最後兩行）：",
-    "1) [QA_DONE]",
-    "2) QA_RESULT={PASS|FAIL}（把 {PASS|FAIL} 替換成 PASS 或 FAIL；等號前後允許空白）",
+    "你的輸出格式接近正確但不完整或有誤。請重新輸出『精確遵守』以下 5 行格式（必須是你輸出的最後 5 行）：",
+    "",
+    "```",
+    `${markerName}`,
+    `TIMESTAMP=<ISO8601-UTC格式：YYYY-MM-DDTHH:mm:ssZ>`,
+    `NONCE=${expectedNonce}`,
+    `TASK_ID=${expectedTaskId}`,
+    `${resultLine}`,
+    "```",
+    "",
+    "格式要求：",
+    "- 每一行必須獨立成行（不要合併）",
+    "- TIMESTAMP 必須是 UTC 時區（以 Z 結尾）",
+    "- NONCE 必須完全一致",
+    "- TASK_ID 必須匹配當前任務",
+    "- 請勿輸出編號或多餘文字",
   ];
 
   const hints = [];
-  if (nearMiss?.orderSwapped) hints.push("- 你目前的順序顛倒了：QA_RESULT 必須在最後一行。\n");
-  if (nearMiss?.missingDone) hints.push("- 你缺少 [QA_DONE] 這一行（必須是倒數第二行）。\n");
-  if (nearMiss?.missingResult) hints.push("- 你缺少 QA_RESULT 這一行（必須是最後一行）。\n");
-  if (nearMiss?.qaDoneLike && nearMiss?.qaDoneLine)
-    hints.push(`- 你目前的 QA_DONE 行看起來像：${nearMiss.qaDoneLine}\n`);
-  if (nearMiss?.qaResultLike && nearMiss?.qaResultLine)
-    hints.push(`- 你目前的 QA_RESULT 行看起來像：${nearMiss.qaResultLine}\n`);
+  if (nearMiss?.markerMalformed) {
+    hints.push(`- 第 1 行格式不正確：${nearMiss.line1}`);
+  }
+  if (nearMiss?.missingTimestamp) {
+    hints.push(`- 缺少 TIMESTAMP 行（應為第 2 行）`);
+  }
+  if (nearMiss?.timestampInvalid) {
+    hints.push(`- TIMESTAMP 格式錯誤：${nearMiss.timestamp}（必須是 YYYY-MM-DDTHH:mm:ssZ）`);
+  }
+  if (nearMiss?.missingNonce) {
+    hints.push(`- 缺少 NONCE 行（應為第 3 行）`);
+  }
+  if (nearMiss?.nonceMismatch) {
+    hints.push(`- NONCE 不匹配：你輸出 ${nearMiss.nonce}，期望 ${expectedNonce}`);
+  }
+  if (nearMiss?.nonceLooksLikeEnvVar) {
+    hints.push(`- NONCE 看起來是環境變數字面值，請輸出實際 nonce 值（例如 ${expectedNonce}）`);
+  }
+  if (nearMiss?.missingTaskId) {
+    hints.push(`- 缺少 TASK_ID 行（應為第 4 行）`);
+  }
+  if (nearMiss?.taskIdMismatch) {
+    hints.push(`- TASK_ID 不匹配：你輸出 ${nearMiss.taskId}，期望 ${expectedTaskId}`);
+  }
+  if (nearMiss?.missingEngineerResult) {
+    hints.push(`- 缺少 ENGINEER_RESULT 行（應為第 5 行）`);
+  }
+  if (nearMiss?.engineerResultInvalid) {
+    hints.push(`- ENGINEER_RESULT 值錯誤：${nearMiss.engineerResult}（必須是 COMPLETE）`);
+  }
+  if (nearMiss?.missingQaResult) {
+    hints.push(`- 缺少 QA_RESULT 行（應為第 5 行）`);
+  }
+  if (nearMiss?.qaResultInvalid) {
+    hints.push(`- QA_RESULT 值錯誤：${nearMiss.qaResult}（必須是 PASS 或 FAIL）`);
+  }
+  if (nearMiss?.missingFixRound) {
+    hints.push(`- 缺少 FIX_ROUND 行（應為第 5 行）`);
+  }
+  if (nearMiss?.extraTailNoise) {
+    hints.push(`- 你在完成標記後又輸出了多餘文字，請重新輸出，且讓這 5 行成為最後 5 個非空白行`);
+  }
 
   if (hints.length > 0) {
-    parts.push("\n提示：\n" + hints.join(""));
+    parts.push("", "偵測到的問題：", ...hints);
   }
 
   if (promptSentinel) {
-    parts.push(`\n${promptSentinel}`);
+    parts.push("", promptSentinel);
   }
 
   return parts.join("\n");
 }
 
 function buildFixPrompt(round, qaSummary) {
+  // Idx-030: Updated prompt with 5-line completion format (no line numbers)
+  const nonce = workflowLoopState?.sessionNonce || "<nonce>";
+  const taskId = workflowLoopState?.idxName || "Idx-XXX";
+
   return (
     `QA 第 ${round} 輪結果為 FAIL，請依以下 QA 摘要修正：\n\n` +
     qaSummary +
-    "\n\n修正完成時請在『最後一行』單獨輸出：左中括號 + FIX + 底線 + DONE + 右中括號（務必包含中括號，且不要加句點或其他文字）。" +
-    "（提醒：除了最後一行以外，請不要提到/輸出任何 marker 文字，以免誤判。）"
+    "\n\n修正完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出：\n\n" +
+    "```\n" +
+    "[FIX_DONE]\n" +
+    "TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>\n" +
+    `NONCE=${nonce}\n` +
+    `TASK_ID=${taskId}\n` +
+    `FIX_ROUND=${round}\n` +
+    "```\n\n" +
+    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。"
   );
 }
 
@@ -2274,109 +2481,212 @@ async function workflowTick(cfg) {
       const cleaned = stripAnsi(text).replace(/\r/g, "\n");
       workflowLoopState.engineerMarkerBuf = (workflowLoopState.engineerMarkerBuf + cleaned).slice(-20000);
 
-      if (
-        workflowLoopState.phase === WORKFLOW_PHASE.waitEngineerDone &&
-        hasCompletionMarker(workflowLoopState.engineerMarkerBuf, WORKFLOW_MARKER_NAMES.engineerDone)
-      ) {
-        logLine("[workflow] detected ENGINEER_DONE");
-        const match = detectCompletionMarker(
+      // Idx-030: unified Engineer completion detection
+      if (workflowLoopState.phase === WORKFLOW_PHASE.waitEngineerDone) {
+        const completion = detectCompletionWithIdx030Format(
           workflowLoopState.engineerMarkerBuf,
-          WORKFLOW_MARKER_NAMES.engineerDone,
+          "ENGINEER",
+          workflowLoopState.sessionNonce,
+          workflowLoopState.idxName || "Idx-XXX"
         );
-        appendWorkflowEvent({
-          action: "engineer_done_detected",
-          terminalName: workflowLoopState.engineerTerminalName,
-          fromPhase: WORKFLOW_PHASE.waitEngineerDone,
-          toPhase: WORKFLOW_PHASE.waitQaDone,
-          round: workflowLoopState.round,
-          matchMode: match.mode,
-          engineerOffset: workflowLoopState.engineerOffset,
-          engineerRawLogSize: workflowLoopState.engineerRawLogAbs
-            ? safeGetFileSize(workflowLoopState.engineerRawLogAbs)
-            : undefined,
-        });
-        const engineerSummary = fs.existsSync(workflowLoopState.engineerLogAbs)
-          ? fs.readFileSync(workflowLoopState.engineerLogAbs, "utf8")
-          : "";
 
-        const engineerSummarySanitized = sanitizeSummaryForPrompt(engineerSummary);
-        const engineerSummaryForQa = summarizeEngineerOutputForQaPrompt(
-          engineerSummarySanitized,
-          cfg.workflowQaEngineerSummaryMaxChars,
-        );
-        appendWorkflowEvent({
-          action: "qa_prompt_summarized",
-          round: workflowLoopState.round,
-          engineerSummaryLen: String(engineerSummarySanitized || "").length,
-          qaSummaryLen: String(engineerSummaryForQa || "").length,
-          maxChars: Number(cfg.workflowQaEngineerSummaryMaxChars) || 1800,
-        });
+        if (completion.ok) {
+          logLine("[workflow] detected ENGINEER_DONE (Idx-030 format)");
+          appendWorkflowEvent({
+            action: "engineer_done_detected",
+            format: "idx030",
+            terminalName: workflowLoopState.engineerTerminalName,
+            fromPhase: WORKFLOW_PHASE.waitEngineerDone,
+            toPhase: WORKFLOW_PHASE.waitQaDone,
+            round: workflowLoopState.round,
+            timestamp: completion.timestamp,
+            nonce: completion.nonce,
+            taskId: completion.taskId,
+            result: completion.result,
+            engineerOffset: workflowLoopState.engineerOffset,
+            engineerRawLogSize: workflowLoopState.engineerRawLogAbs
+              ? safeGetFileSize(workflowLoopState.engineerRawLogAbs)
+              : undefined,
+          });
 
-        workflowLoopState.phase = WORKFLOW_PHASE.waitQaDone;
-        workflowLoopState.qaWrongMarkerNudgedRound = 0;
-        workflowLoopState.qaNudgeCount = 0;
-        workflowLoopState.qaPromptSentinel = `PROMPT_END_ID=qa_${workflowLoopState.round}_${Date.now()}`;
-        workflowLoopState.qaSeenPromptSentinel = false;
-        workflowLoopState.qaPauseUntilMs = Date.now() + 2000;
-        await workflowSendInstructionWithRetry(
-          cfg,
-          workflowLoopState.qaTerminalName,
-          buildQaPrompt(
-            workflowLoopState.round,
-            workflowLoopState.taskDescription,
-            engineerSummaryForQa,
-            workflowLoopState.qaPromptSentinel,
-          ),
-        );
-        return;
-      }
+          const engineerSummary = fs.existsSync(workflowLoopState.engineerLogAbs)
+            ? fs.readFileSync(workflowLoopState.engineerLogAbs, "utf8")
+            : "";
 
-      if (
-        workflowLoopState.phase === WORKFLOW_PHASE.waitFixDone &&
-        hasCompletionMarker(workflowLoopState.engineerMarkerBuf, WORKFLOW_MARKER_NAMES.fixDone)
-      ) {
-        logLine("[workflow] detected FIX_DONE");
-        workflowLoopState.round += 1;
-        if (workflowLoopState.round > workflowLoopState.maxRounds) {
-          stopWorkflowLoop("max rounds exceeded");
+          const engineerSummarySanitized = sanitizeSummaryForPrompt(engineerSummary);
+          const engineerSummaryForQa = summarizeEngineerOutputForQaPrompt(
+            engineerSummarySanitized,
+            cfg.workflowQaEngineerSummaryMaxChars,
+          );
+          appendWorkflowEvent({
+            action: "qa_prompt_summarized",
+            round: workflowLoopState.round,
+            engineerSummaryLen: String(engineerSummarySanitized || "").length,
+            qaSummaryLen: String(engineerSummaryForQa || "").length,
+            maxChars: Number(cfg.workflowQaEngineerSummaryMaxChars) || 1800,
+          });
+
+          workflowLoopState.phase = WORKFLOW_PHASE.waitQaDone;
+          workflowLoopState.qaWrongMarkerNudgedRound = 0;
+          workflowLoopState.qaNudgeCount = 0;
+          workflowLoopState.qaPromptSentinel = `PROMPT_END_ID=qa_${workflowLoopState.round}_${Date.now()}`;
+          workflowLoopState.qaSeenPromptSentinel = false;
+          workflowLoopState.qaPauseUntilMs = Date.now() + 2000;
+          await workflowSendInstructionWithRetry(
+            cfg,
+            workflowLoopState.qaTerminalName,
+            buildQaPrompt(
+              workflowLoopState.round,
+              workflowLoopState.taskDescription,
+              engineerSummaryForQa,
+              workflowLoopState.qaPromptSentinel,
+            ),
+          );
           return;
         }
 
-        const engineerSummary = fs.existsSync(workflowLoopState.engineerLogAbs)
-          ? fs.readFileSync(workflowLoopState.engineerLogAbs, "utf8")
-          : "";
+        // Near-miss handling
+        if (completion.nearMiss) {
+          if (workflowLoopState.engineerNudgeCount >= workflowLoopState.engineerNudgeMaxPerRound) {
+            appendWorkflowEvent({
+              action: "workflow_stop",
+              reason: "engineer_completion_verification_exhausted",
+              round: workflowLoopState.round,
+              detail: "Engineer completion format errors persist despite nudges",
+              nearMiss: completion.nearMiss,
+              nudgeCount: workflowLoopState.engineerNudgeCount,
+            });
+            stopWorkflowLoop("Engineer completion verification exhausted");
+            return;
+          }
 
-        const engineerSummarySanitized = sanitizeSummaryForPrompt(engineerSummary);
-        const engineerSummaryForQa = summarizeEngineerOutputForQaPrompt(
-          engineerSummarySanitized,
-          cfg.workflowQaEngineerSummaryMaxChars,
+          workflowLoopState.engineerNudgeCount += 1;
+          appendWorkflowEvent({
+            action: "engineer_completion_format_error_detected",
+            round: workflowLoopState.round,
+            nearMiss: completion.nearMiss,
+            nudgeAttempt: workflowLoopState.engineerNudgeCount,
+          });
+
+          workflowLoopState.engineerPauseUntilMs = Date.now() + 1500;
+          await workflowSendInstructionWithRetry(
+            cfg,
+            workflowLoopState.engineerTerminalName,
+            buildIdx030NearMissNudgePrompt(
+              "ENGINEER",
+              completion.nearMiss,
+              workflowLoopState.sessionNonce,
+              workflowLoopState.idxName || "Idx-XXX",
+              undefined
+            ),
+          );
+          return;
+        }
+      }
+
+      // Idx-030: unified Fix completion detection
+      if (workflowLoopState.phase === WORKFLOW_PHASE.waitFixDone) {
+        const completion = detectCompletionWithIdx030Format(
+          workflowLoopState.engineerMarkerBuf,
+          "FIX",
+          workflowLoopState.sessionNonce,
+          workflowLoopState.idxName || "Idx-XXX"
         );
-        appendWorkflowEvent({
-          action: "qa_prompt_summarized",
-          round: workflowLoopState.round,
-          engineerSummaryLen: String(engineerSummarySanitized || "").length,
-          qaSummaryLen: String(engineerSummaryForQa || "").length,
-          maxChars: Number(cfg.workflowQaEngineerSummaryMaxChars) || 1800,
-        });
 
-        workflowLoopState.phase = WORKFLOW_PHASE.waitQaDone;
-        workflowLoopState.qaWrongMarkerNudgedRound = 0;
-        workflowLoopState.qaNudgeCount = 0;
-        workflowLoopState.qaPromptSentinel = `PROMPT_END_ID=qa_${workflowLoopState.round}_${Date.now()}`;
-        workflowLoopState.qaSeenPromptSentinel = false;
-        workflowLoopState.qaPauseUntilMs = Date.now() + 2000;
-        await workflowSendInstructionWithRetry(
-          cfg,
-          workflowLoopState.qaTerminalName,
-          buildQaPrompt(
-            workflowLoopState.round,
-            workflowLoopState.taskDescription,
-            engineerSummaryForQa,
-            workflowLoopState.qaPromptSentinel,
-          ),
-        );
+        if (completion.ok) {
+          logLine("[workflow] detected FIX_DONE (Idx-030 format)");
+          workflowLoopState.round += 1;
+          if (workflowLoopState.round > workflowLoopState.maxRounds) {
+            stopWorkflowLoop("max rounds exceeded");
+            return;
+          }
 
-        // Do not fast-forward offsets; we rely on qaPromptSentinel gating.
+          appendWorkflowEvent({
+            action: "fix_done_detected",
+            format: "idx030",
+            terminalName: workflowLoopState.engineerTerminalName,
+            fromPhase: WORKFLOW_PHASE.waitFixDone,
+            toPhase: WORKFLOW_PHASE.waitQaDone,
+            round: workflowLoopState.round,
+            timestamp: completion.timestamp,
+            nonce: completion.nonce,
+            taskId: completion.taskId,
+            fixRound: completion.result,
+          });
+
+          const engineerSummary = fs.existsSync(workflowLoopState.engineerLogAbs)
+            ? fs.readFileSync(workflowLoopState.engineerLogAbs, "utf8")
+            : "";
+
+          const engineerSummarySanitized = sanitizeSummaryForPrompt(engineerSummary);
+          const engineerSummaryForQa = summarizeEngineerOutputForQaPrompt(
+            engineerSummarySanitized,
+            cfg.workflowQaEngineerSummaryMaxChars,
+          );
+          appendWorkflowEvent({
+            action: "qa_prompt_summarized",
+            round: workflowLoopState.round,
+            engineerSummaryLen: String(engineerSummarySanitized || "").length,
+            qaSummaryLen: String(engineerSummaryForQa || "").length,
+            maxChars: Number(cfg.workflowQaEngineerSummaryMaxChars) || 1800,
+          });
+
+          workflowLoopState.phase = WORKFLOW_PHASE.waitQaDone;
+          workflowLoopState.qaWrongMarkerNudgedRound = 0;
+          workflowLoopState.qaNudgeCount = 0;
+          workflowLoopState.qaPromptSentinel = `PROMPT_END_ID=qa_${workflowLoopState.round}_${Date.now()}`;
+          workflowLoopState.qaSeenPromptSentinel = false;
+          workflowLoopState.qaPauseUntilMs = Date.now() + 2000;
+          await workflowSendInstructionWithRetry(
+            cfg,
+            workflowLoopState.qaTerminalName,
+            buildQaPrompt(
+              workflowLoopState.round,
+              workflowLoopState.taskDescription,
+              engineerSummaryForQa,
+              workflowLoopState.qaPromptSentinel,
+            ),
+          );
+          return;
+        }
+
+        // Near-miss handling
+        if (completion.nearMiss) {
+          if (workflowLoopState.fixNudgeCount >= workflowLoopState.fixNudgeMaxPerRound) {
+            appendWorkflowEvent({
+              action: "workflow_stop",
+              reason: "fix_completion_verification_exhausted",
+              round: workflowLoopState.round,
+              detail: "Fix completion format errors persist despite nudges",
+              nearMiss: completion.nearMiss,
+              nudgeCount: workflowLoopState.fixNudgeCount,
+            });
+            stopWorkflowLoop("Fix completion verification exhausted");
+            return;
+          }
+
+          workflowLoopState.fixNudgeCount += 1;
+          appendWorkflowEvent({
+            action: "fix_completion_format_error_detected",
+            round: workflowLoopState.round,
+            nearMiss: completion.nearMiss,
+            nudgeAttempt: workflowLoopState.fixNudgeCount,
+          });
+
+          workflowLoopState.engineerPauseUntilMs = Date.now() + 1500;
+          await workflowSendInstructionWithRetry(
+            cfg,
+            workflowLoopState.engineerTerminalName,
+            buildIdx030NearMissNudgePrompt(
+              "FIX",
+              completion.nearMiss,
+              workflowLoopState.sessionNonce,
+              workflowLoopState.idxName || "Idx-XXX",
+              undefined
+            ),
+          );
+          return;
+        }
       }
     }
     return;
@@ -2470,8 +2780,14 @@ async function workflowTick(cfg) {
       return;
     }
 
-    // Completion / near-miss detection (Idx-029 SPEC)
-    const completion = detectQaCompletion(workflowLoopState.qaMarkerBuf);
+    // Completion / near-miss detection (Idx-030 SPEC)
+    const completion = detectCompletionWithIdx030Format(
+      workflowLoopState.qaMarkerBuf,
+      "QA",
+      workflowLoopState.sessionNonce,
+      workflowLoopState.idxName || "Idx-XXX"
+    );
+
     if (!completion.ok) {
       if (completion.nearMiss) {
         if (!workflowLoopState.qaTerminalName) return;
@@ -2479,33 +2795,22 @@ async function workflowTick(cfg) {
         if (workflowLoopState.qaNudgeCount >= workflowLoopState.qaNudgeMaxPerRound) {
           appendWorkflowEvent({
             action: "workflow_stop",
-            reason: "qa_completion_unstable",
+            reason: "qa_completion_verification_exhausted",
             round: workflowLoopState.round,
             detail: "QA completion format errors persist despite nudges",
-            nearMiss: {
-              orderSwapped: !!completion.nearMiss.orderSwapped,
-              missingDone: !!completion.nearMiss.missingDone,
-              missingResult: !!completion.nearMiss.missingResult,
-              qaDoneLike: !!completion.nearMiss.qaDoneLike,
-              qaResultLike: !!completion.nearMiss.qaResultLike,
-            },
+            nearMiss: completion.nearMiss,
             nudgeCount: workflowLoopState.qaNudgeCount,
           });
-          stopWorkflowLoop("QA completion unstable (format errors)");
+          stopWorkflowLoop("QA completion verification exhausted");
           return;
         }
 
         workflowLoopState.qaNudgeCount += 1;
         appendWorkflowEvent({
           action: "qa_completion_format_error_detected",
+          format: "idx030",
           round: workflowLoopState.round,
-          nearMiss: {
-            orderSwapped: !!completion.nearMiss.orderSwapped,
-            missingDone: !!completion.nearMiss.missingDone,
-            missingResult: !!completion.nearMiss.missingResult,
-            qaDoneLike: !!completion.nearMiss.qaDoneLike,
-            qaResultLike: !!completion.nearMiss.qaResultLike,
-          },
+          nearMiss: completion.nearMiss,
           nudgeAttempt: workflowLoopState.qaNudgeCount,
         });
 
@@ -2520,7 +2825,13 @@ async function workflowTick(cfg) {
         await workflowSendInstructionWithRetry(
           cfg,
           workflowLoopState.qaTerminalName,
-          buildQaNearMissNudgePrompt(completion.nearMiss, sentinel),
+          buildIdx030NearMissNudgePrompt(
+            "QA",
+            completion.nearMiss,
+            workflowLoopState.sessionNonce,
+            workflowLoopState.idxName || "Idx-XXX",
+            sentinel
+          ),
         );
         return;
       }
@@ -2529,9 +2840,17 @@ async function workflowTick(cfg) {
     }
 
     const qaResult = completion.result;
+    appendWorkflowEvent({
+      action: qaResult === "PASS" ? "qa_pass_detected" : "qa_fail_detected",
+      format: "idx030",
+      timestamp: completion.timestamp,
+      nonce: completion.nonce,
+      taskId: completion.taskId,
+      result: qaResult,
+    });
+
     if (qaResult === "PASS") {
-      logLine("[workflow] detected QA PASS");
-      appendWorkflowEvent({ action: "qa_pass_detected" });
+      logLine("[workflow] detected QA PASS (Idx-030 format)");
       // If configured, offer to clear terminal capture when PASS detected and log exists.
       if (cfg.workflowPromptClearCaptureOnPass) {
         try {
@@ -2545,8 +2864,7 @@ async function workflowTick(cfg) {
       return;
     }
 
-    logLine("[workflow] detected QA FAIL");
-    appendWorkflowEvent({ action: "qa_fail_detected" });
+    logLine("[workflow] detected QA FAIL (Idx-030 format)");
 
     if (workflowLoopState.round >= workflowLoopState.maxRounds) {
       stopWorkflowLoop("FAIL (max rounds reached)");
@@ -2558,6 +2876,7 @@ async function workflowTick(cfg) {
       : "";
 
     workflowLoopState.phase = WORKFLOW_PHASE.waitFixDone;
+    workflowLoopState.fixNudgeCount = 0; // Reset fix nudge counter
     workflowLoopState.engineerPauseUntilMs = Date.now() + 600;
     await workflowSendInstructionWithRetry(
       cfg,
@@ -2635,158 +2954,31 @@ async function startWorkflowLoop(context) {
     }
   }
 
-  const paths = resolveWorkflowLogPaths(cfg);
-  if (!paths) {
-    vscode.window.showErrorMessage("Workspace folder not found; cannot create workflow logs.");
-    return;
+  // Idx-030 Fix: Unify with startWorkflowLoopCore to ensure nonce/env/state consistency
+  const workflowRunId = `wf_${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}_${crypto
+    .randomBytes(3)
+    .toString("hex")}`;
+
+  try {
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.workflowRunId, workflowRunId);
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.planId, normalizedIdx || "");
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.state, "starting");
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.startedAtIso, new Date().toISOString());
+  } catch {
+    // ignore
   }
 
-  fs.mkdirSync(paths.dirAbs, { recursive: true });
-  fs.writeFileSync(paths.engineerLogAbs, "", "utf8");
-  fs.writeFileSync(paths.qaLogAbs, "", "utf8");
-  fs.writeFileSync(paths.engineerRawLogAbs, "", "utf8");
-  fs.writeFileSync(paths.qaRawLogAbs, "", "utf8");
-  fs.writeFileSync(paths.eventLogAbs, "", "utf8");
-
-  const scriptOk = isScriptAvailable();
-  let captureMode = "none";
-  if (scriptOk) {
-    captureMode = "script";
-  } else if (terminalDataWriteEventAvailable) {
-    captureMode = "terminalData";
-  }
-
-  if (captureMode === "none") {
-    vscode.window.showErrorMessage(
-      "Workflow loop 無法啟動：找不到 `script`（落檔用），且 VS Code Proposed API terminalDataWriteEvent 未啟用。\n\n" +
-        "請先安裝 util-linux（提供 script），或用 `--enable-proposed-api ivyhouse-local.ivyhouse-terminal-orchestrator` 啟動 VS Code。",
-    );
-    return;
-  }
-
-  workflowLoopState = {
-    active: true,
-    phase: WORKFLOW_PHASE.waitEngineerDone,
-    captureMode,
-    startedAtMs: Date.now(),
-    round: 1,
-    taskDescription: taskDescription.trim(),
-    idxName: normalizedIdx,
+  const result = await startWorkflowLoopCore(context, {
     engineerTerminalName: engineerPick.label,
     qaTerminalName: qaPick.label,
-    engineerTerminal: undefined,
-    qaTerminal: undefined,
-    engineerRawLogAbs: paths.engineerRawLogAbs,
-    qaRawLogAbs: paths.qaRawLogAbs,
-    engineerLogAbs: paths.engineerLogAbs,
-    engineerLogDisplay: paths.engineerLogDisplay,
-    qaLogAbs: paths.qaLogAbs,
-    qaLogDisplay: paths.qaLogDisplay,
-    eventLogAbs: paths.eventLogAbs,
-    eventLogDisplay: paths.eventLogDisplay,
-    engineerOffset: 0,
-    qaOffset: 0,
-    engineerMarkerBuf: "",
-    qaMarkerBuf: "",
-    pollIntervalMs: Math.max(200, Number(cfg.workflowPollIntervalMs) || 10000),
-    maxRounds: Math.max(1, Number(cfg.workflowMaxRounds) || 10),
-    timeoutMs: Math.max(1000, Number(cfg.workflowTimeoutMs) || 1800000),
-    timer: undefined,
-    tickBusy: false,
-  };
-
-  appendWorkflowEvent({
-    action: "workflow_start",
-    captureMode,
-    engineerTerminalName: workflowLoopState.engineerTerminalName,
-    qaTerminalName: workflowLoopState.qaTerminalName,
-    engineerRawLog: paths.engineerRawLogDisplay,
-    qaRawLog: paths.qaRawLogDisplay,
-    idxName: workflowLoopState.idxName,
+    taskDescription: taskDescription.trim(),
+    idxName: normalizedIdx,
+    workflowRunId,
   });
 
-  // Start / restart terminals to ensure clean session.
-  for (const terminalName of [engineerPick.label, qaPick.label]) {
-    const stateKey = getStateKeyForTerminal(cfg, terminalName);
-    if (stateKey) {
-      await context.workspaceState.update(stateKey, false);
-    }
-    disposeTerminalByName(terminalName);
-    // Avoid a race where we create a new terminal with the same name while VS Code
-    // is still finalizing disposal of the previous one.
-    await waitForTerminalToClose(terminalName, 3000);
-  }
-
-  const engineerStart = getStartCommandForTerminal(cfg, engineerPick.label);
-  const qaStart = getStartCommandForTerminal(cfg, qaPick.label);
-  if (!engineerStart || !qaStart) {
-    stopWorkflowLoop("invalid terminal selection");
-    vscode.window.showErrorMessage("Unsupported terminal selection; expected Codex/OpenCode terminals.");
-    return;
-  }
-
-  const engineerTerm = getOrCreateTerminal(engineerPick.label);
-  const qaTerm = getOrCreateTerminal(qaPick.label);
-  workflowLoopState.engineerTerminal = engineerTerm;
-  workflowLoopState.qaTerminal = qaTerm;
-
-  if (captureMode === "script") {
-    const engineerCmd =
-      `script -q -f -c ${bashSingleQuote(engineerStart)} ` +
-      bashSingleQuote(workflowLoopState.engineerRawLogAbs);
-    const qaCmd =
-      `script -q -f -c ${bashSingleQuote(qaStart)} ` + bashSingleQuote(workflowLoopState.qaRawLogAbs);
-
-    const engineerKey = getStateKeyForTerminal(cfg, engineerPick.label);
-    const qaKey = getStateKeyForTerminal(cfg, qaPick.label);
-
-    const ok1 = await startTerminalIfNeeded(context, engineerTerm, engineerKey, engineerCmd, true);
-    const ok2 = await startTerminalIfNeeded(context, qaTerm, qaKey, qaCmd, true);
-    if (!ok1 || !ok2) {
-      stopWorkflowLoop("failed to start terminals (script mode)");
-      return;
-    }
-  } else {
-    // terminalData mode: start normally; output will be captured by onDidWriteTerminalData.
-    const engineerKey = getStateKeyForTerminal(cfg, engineerPick.label);
-    const qaKey = getStateKeyForTerminal(cfg, qaPick.label);
-    const ok1 = await startTerminalIfNeeded(context, engineerTerm, engineerKey, engineerStart, true);
-    const ok2 = await startTerminalIfNeeded(context, qaTerm, qaKey, qaStart, true);
-    if (!ok1 || !ok2) {
-      stopWorkflowLoop("failed to start terminals (terminalData mode)");
-      return;
-    }
-  }
-
   vscode.window.showInformationMessage(
-    `Workflow loop started. Logs: ${workflowLoopState.engineerLogDisplay}, ${workflowLoopState.qaLogDisplay} (events: ${workflowLoopState.eventLogDisplay})`,
+    `Workflow loop started. Logs: ${result.engineerRawLogDisplay}, ${result.qaRawLogDisplay}`,
   );
-
-  // Avoid false-positive marker detection from transcript echo of our own prompt.
-  workflowLoopState.engineerPauseUntilMs = Date.now() + 2000;
-  const firstSendOk = await workflowSendInstructionWithRetry(
-    cfg,
-    workflowLoopState.engineerTerminalName,
-    buildEngineerPrompt(workflowLoopState.taskDescription),
-  );
-
-  if (!firstSendOk || !workflowLoopState.active) {
-    return;
-  }
-
-  if (workflowLoopState.engineerRawLogAbs) {
-    // Give the TUI a brief moment to finish echoing input before fast-forwarding.
-    await sleepMs(400);
-    workflowLoopState.engineerOffset = safeGetFileSize(workflowLoopState.engineerRawLogAbs);
-    workflowLoopState.engineerMarkerBuf = "";
-  }
-
-  // Start poller.
-  workflowLoopState.timer = setInterval(() => {
-    workflowTick(getConfig()).catch((err) => {
-      console.error(err);
-    });
-  }, workflowLoopState.pollIntervalMs);
   } catch (err) {
     const msg = String(err || "");
     logLine(`[workflow] start failed: ${msg}`);
@@ -2840,9 +3032,6 @@ function stopCapture(reason) {
     clearInterval(captureState.stopTimer);
   }
   captureState.stopTimer = undefined;
-  vscode.window.showInformationMessage(
-    `Codex capture stopped${reason ? `: ${reason}` : ""}. Output saved to ${captureState.lastFileDisplay}`,
-  );
 }
 
 function stopCaptureWithPromise(reason) {

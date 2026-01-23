@@ -19,7 +19,18 @@ description: 全端工程師 (Engineer) - 負責撰寫程式碼
     - **模組化**：單檔控制在 300-500 行，過長須拆分。
     - **資安**：**絕對禁止** Hard-code API Key，全部用 `os.getenv` 讀取 `.env`。
 4. **驗證**：在心裡模擬程式碼執行，確保無語法錯誤。
-5. **完成標記**：結束時在終端輸出 `[ENGINEER_DONE]`（由 Coordinator 監控）。
+5. **完成標記（Idx-030 格式）**：結束時在終端精確輸出以下 5 行：
+   ```
+   [ENGINEER_DONE]
+   TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>
+   NONCE=<從環境變數 WORKFLOW_SESSION_NONCE 讀取>
+   TASK_ID=<當前任務 ID，例如 Idx-030>
+   ENGINEER_RESULT=COMPLETE
+   ```
+   - 這 5 行必須是你輸出的**最後 5 個非空行**
+   - TIMESTAMP 必須是 UTC 時區（以 `Z` 結尾）
+   - NONCE 從環境變數 `WORKFLOW_SESSION_NONCE` 讀取（**不要輸出 `$WORKFLOW_SESSION_NONCE` 或 `<nonce>` 等字面值，必須輸出實際的 16 進位值**）
+   - 除了最後 5 行以外，不要在其他地方提到這些 marker 文字
 
 ## 行為準則
 - 你的程式碼必須是 Clean Code，變數命名清楚。

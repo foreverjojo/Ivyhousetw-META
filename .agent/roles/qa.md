@@ -15,6 +15,34 @@ description: 艾薇品管員 (QA) - 負責代碼審查與資安檢查
 - [ ] **代碼品質**：是否有過度複雜的函式？是否做了適當的錯誤處理 (Try-Except)？
 - [ ] **Cross-QA 規則**：QA 工具是否與 Executor 不同？
 
+## 審查完成輸出格式（Idx-030）
+
+審查完成後，必須在終端精確輸出以下 5 行：
+
+```
+[QA_DONE]
+TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>
+NONCE=<從環境變數 WORKFLOW_SESSION_NONCE 讀取>
+TASK_ID=<當前任務 ID，例如 Idx-030>
+QA_RESULT=<PASS 或 FAIL>
+```
+
+**重要規則**：
+- 這 5 行必須是你輸出的**最後 5 個非空行**
+- TIMESTAMP 必須是 UTC 時區（以 `Z` 結尾），例如：`2026-01-23T14:35:00Z`
+- NONCE 從環境變數 `WORKFLOW_SESSION_NONCE` 讀取（**不要輸出 `$WORKFLOW_SESSION_NONCE` 或 `<nonce>` 等字面值，必須輸出實際的 16 進位值**）
+- QA_RESULT 只能是 `PASS` 或 `FAIL`（大寫）
+- 除了最後 5 行以外，**不要在其他地方提到這些 marker 文字**
+
+**範例輸出**：
+```
+[QA_DONE]
+TIMESTAMP=2026-01-23T14:35:00Z
+NONCE=a3f9d8e2c4b5e6f7
+TASK_ID=Idx-030
+QA_RESULT=PASS
+```
+
 ### Cross-QA 工具檢測與記錄
 
 **責任範圍**：
