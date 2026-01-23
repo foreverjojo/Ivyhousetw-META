@@ -49,9 +49,10 @@
 
 - Commit A（含主要變更）：f9f003e
 - Commit B（回填 commit_hash）：20fbb59
+- Commit C（log/index 收尾）：d868f59
 - Pushed branch：`feature/idx-024-clear-on-pass`
 
-Push 結果：✅ 已推送至 `origin/feature/idx-024-clear-on-pass`（HEAD=20fbb59）
+Push 結果：✅ 已推送至 `origin/feature/idx-024-clear-on-pass`
 
 ---
 
