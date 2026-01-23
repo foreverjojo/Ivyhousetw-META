@@ -8,17 +8,22 @@
 
 ## ✅ 結果摘要
 
-- [TBD]
+- Ruff：✅ lint/format 通過
+- Pytest：✅ 全綠（1 個 golden files 相關測試為預期 skip）
+- Extensions：✅ 三方清單一致（devcontainer / .vscode / idx），且已將 local extension 的安裝納入 Dev Container restore
+- 一鍵恢復：✅ `verify_restore_state.py` 通過，並補強檢查 dev deps 與 local extension install
 
 ---
 
 ## 🧪 健康檢查
 
 ### Ruff
-- [TBD]
+- `python -m ruff check . --select=E9,F63,F7,F82 --target-version=py311`：pass
+- `python -m ruff check core utils scripts tests main.py --target-version=py311`：pass
+- `python -m ruff format --check core utils scripts tests main.py`：pass
 
 ### Pytest
-- [TBD]
+- `pytest tests/`：pass（skipped: 1）
 
 ---
 
@@ -36,14 +41,18 @@
 
 ## 🔁 一鍵恢復（portable / devcontainer）
 
-- `python scripts/portable/verify_restore_state.py`： [TBD]
+### Restore 狀態檢查
+- `python scripts/portable/check_extensions_consistency.py`：pass
+- `python scripts/portable/verify_restore_state.py`：pass
 
 差異與修正：
-- [TBD]
+- Dev Container / GHCR template：改為在 `uv.lock` 存在時使用 `uv sync --frozen --extra dev`，確保 ruff/pytest 等 dev tools 會被安裝
+- Dev Container：在 `postCreateCommand` 自動執行 `scripts/vscode/install_terminal_orchestrator.sh`，讓 local terminal orchestrator extension 可重現
+- Portable scripts：補充文件說明；並將多個 `.sh` 腳本加上可執行權限（chmod +x）
 
 ---
 
 ## 🧾 Commit / Push
 
-- Commit：pending
+- Commit：cac749a
 - Pushed branch：`feature/idx-024-clear-on-pass`

@@ -127,7 +127,7 @@ executor_tool: manual
 executor_tool_version: N/A
 executor_user: GitHub Copilot (VS Code)
 executor_start: 2026-01-23T06:37:39+00:00
-executor_end: [TBD]
+executor_end: 2026-01-23T06:45:01+00:00
 session_id: N/A
 last_change_tool: manual
 
@@ -135,14 +135,14 @@ last_change_tool: manual
 qa_tool: manual
 qa_tool_version: N/A
 qa_user: GitHub Copilot (VS Code)
-qa_start: [TBD]
-qa_end: [TBD]
-qa_result: [TBD]
+qa_start: 2026-01-23T06:45:01+00:00
+qa_end: 2026-01-23T06:45:01+00:00
+qa_result: PASS_WITH_RISK
 qa_compliance: ⚠️ 例外：本次為 repo 內建驗證（ruff/pytest/restore scripts）自動化驗證為主，未切換 codex/opencode
 
 # 收尾
 log_file_path: .agent/logs/Idx-032_log.md
-commit_hash: pending
+commit_hash: cac749a
 rollback_at: N/A
 rollback_reason: N/A
 rollback_files: N/A
