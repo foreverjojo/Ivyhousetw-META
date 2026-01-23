@@ -66,7 +66,8 @@ QA_RESULT=PASS
 ## 🧪 驗證狀態
 
 - 本次 log 以「終端 completion 證據 + 文件/規格一致性」為主。
-- 目前工作樹仍有未 commit 的變更（commit_hash: pending）；建議在提交前執行：
+- 本次變更已提交：commit_hash: f9f003e
+- 建議在本地/CI 持續維持的檢查：
   - `node --check tools/vscode_terminal_orchestrator/extension.js`
   - 若 repo 有對應 lint/test 流程：依 CI 指示執行
 

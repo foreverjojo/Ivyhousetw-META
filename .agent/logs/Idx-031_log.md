@@ -31,7 +31,7 @@
 - `.agent/logs/Idx-030_log.md`
 
 ### 判定
-- Result：TBD（待 commit 後以 `git status` / `git diff` 確認）
+- Result：TBD（待 Idx-031 收尾 commit 完成後，以 `git status` / `git diff` 最終確認）
 
 ---
 
@@ -47,7 +47,7 @@
 
 ## 🧾 Commit / Push
 
-- Commit A（含主要變更）：pending
+- Commit A（含主要變更）：f9f003e
 - Commit B（回填 commit_hash）：pending
 - Pushed branch：`feature/idx-024-clear-on-pass`
 
@@ -55,5 +55,5 @@
 
 ## 🧪 驗證
 
-- `python .agent/skills/plan_validator.py .agent/plans/Idx-031_plan.md`：pending
-- `node --check tools/vscode_terminal_orchestrator/extension.js`：pending
+- `python .agent/skills/plan_validator.py .agent/plans/Idx-031_plan.md`：pass
+- `node --check tools/vscode_terminal_orchestrator/extension.js`：pass

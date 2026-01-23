@@ -18,4 +18,4 @@
 
 - 原始 log：缺失（未保存/不可得）
 - 本次處置：建立占位 log，並在 index 指向此檔
-- commit_hash：由 Idx-031 的治理收斂 commit 產出後回填
+- commit_hash：f9f003e

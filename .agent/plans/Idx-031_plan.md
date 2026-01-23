@@ -168,7 +168,7 @@ qa_compliance: ⚠️ 例外：本次為治理/文件/設定收斂，未走 code
 
 # 收尾
 log_file_path: .agent/logs/Idx-031_log.md
-commit_hash: pending
+commit_hash: f9f003e
 rollback_at: N/A
 rollback_reason: N/A
 rollback_files: N/A

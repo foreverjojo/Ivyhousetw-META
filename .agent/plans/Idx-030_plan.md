@@ -29,7 +29,7 @@ qa_compliance: ok (qa_tool != last_change_tool)
 
 # 收尾
 log_file_path: .agent/logs/Idx-030_log.md
-commit_hash: pending
+commit_hash: f9f003e
 rollback_at: N/A
 rollback_reason: N/A
 rollback_files: N/A
