@@ -41,6 +41,15 @@
 - `.agent/scripts/setup_workflow.sh`
 - `.agent/scripts/run_codex_template.sh`
 
+### E. VS Code 周邊（A+B：終端管理/編排 + sendText/監測）（建議同步）
+目標：讓新專案從 template 開箱就具備「終端注入（sendText）+ 監測（capture）」能力。
+
+建議同步：
+- `tools/vscode_terminal_orchestrator/**`：local VS Code extension（含 HTTP SendText Bridge、Proposed API `terminalDataWriteEvent` + fallback capture）
+- `scripts/vscode/install_terminal_orchestrator.sh`：Dev Container / VS Code Server 安裝腳本（symlink install）
+- `scripts/sendtext_bridge_client.py`：bridge 的 Python CLI client
+- `.vscode/**`：workspace settings / tasks / extension recommendations（包含 Copilot terminal command debug 開關）
+
 ---
 
 ## 2) 不回推的內容（本次明確排除）
@@ -63,6 +72,13 @@ python scripts/template/sync_agent_workflow_to_template.py --template-root /path
 
 ```bash
 python scripts/template/sync_agent_workflow_to_template.py --template-root /path/to/agent-workflow-template --apply
+```
+
+（選用）也同步 VS Code 周邊（A+B）：
+
+```bash
+python scripts/template/sync_agent_workflow_to_template.py --template-root /path/to/agent-workflow-template --include-peripherals
+python scripts/template/sync_agent_workflow_to_template.py --template-root /path/to/agent-workflow-template --include-peripherals --apply
 ```
 
 建議操作流程：

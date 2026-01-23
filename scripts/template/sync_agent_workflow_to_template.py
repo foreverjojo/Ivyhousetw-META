@@ -10,8 +10,12 @@
 - 需要明確加 `--apply` 才會覆寫/寫入檔案。
 
 使用方式：
-  python scripts/template/sync_agent_workflow_to_template.py --template-root /path/to/agent-workflow-template
-  python scripts/template/sync_agent_workflow_to_template.py --template-root ../agent-workflow-template --apply
+    python scripts/template/sync_agent_workflow_to_template.py --template-root /path/to/agent-workflow-template
+    python scripts/template/sync_agent_workflow_to_template.py --template-root ../agent-workflow-template --apply
+
+    # （選用）也同步 VS Code 周邊（local extension / 安裝腳本 / .vscode 設定 / client）
+    python scripts/template/sync_agent_workflow_to_template.py --template-root ../agent-workflow-template --include-peripherals
+    python scripts/template/sync_agent_workflow_to_template.py --template-root ../agent-workflow-template --include-peripherals --apply
 
 注意：
 - 此腳本不會做 git commit。
@@ -69,6 +73,14 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="實際寫入/覆寫檔案（預設為 dry-run）",
     )
+    parser.add_argument(
+        "--include-peripherals",
+        action="store_true",
+        help=(
+            "同步 VS Code 周邊（tools/vscode_terminal_orchestrator、scripts/vscode/、"
+            "scripts/sendtext_bridge_client.py、.vscode/）。預設不包含。"
+        ),
+    )
     args = parser.parse_args(argv)
 
     template_root = Path(os.path.expanduser(args.template_root)).resolve()
@@ -88,6 +100,16 @@ def main(argv: list[str]) -> int:
         REPO_ROOT / ".agent" / "scripts" / "setup_workflow.sh",
         REPO_ROOT / ".agent" / "scripts" / "run_codex_template.sh",
     ]
+
+    if args.include_peripherals:
+        allow_dirs.extend(
+            [
+                REPO_ROOT / ".vscode",
+                REPO_ROOT / "tools" / "vscode_terminal_orchestrator",
+                REPO_ROOT / "scripts" / "vscode",
+            ]
+        )
+        allow_files.extend([REPO_ROOT / "scripts" / "sendtext_bridge_client.py"])
 
     src_files: list[Path] = []
     for d in allow_dirs:
