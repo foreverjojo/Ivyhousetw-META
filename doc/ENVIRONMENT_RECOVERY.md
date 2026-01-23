@@ -10,6 +10,26 @@
 - 位置：`scripts/portable/`
 - 內容：安裝 VS Code / Docker / Git / Python（視作業系統與可用套件管理工具而定）+ 下載本 repo + 安裝本 repo 建議的 VS Code extensions
 
+### 0.z 一鍵自檢入口指令（建議）
+
+完成 restore / Reopen in Container 後，建議先跑一次自檢（不修改系統）：
+
+```bash
+python scripts/portable/self_check.py --strict
+```
+
+若提示缺少 `ruff/pytest`（dev dependencies 未安裝），可用以下方式（擇一）：
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+或（若你使用 uv/uv.lock 工作流）：
+
+```bash
+uv sync --extra dev
+```
+
 ### 0.x 一致性等級（你能期待「一模一樣」到什麼程度）
 
 - **Level A（幾乎 100%）**：Dev Container 內 toolchain + Python 依賴（以 `uv.lock` + `uv sync --frozen` 為準）

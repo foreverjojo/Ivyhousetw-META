@@ -41,6 +41,7 @@
 | Idx-030 | Workflow Loop：統一 Completion 判定（tail-only + timestamp + nonce/env） | P0 | ✅ 已完成 | opencode | PASS | 2026-01-23-v1 | `.agent/logs/Idx-030_log.md` | Plan：`.agent/plans/Idx-030_plan.md` |
 | Idx-031 | 治理閉環：commit/push + log 不再追溯占位 + tasks 跨平台 | P0 | ✅ 已完成 | manual | PASS WITH RISK | 2026-01-23-v1 | `.agent/logs/Idx-031_log.md` | Plan：`.agent/plans/Idx-031_plan.md` |
 | Idx-032 | 健康檢查 + extensions 同步 + 一鍵恢復對齊現況 | P0 | ✅ 已完成 | manual | PASS WITH RISK | 2026-01-23-v1 | `.agent/logs/Idx-032_log.md` | Plan：`.agent/plans/Idx-032_plan.md` |
+| Idx-033 | 一鍵自檢入口 + Template workflow/skills 回推包（不含 portable） | P0 | ✅ 已完成 | manual | PASS WITH RISK | 2026-01-23-v1 | `.agent/logs/Idx-033_log.md` | Plan：`.agent/plans/Idx-033_plan.md` |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
