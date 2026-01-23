@@ -1,7 +1,6 @@
 import importlib.util
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -16,7 +15,8 @@ def load_validate_state_gate_module():
 
 def write_index_file(path: Path, indices: list[str]) -> None:
     rows = [
-        f"| {idx} | title | P2 | ✅ 已完成 | Manual | PASS | 1.0.0 | log | note |" for idx in indices
+        f"| {idx} | title | P2 | ✅ 已完成 | Manual | PASS | 1.0.0 | log | note |"
+        for idx in indices
     ]
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 

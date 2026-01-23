@@ -58,7 +58,7 @@
   "mounts": [
     "source=${localWorkspaceFolder},target=/workspaces/Ivyhousetw-META,type=bind,consistency=cached"
   ],
-  "postCreateCommand": "bash -lc 'set -euo pipefail; cd /workspaces/Ivyhousetw-META; if [ ! -d .venv ]; then python -m venv .venv; fi; . .venv/bin/activate; python -m pip install -U pip; UVV=\"${UV_VERSION:-0.5.24}\"; if command -v uv >/dev/null 2>&1; then cur=\"$(uv --version 2>/dev/null | awk \"{print \\$2}\" || true)\"; if [ -n \"$cur\" ] && [ \"$cur\" != \"$UVV\" ]; then python -m pip install --no-cache-dir \"uv==${UVV}\"; fi; else python -m pip install --no-cache-dir \"uv==${UVV}\"; fi; if [ -f uv.lock ]; then uv sync --frozen; else uv pip install -r requirements.txt; fi'",
+    "postCreateCommand": "bash -lc 'set -euo pipefail; cd /workspaces/Ivyhousetw-META; if [ ! -d .venv ]; then python -m venv .venv; fi; . .venv/bin/activate; python -m pip install -U pip; UVV=\"${UV_VERSION:-0.5.24}\"; python -m pip install --no-cache-dir \"uv==${UVV}\"; if [ -f uv.lock ]; then uv sync --frozen --extra dev; else uv pip install -r requirements.txt -r requirements-dev.txt; fi; bash scripts/vscode/install_terminal_orchestrator.sh || true'",
   "runArgs": [
     "--add-host=host.docker.internal:host-gateway"
   ]

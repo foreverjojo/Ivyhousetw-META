@@ -6,6 +6,7 @@
 - 會嘗試安裝：VS Code / Docker / Git / Python（依作業系統與可用的套件管理工具而定）
 - 會下載（clone 或 zip）本 repo 到本機
 - 會依照本 repo 的 `.vscode/extensions.json` 一鍵安裝建議的 VS Code extensions
+- 另外，本 repo 有一個 local VS Code extension（terminal orchestrator），在 Dev Container 會由 `.devcontainer/devcontainer.json` 的 `postCreateCommand` 自動安裝；若需要也可手動執行 `scripts/vscode/install_terminal_orchestrator.sh`
 
 ## 快速開始（建議）
 

@@ -53,6 +53,8 @@ def main(argv: list[str]) -> int:
         REPO_ROOT / "uv.lock",
         REPO_ROOT / ".devcontainer" / "Dockerfile",
         REPO_ROOT / ".devcontainer" / "devcontainer.json",
+        REPO_ROOT / "scripts" / "vscode" / "install_terminal_orchestrator.sh",
+        REPO_ROOT / "tools" / "vscode_terminal_orchestrator" / "package.json",
         REPO_ROOT / ".vscode" / "extensions.json",
         REPO_ROOT / ".vscode" / "settings.json",
         REPO_ROOT / ".idx" / "dev.nix",
@@ -75,6 +77,12 @@ def main(argv: list[str]) -> int:
     devcontainer_mode = "unknown"
     devcontainer_image = None
     devcontainer_is_digest = False
+    post_create_command = None
+    post_create_installs_dev = False
+    post_create_installs_local_extension = False
+    ghcr_template_post_create_command = None
+    ghcr_template_installs_dev = False
+    ghcr_template_installs_local_extension = False
     ghcr_template_exists = False
     ghcr_template_image = None
     ghcr_template_is_digest = False
@@ -82,6 +90,16 @@ def main(argv: list[str]) -> int:
         dc = json.loads(
             (REPO_ROOT / ".devcontainer" / "devcontainer.json").read_text(encoding="utf-8")
         )
+        post_create_command = dc.get("postCreateCommand")
+        if isinstance(post_create_command, str):
+            post_create_installs_dev = (
+                "uv sync" in post_create_command
+                and "--extra dev" in post_create_command
+                or "requirements-dev.txt" in post_create_command
+            )
+            post_create_installs_local_extension = (
+                "scripts/vscode/install_terminal_orchestrator.sh" in post_create_command
+            )
         if "image" in dc:
             devcontainer_mode = "image"
             devcontainer_image = dc.get("image")
@@ -100,6 +118,17 @@ def main(argv: list[str]) -> int:
         try:
             gh = json.loads(ghcr_template_path.read_text(encoding="utf-8"))
             ghcr_template_image = gh.get("image")
+            ghcr_template_post_create_command = gh.get("postCreateCommand")
+            if isinstance(ghcr_template_post_create_command, str):
+                ghcr_template_installs_dev = (
+                    "uv sync" in ghcr_template_post_create_command
+                    and "--extra dev" in ghcr_template_post_create_command
+                    or "requirements-dev.txt" in ghcr_template_post_create_command
+                )
+                ghcr_template_installs_local_extension = (
+                    "scripts/vscode/install_terminal_orchestrator.sh"
+                    in ghcr_template_post_create_command
+                )
             if isinstance(ghcr_template_image, str) and "@sha256:" in ghcr_template_image:
                 ghcr_template_is_digest = True
         except Exception:
@@ -118,6 +147,38 @@ def main(argv: list[str]) -> int:
     if extensions_check.get("status") != "pass":
         status = "fail"
         problems.append("extensions 清單不一致（devcontainer / .vscode / idx）")
+
+    if not post_create_installs_dev:
+        msg = "devcontainer.json 的 postCreateCommand 未明確安裝 dev 依賴（pytest/ruff）；新機器可能無法直接跑 ruff/pytest"
+        if strict:
+            status = "fail"
+            problems.append(msg)
+        else:
+            warnings.append(msg)
+
+    if not post_create_installs_local_extension:
+        msg = "devcontainer.json 的 postCreateCommand 未自動安裝 local terminal orchestrator extension；開發體驗可能與現況不一致"
+        if strict:
+            status = "fail"
+            problems.append(msg)
+        else:
+            warnings.append(msg)
+
+    if ghcr_template_exists and not ghcr_template_installs_dev:
+        msg = "devcontainer.ghcr.json 的 postCreateCommand 未明確安裝 dev 依賴（pytest/ruff）；full-fidelity restore 後可能無法直接跑 ruff/pytest"
+        if strict:
+            status = "fail"
+            problems.append(msg)
+        else:
+            warnings.append(msg)
+
+    if ghcr_template_exists and not ghcr_template_installs_local_extension:
+        msg = "devcontainer.ghcr.json 的 postCreateCommand 未自動安裝 local terminal orchestrator extension；full-fidelity restore 後開發體驗可能不一致"
+        if strict:
+            status = "fail"
+            problems.append(msg)
+        else:
+            warnings.append(msg)
 
     full_fidelity_ready = bool(ghcr_template_exists and ghcr_template_is_digest) or bool(
         devcontainer_mode == "image" and devcontainer_is_digest
@@ -160,12 +221,22 @@ def main(argv: list[str]) -> int:
             "mode": devcontainer_mode,
             "image": devcontainer_image,
             "digest_pinned": devcontainer_is_digest,
+            "postCreateCommand": post_create_command,
+            "postCreate": {
+                "installs_dev": post_create_installs_dev,
+                "installs_local_extension": post_create_installs_local_extension,
+            },
         },
         "ghcr_template": {
             "exists": ghcr_template_exists,
             "image": ghcr_template_image,
             "digest_pinned": ghcr_template_is_digest,
             "full_fidelity_ready": full_fidelity_ready,
+            "postCreateCommand": ghcr_template_post_create_command,
+            "postCreate": {
+                "installs_dev": ghcr_template_installs_dev,
+                "installs_local_extension": ghcr_template_installs_local_extension,
+            },
         },
         "extensions_consistency": extensions_check,
         "next_steps": [
