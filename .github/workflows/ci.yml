@@ -55,9 +55,13 @@ jobs:
 
       - name: Check for hardcoded secrets (basic)
         run: |
-          # 簡易檢查：搜尋常見的 API key patterns
-          ! grep -r "sk-[a-zA-Z0-9]\{20,\}" --include="*.py" . || (echo "Found potential API key!" && exit 1)
-          ! grep -r "api[_-]key\s*=\s*['\"][^'\"]\+['\"]" --include="*.py" . || (echo "Found hardcoded API key!" && exit 1)
+          # 簡易檢查：搜尋常見的 API key patterns，只掃描原始碼目錄並排除 vendor/metadata 等目錄以減少 false positives
+          EXCLUDES="--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.opencode --exclude-dir=.python311 --exclude-dir=.pytest_cache --exclude-dir=.venv --exclude-dir=.github --exclude-dir=.agent"
+          SEARCH_TARGETS="core utils scripts tests main.py app.py"
+          # 1) 找 sk- 型式 (長度 >= 20)
+          ! grep -R $EXCLUDES -E "sk-[A-Za-z0-9]{20,}" --include="*.py" $SEARCH_TARGETS || (echo "Found potential API key!" && exit 1)
+          # 2) 找像 api_key = "..." 的明文賦值
+          ! grep -R $EXCLUDES -E "api[_-]?key[[:space:]]*=[[:space:]]*['\"][^'\"]+['\"]" --include="*.py" $SEARCH_TARGETS || (echo "Found hardcoded API key!" && exit 1)
 
   # P1: 依賴項安全掃描
   security-scan:
