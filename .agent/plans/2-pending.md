@@ -1,7 +1,7 @@
 # 2_pending.md - AI Agent 工作流程系統待整合項目
 
-> **文件狀態**: Pending Review  
-> **建立日期**: 2025-01-12  
+> **文件狀態**: Pending Review
+> **建立日期**: 2025-01-12
 > **來源文件**:
 > - `Agent_Workflow_System_Overview_v3.md`
 > - `SimpleMem_MCP_Workflow_Guide.md`
@@ -364,27 +364,27 @@ simplemem list --since="2025-01-01" --until="2025-01-12"
 2. **Handoff Template 標準化**
    ```markdown
    # Handoff: [Task Name]
-   
+
    ## Meta
    - From: Chat Agent (Continue)
    - To: Dev Agent (Copilot)
    - Date: YYYY-MM-DD
    - Session ID: (optional, for SimpleMem)
-   
+
    ## Context
    [問題背景與研究過程]
-   
+
    ## Decision
    [決策結論與選擇理由]
-   
+
    ## Scope
    - In Scope: [明確範圍]
    - Out of Scope: [排除項目]
-   
+
    ## Next Steps
    1. [具體行動項目]
    2. [優先順序]
-   
+
    ## References
    - [相關檔案路徑]
    - [SimpleMem entity ID] (如有)
