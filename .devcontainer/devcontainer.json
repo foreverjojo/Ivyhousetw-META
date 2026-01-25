@@ -1,6 +1,6 @@
 {
   "name": "Ivyhousetw-META (GHCR pinned devcontainer image)",
-  "image": "ghcr.io/foreverjojo/ivyhousetw-meta-devcontainer:devcontainer-928e6a9d0650dd3f9a9972754a86af02ec9d745f",
+  "image": "ghcr.io/foreverjojo/ivyhousetw-meta-devcontainer@sha256:ac443570990afc7779b7f776415a5b4aef4f1806e4d49513f6dfd88249e6f7a8",
   "features": {},
   "containerEnv": {
     "UV_VERSION": "0.5.24"
