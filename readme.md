@@ -15,6 +15,20 @@ streamlit run app.py
 - 本專案維護下列 extension 清單：`.devcontainer/devcontainer.json`（Dev Container）、`.vscode/extensions.json`（工作區建議）、`.idx/dev.nix`（IDX / Firebase Studio）。
 - 在 Dev Container 中開啟工作區時，VS Code 會根據 `.devcontainer/devcontainer.json` 安裝 extensions；在 IDX / Firebase Studio 開啟時，會安裝 `.idx/dev.nix` 內列的 extensions，以確保本地與雲端 IDE 的一致性。
 
+### 一鍵自檢入口指令（建議）
+
+恢復/重建環境後，建議先跑一次「可機械化」自檢（不修改系統）：
+
+```bash
+python scripts/portable/self_check.py --strict
+```
+
+若提示缺少 `ruff/pytest`（dev dependencies 未安裝），可用以下方式（擇一）：
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
 ### When to use local workflow
 - 適用於快速測試或效能敏感的任務，例如處理大量數據或執行性能測試。
 - 當容器啟動過慢或 Docker 無法正常運行時。

@@ -1,0 +1,191 @@
+{
+  "name": "ivyhouse-terminal-orchestrator",
+  "displayName": "IvyHouse Terminal Orchestrator",
+  "description": "Auto-start and sendText to dedicated Codex/OpenCode terminals.",
+  "version": "0.0.1",
+  "publisher": "ivyhouse-local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "enabledApiProposals": ["terminalDataWriteEvent"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "ivyhouseTerminalOrchestrator.startCodex",
+        "title": "IvyHouse: Start Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.restartCodex",
+        "title": "IvyHouse: Restart Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.startOpenCode",
+        "title": "IvyHouse: Start OpenCode Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.startAll",
+        "title": "IvyHouse: Start Codex + OpenCode Terminals"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.sendToCodex",
+        "title": "IvyHouse: Send Text to Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.sendToOpenCode",
+        "title": "IvyHouse: Send Text to OpenCode Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.captureCodexOutput",
+        "title": "IvyHouse: Capture Codex Output (sendText)"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.openLastCodexCapture",
+        "title": "IvyHouse: Open Last Codex Capture"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.clearCodexCapture",
+        "title": "IvyHouse: Clear Codex Capture"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.clearTerminalCaptureAfterQaPassAndLog",
+        "title": "IvyHouse: Clear .service/terminal_capture (after QA PASS + log)"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.codexCaptureDiagnostics",
+        "title": "IvyHouse: Codex Capture Diagnostics"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.autoCaptureCodexStatus",
+        "title": "IvyHouse: Auto-Capture Codex /status (no user input)"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.restartAndCaptureCodexStatus",
+        "title": "IvyHouse: Restart Codex + Auto-Capture /status"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.resetSessionState",
+        "title": "IvyHouse: Reset Terminal Orchestrator Session State"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.startWorkflowLoop",
+        "title": "IvyHouse: Start Workflow Loop (Engineer→QA→Fix)"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.stopWorkflowLoop",
+        "title": "IvyHouse: Stop Workflow Loop"
+      },
+      {
+        "command": "ivyhouseTerminalOrchestrator.showWorkflowStatus",
+        "title": "IvyHouse: Show Workflow Status"
+      }
+    ],
+    "configuration": {
+      "title": "IvyHouse Terminal Orchestrator",
+      "properties": {
+        "ivyhouseTerminalOrchestrator.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start Codex and OpenCode terminals on VS Code startup."
+        },
+        "ivyhouseTerminalOrchestrator.codexCommand": {
+          "type": "string",
+          "default": "codex",
+          "description": "Command sent via terminal.sendText to start Codex CLI."
+        },
+        "ivyhouseTerminalOrchestrator.opencodeCommand": {
+          "type": "string",
+          "default": "opencode",
+          "description": "Command sent via terminal.sendText to start OpenCode."
+        },
+        "ivyhouseTerminalOrchestrator.codexTerminalName": {
+          "type": "string",
+          "default": "Codex CLI",
+          "description": "Name of the dedicated Codex terminal."
+        },
+        "ivyhouseTerminalOrchestrator.opencodeTerminalName": {
+          "type": "string",
+          "default": "OpenCode CLI",
+          "description": "Name of the dedicated OpenCode terminal."
+        },
+        "ivyhouseTerminalOrchestrator.captureMaxSeconds": {
+          "type": "number",
+          "default": 10,
+          "description": "Max seconds to capture terminal output after sending a command."
+        },
+        "ivyhouseTerminalOrchestrator.captureSilenceMs": {
+          "type": "number",
+          "default": 800,
+          "description": "Stop capturing when no new terminal output arrives for this long (ms)."
+        },
+        "ivyhouseTerminalOrchestrator.captureMaxBytes": {
+          "type": "number",
+          "default": 65536,
+          "description": "Max bytes to write into a single capture file."
+        },
+        "ivyhouseTerminalOrchestrator.captureDir": {
+          "type": "string",
+          "default": ".service/terminal_capture",
+          "description": "Workspace-relative directory to store terminal captures (should be gitignored)."
+        },
+        "ivyhouseTerminalOrchestrator.workflowPollIntervalMs": {
+          "type": "number",
+          "default": 5000,
+          "description": "Workflow loop: interval (ms) to poll log files for markers."
+        },
+        "ivyhouseTerminalOrchestrator.workflowMaxRounds": {
+          "type": "number",
+          "default": 10,
+          "description": "Workflow loop: maximum number of QA rounds before auto-stop."
+        },
+        "ivyhouseTerminalOrchestrator.workflowTimeoutMs": {
+          "type": "number",
+          "default": 1800000,
+          "description": "Workflow loop: total timeout (ms) before auto-stop (default: 30 minutes)."
+        },
+        "ivyhouseTerminalOrchestrator.workflowTailLines": {
+          "type": "number",
+          "default": 200,
+          "description": "Workflow loop: keep only the last N lines in compact engineer_/qa_ tail logs. Raw logs may still grow."
+        },
+        "ivyhouseTerminalOrchestrator.workflowReadyTimeoutMs": {
+          "type": "number",
+          "default": 60000,
+          "description": "Workflow loop: wait up to this many ms for Codex/OpenCode TUI to become ready (detected from raw transcript tail) before sending prompts."
+        },
+        "ivyhouseTerminalOrchestrator.workflowReadyPollIntervalMs": {
+          "type": "number",
+          "default": 300,
+          "description": "Workflow loop: polling interval (ms) for ready detection based on transcript tail."
+        },
+        "ivyhouseTerminalOrchestrator.workflowSendRetryCount": {
+          "type": "number",
+          "default": 3,
+          "description": "Workflow loop: number of retries when prompt injection shows no weak ACK (transcript unchanged)."
+        },
+        "ivyhouseTerminalOrchestrator.workflowSendAckTimeoutMs": {
+          "type": "number",
+          "default": 3000,
+          "description": "Workflow loop: time (ms) to wait for a weak ACK after sendText (raw log size or tail fingerprint changes)."
+        },
+        "ivyhouseTerminalOrchestrator.workflowSendRetryDelayMs": {
+          "type": "number",
+          "default": 1200,
+          "description": "Workflow loop: delay (ms) between send retries."
+        },
+        "ivyhouseTerminalOrchestrator.workflowPrimeEnterCount": {
+          "type": "number",
+          "default": 2,
+          "description": "Workflow loop: before sending a prompt, send N blank lines to help focus input in some TUIs."
+        },
+        "ivyhouseTerminalOrchestrator.workflowPromptClearCaptureOnPass": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, Workflow Loop will automatically prompt to clear `.service/terminal_capture` after detecting QA PASS and the associated `.agent/logs/<Idx-XXX>_log.md` exists. Set to false to disable automatic prompt."
+        }
+      }
+    }
+  }
+}

@@ -21,15 +21,20 @@ PROJECT_INDEX_FILE = Path("doc/Implementation_Plan_index.md")
 WORKFLOW_INDEX_FILE = Path(".agent/Workflow_Plan_index.md")
 LOCK_FILE = Path(".agent/active_task.lock")
 
-# Commit message 豁免前綴（不需要 Index）
-EXEMPT_PREFIXES = [
-    "chore:",
-    "docs:",
-    "style:",
-    "ci:",
-    "build:",
-    "revert:",
+# Commit message 豁免類型（不需要 Index）
+# 支援：
+# - chore: <description>
+# - chore(scope): <description>
+EXEMPT_TYPES = [
+    "chore",
+    "docs",
+    "style",
+    "ci",
+    "build",
+    "revert",
 ]
+
+EXEMPT_COMMIT_RE = re.compile(rf"^({'|'.join(EXEMPT_TYPES)})(\([^)]*\))?:")
 
 
 def detect_index_file():
@@ -78,10 +83,7 @@ def detect_index_file():
 
 def is_exempt_commit(message):
     """檢查是否為豁免的 commit 類型"""
-    for prefix in EXEMPT_PREFIXES:
-        if message.startswith(prefix):
-            return True
-    return False
+    return bool(EXEMPT_COMMIT_RE.match(message.strip()))
 
 
 def extract_index(commit_message):
@@ -109,6 +111,13 @@ def check_index_exists(index, index_file):
         return True
 
     return False
+
+
+def check_index_duplication(index):
+    """檢查 Index 是否同時存在於兩份 Index（避免治理混淆）。"""
+    in_project = check_index_exists(index, PROJECT_INDEX_FILE)
+    in_workflow = check_index_exists(index, WORKFLOW_INDEX_FILE)
+    return in_project, in_workflow
 
 
 def check_lock_consistency(index):
@@ -145,7 +154,9 @@ def validate_commit_message(message, index_file):
     # 檢查豁免
     if is_exempt_commit(message):
         print("✅ 豁免類型，跳過 Index 檢查")
-        print(f"   類型: {message.split(':')[0]}")
+        m = EXEMPT_COMMIT_RE.match(message.strip())
+        commit_type = m.group(1) if m else message.split(":")[0]
+        print(f"   類型: {commit_type}")
         return True
 
     # 提取 Index
@@ -161,20 +172,45 @@ def validate_commit_message(message, index_file):
         print("  fix(Idx-002): 修復 bug")
         print()
         print("或使用豁免前綴：")
-        for prefix in EXEMPT_PREFIXES:
-            print(f"  {prefix} <description>")
+        for t in EXEMPT_TYPES:
+            print(f"  {t}: <description>")
+            print(f"  {t}(scope): <description>")
         return False
 
     print(f"✅ Index 格式正確: {index}")
 
-    # 檢查 Index 存在性
-    if not check_index_exists(index, index_file):
+    # 檢查 Index 是否同時存在於兩份 Index（屬於治理錯誤，必須先解掉）
+    in_project, in_workflow = check_index_duplication(index)
+    if in_project and in_workflow:
+        print("❌ 錯誤: Index 同時存在於兩份 Index（治理混淆）")
+        print(f"   - {PROJECT_INDEX_FILE}: ✅ 存在")
+        print(f"   - {WORKFLOW_INDEX_FILE}: ✅ 存在")
+        print()
+        print("請先移除其中一份（依 doc/FILE_OWNERSHIP.md 的領域歸屬規則）。")
+        return False
+
+    # 檢查 Index 存在性（依 staged 路徑選擇的 index_file）
+    if check_index_exists(index, index_file):
+        print(f"✅ Index 存在於 {index_file.name}")
+    else:
+        other_index_file = WORKFLOW_INDEX_FILE if index_file == PROJECT_INDEX_FILE else PROJECT_INDEX_FILE
+
+        # 如果 Index 存在於另一份 Index，代表 staged 路徑與 Index 領域不一致
+        if check_index_exists(index, other_index_file):
+            print("❌ 錯誤: Index 存在於另一份 Index，代表領域不一致")
+            print(f"   State Gate 選擇 Index: {index_file}")
+            print(f"   但 {index} 實際存在於: {other_index_file}")
+            print()
+            print("建議修正方式（二選一）：")
+            print("  1) 將本次變更拆成兩個 commit（workflow vs project 分離）")
+            print("  2) 改用正確領域的 Index，或改用豁免前綴（例如 chore: / docs:）")
+            return False
+
+        # Index 在兩份 Index 都不存在
         print(f"❌ 錯誤: {index} 不存在於 {index_file}")
         print()
         print(f"請先在 {index_file} 中註冊此 Index")
         return False
-
-    print(f"✅ Index 存在於 {index_file.name}")
 
     # 檢查鎖一致性
     lock_check = check_lock_consistency(index)

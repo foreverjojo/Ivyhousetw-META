@@ -175,7 +175,18 @@ rollback_files: [N/A|檔案清單]
 
 #### 共同規則（Coordinator 必須落地）
 - **Plan 注入方式**：僅使用 VS Code 內建 `terminal.sendText` 對「已啟動的 Codex/OpenCode 終端」送出指令/Plan 文字
-- **完成條件**：Engineer 結束時在終端輸出 completion marker（例如：`[ENGINEER_DONE]`）
+- **完成條件（Idx-030 格式）**：Engineer/QA/Fix 結束時在終端輸出 5 行 completion marker：
+  ```
+  [ENGINEER_DONE] 或 [QA_DONE] 或 [FIX_DONE]
+  TIMESTAMP=YYYY-MM-DDTHH:mm:ssZ
+  NONCE=<從環境變數 WORKFLOW_SESSION_NONCE 讀取>
+  TASK_ID=Idx-XXX
+  <角色特定結果行>
+  ```
+  - Engineer: `ENGINEER_RESULT=COMPLETE`
+  - QA: `QA_RESULT=PASS` 或 `QA_RESULT=FAIL`
+  - Fix: `FIX_ROUND=N`
+  - **⚠️ 硬性規則**：這 5 行必須是輸出的**最後 5 個非空白行**。完成標記後不可再輸出任何文字（包括確認訊息、說明等）。
 - **即時監控**：Coordinator 以 Proposed API 監測終端輸出，直到偵測 completion marker 或 timeout
 - **Scope Gate**：偵測到變更後，Coordinator 必須先確認變更檔案未超出 Plan 的檔案清單（超出則停下來請用戶決策）
 
