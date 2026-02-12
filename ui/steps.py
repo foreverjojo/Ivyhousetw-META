@@ -50,7 +50,8 @@ from utils.week_utils import get_prev_week_id as _get_prev_week_id_raw
 from scripts.kpi_calc import build_report_summary
 from scripts.llm_insights import generate_report_insights
 from scripts.consultants import generate_consultant_notes
-from scripts.moderator import build_workflow_state, build_meeting_markdown, write_artifacts
+from scripts.moderator import build_workflow_state
+from scripts.moderator_meeting import build_meeting_markdown, write_artifacts
 from scripts.adapters.shopee_adapter import adapt_shopee_ad_csv
 from scripts.adapters.momo_adapter import adapt_momo_ad_report
 from scripts.json_to_readable import (

@@ -134,6 +134,7 @@ cython_debug/
 
 # ---- runtime artifacts ----
 history/
+logs/llm_calls.jsonl
 *.log
 !doc/logs/
 
