@@ -71,6 +71,9 @@
   // (this interferes with Codex CLI interactive input)
   "python.terminal.activateEnvironment": false,
 
+  // Use repo-local venv for Python extension (workspace scope supports ${workspaceFolder})
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+
   // =====================================================================
   // ====== A Group: Quality / Formatting (SAFEST: warn only, no auto-fix) ======
   // =====================================================================
