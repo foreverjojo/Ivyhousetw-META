@@ -19,6 +19,7 @@ import requests
 
 # LLM Monitor (新增)
 from core.llm_monitor import LLMCall, estimate_cost, get_monitor
+from core.model_settings import get_model, get_retry_model_chain
 from utils import now_iso
 
 llm_monitor = get_monitor()
@@ -101,6 +102,33 @@ def _openrouter_chat_completion(
     )
 
 
+def _openrouter_chat_completion_with_fallback(
+    messages,
+    *,
+    model: str,
+    role: str,
+    temperature: float = 0.2,
+    max_tokens: int = 8000,
+) -> tuple[str, dict[str, int], str, bool]:
+    """API 失敗時以 fallback model 重試一次。"""
+    retry_chain = get_retry_model_chain(role, primary_model=model)
+    errors: list[str] = []
+
+    for idx, candidate in enumerate(retry_chain):
+        try:
+            content, usage = _openrouter_chat_completion(
+                messages,
+                model=candidate,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return content, usage, candidate, idx > 0
+        except Exception as err:
+            errors.append(f"{candidate}: {err}")
+
+    raise RuntimeError("; ".join(errors))
+
+
 def _try_parse_json(s: str) -> dict[str, Any]:
     if not s:
         return {
@@ -136,7 +164,7 @@ def generate_report_insights(
     """
     只做「洞察解讀」，不算數字。輸出必須是 JSON object（無 code fence）。
     """
-    model = model or os.getenv("MODEL_INSIGHTS") or "openai/gpt-4o-mini"
+    configured_model = model or get_model("insights")
 
     # 將輸入控制在「足夠判讀」的大小
     compact_input = {
@@ -189,9 +217,16 @@ def generate_report_insights(
             "total_tokens": int(a.get("total_tokens", 0)) + int(b.get("total_tokens", 0)),
         }
 
-    content, usage_main = _openrouter_chat_completion(messages, model=model)
+    content, usage_main, active_model, retried_with_fallback_main = (
+        _openrouter_chat_completion_with_fallback(
+            messages,
+            model=configured_model,
+            role="insights",
+        )
+    )
     out = _try_parse_json(content)
     total_usage = usage_main
+    retried_with_fallback_repair = False
 
     # 若解析失敗（含 error key），做一次修復重試，並累計 token usage（避免低估成本）
     if isinstance(out, dict) and out.get("error"):
@@ -203,12 +238,16 @@ def generate_report_insights(
             },
             {"role": "user", "content": content},
         ]
-        content2, usage_repair = _openrouter_chat_completion(
-            repair_messages,
-            model=model,
-            temperature=0.0,
-            max_tokens=8000,
+        content2, usage_repair, repair_model, retried_with_fallback_repair = (
+            _openrouter_chat_completion_with_fallback(
+                repair_messages,
+                model=active_model,
+                role="insights",
+                temperature=0.0,
+                max_tokens=8000,
+            )
         )
+        active_model = repair_model
         total_usage = _add_usage(total_usage, usage_repair)
         out = _try_parse_json(content2)
 
@@ -223,18 +262,35 @@ def generate_report_insights(
         llm_monitor.log_call(
             LLMCall(
                 timestamp=now_iso(),
-                model=model,
+                model=active_model,
                 prompt_tokens=int(total_usage.get("prompt_tokens", 0) or 0),
                 completion_tokens=int(total_usage.get("completion_tokens", 0) or 0),
                 total_tokens=int(total_usage.get("total_tokens", 0) or 0),
                 cost_usd=estimate_cost(
-                    model,
+                    active_model,
                     int(total_usage.get("prompt_tokens", 0) or 0),
                     int(total_usage.get("completion_tokens", 0) or 0),
                 ),
                 function="generate_report_insights",
                 week_id=week_id,
-                extra={"step": "C", "version_fp": version_fp} if version_fp else {"step": "C"},
+                extra=(
+                    {
+                        "step": "C",
+                        "version_fp": version_fp,
+                        "configured_model": configured_model,
+                        "used_model": active_model,
+                        "fallback_retry_main": retried_with_fallback_main,
+                        "fallback_retry_repair": retried_with_fallback_repair,
+                    }
+                    if version_fp
+                    else {
+                        "step": "C",
+                        "configured_model": configured_model,
+                        "used_model": active_model,
+                        "fallback_retry_main": retried_with_fallback_main,
+                        "fallback_retry_repair": retried_with_fallback_repair,
+                    }
+                ),
             )
         )
     except Exception:

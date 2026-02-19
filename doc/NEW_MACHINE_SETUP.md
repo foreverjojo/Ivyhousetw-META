@@ -31,6 +31,29 @@
 
 ## 3) 啟動本機開發（容器內）
 
+### 3.0 Terminal extensions 初始化（建議先做）
+
+在容器內執行：
+
+```bash
+bash scripts/vscode/install_terminal_orchestrator.sh
+```
+
+完成後在 VS Code 執行 `Developer: Reload Window`。
+
+若要啟用 Monitor 的 Proposed API 主路徑，請在 Windows 端 runtime `argv.json`（例如 `%APPDATA%\\Code - Insiders\\User\\argv.json`）加入：
+
+```json
+{
+  "enable-proposed-api": [
+    "ivyhouse-local.ivyhouse-terminal-monitor",
+    "ivyhouse-local.ivyhouse-terminal-orchestrator"
+  ]
+}
+```
+
+儲存後完整關閉 VS Code 再重啟。
+
 - Streamlit：
   - `streamlit run app.py`
 

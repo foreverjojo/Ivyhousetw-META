@@ -17,13 +17,13 @@ Budget Rules Skill (Deterministic)
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from scripts.skills import build_standard_skill_contract
 
 
-class BudgetAction(str, Enum):
+class BudgetAction(StrEnum):
     """預算行動類型"""
 
     KILL = "KILL"  # 立即停止

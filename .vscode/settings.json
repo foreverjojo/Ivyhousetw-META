@@ -60,6 +60,13 @@
   "terminal.integrated.defaultProfile.osx": "zsh",
   "terminal.integrated.defaultProfile.linux": "bash",
 
+  // ====== Remote port forwarding ======
+  // Prevent VS Code from auto-forwarding every detected listening port.
+  // You can still forward ports manually from the Ports panel when needed.
+  "remote.autoForwardPorts": false,
+  // Avoid restoring previously forwarded ports on window reload/reconnect.
+  "remote.restoreForwardedPorts": false,
+
   // Prevent Python extension from auto-injecting `source .../activate` into terminals
   // (this interferes with Codex CLI interactive input)
   "python.terminal.activateEnvironment": false,
@@ -172,5 +179,12 @@
   // ====== GitHub Copilot: Enable terminal command sending ======
   "github.copilot.advanced": {
     "debug.enableTerminalCommands": true
-  }
+  },
+  "python-envs.pythonProjects": [
+    {
+      "path": ".",
+      "envManager": "ms-python.python:venv",
+      "packageManager": "ms-python.python:pip"
+    }
+  ]
 }

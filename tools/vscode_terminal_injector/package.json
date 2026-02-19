@@ -1,0 +1,93 @@
+{
+  "name": "ivyhouse-terminal-injector",
+  "displayName": "IvyHouse Terminal Injector",
+  "description": "Dedicated sendText injector for Codex/OpenCode terminals.",
+  "version": "0.0.12",
+  "publisher": "ivyhouse-local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "ivyhouseTerminalInjector.startCodex",
+        "title": "IvyHouse Injector: Start Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalInjector.pressEnterCodex",
+        "title": "IvyHouse Injector: Press Enter in Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalInjector.restartCodex",
+        "title": "IvyHouse Injector: Restart Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalInjector.startOpenCode",
+        "title": "IvyHouse Injector: Start OpenCode Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalInjector.restartOpenCode",
+        "title": "IvyHouse Injector: Restart OpenCode Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalInjector.startAll",
+        "title": "IvyHouse Injector: Start Codex + OpenCode Terminals"
+      },
+      {
+        "command": "ivyhouseTerminalInjector.sendToCodex",
+        "title": "IvyHouse Injector: Send Text to Codex Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalInjector.sendToOpenCode",
+        "title": "IvyHouse Injector: Send Text to OpenCode Terminal"
+      },
+      {
+        "command": "ivyhouseTerminalInjector.resetSessionState",
+        "title": "IvyHouse Injector: Reset Session State"
+      }
+    ],
+    "configuration": {
+      "title": "IvyHouse Terminal Injector",
+      "properties": {
+        "ivyhouseTerminalInjector.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start Codex and OpenCode terminals on VS Code startup."
+        },
+        "ivyhouseTerminalInjector.codexCommand": {
+          "type": "string",
+          "default": "codex",
+          "description": "Command sent via sendText to start Codex CLI."
+        },
+        "ivyhouseTerminalInjector.opencodeCommand": {
+          "type": "string",
+          "default": "opencode",
+          "description": "Command sent via sendText to start OpenCode CLI."
+        },
+        "ivyhouseTerminalInjector.codexTerminalName": {
+          "type": "string",
+          "default": "Codex CLI",
+          "description": "Name of the dedicated Codex terminal."
+        },
+        "ivyhouseTerminalInjector.opencodeTerminalName": {
+          "type": "string",
+          "default": "OpenCode CLI",
+          "description": "Name of the dedicated OpenCode terminal."
+        },
+        "ivyhouseTerminalInjector.submitDelayMs": {
+          "type": "number",
+          "default": 350,
+          "description": "Delay in milliseconds between sending text and submitting Enter via sendSequence(\\r) for both Codex and OpenCode terminals."
+        },
+        "ivyhouseTerminalInjector.codexSubmitDelayMs": {
+          "type": "number",
+          "default": 350,
+          "description": "[Legacy compatibility] Old key for submit delay. Prefer ivyhouseTerminalInjector.submitDelayMs."
+        }
+      }
+    }
+  }
+}

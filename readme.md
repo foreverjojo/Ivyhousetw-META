@@ -5,6 +5,11 @@
 - Step B produces `report_summary.json` and **forces schema validation** using `schemas/report_summary.v1.json`
 - Validation errors are logged into `pipeline_state.json` with event step `B(validate_error)`
 
+## Release / Changelog
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Latest: `0.3.0` (2026-01-04) — Phase 3 多通路擴充（Shopee/MOMO）+ 觀測性基礎建設（structured logging / LLM monitor）
+- Unreleased: Phase 4 Streamlit Crew Console MVP、Trace ID 追蹤系統（詳見 `CHANGELOG.md`）
+
 
 ## Run app
 ```bash

@@ -45,9 +45,10 @@
 目標：讓新專案從 template 開箱就具備「終端注入（sendText）+ 監測（capture）」能力。
 
 建議同步：
-- `tools/vscode_terminal_orchestrator/**`：local VS Code extension（含 HTTP SendText Bridge、Proposed API `terminalDataWriteEvent` + fallback capture）
-- `scripts/vscode/install_terminal_orchestrator.sh`：Dev Container / VS Code Server 安裝腳本（symlink install）
-- `scripts/sendtext_bridge_client.py`：bridge 的 Python CLI client
+- `tools/vscode_terminal_injector/**`：local VS Code extension（只負責 sendText 注入）
+- `tools/vscode_terminal_monitor/**`：local VS Code extension（Proposed API 監測 + fallback capture）
+- `tools/vscode_terminal_orchestrator/**`：legacy 相容（workflow loop / bridge 場景）
+- 兩個套件的 VSIX 安裝命令（`code-insiders --install-extension ...`）
 - `.vscode/**`：workspace settings / tasks / extension recommendations（包含 Copilot terminal command debug 開關）
 
 ---

@@ -1,8 +1,8 @@
 {
   "name": "ivyhouse-terminal-orchestrator",
-  "displayName": "IvyHouse Terminal Orchestrator",
-  "description": "Auto-start and sendText to dedicated Codex/OpenCode terminals.",
-  "version": "0.0.1",
+  "displayName": "IvyHouse Terminal Orchestrator (DEPRECATED)",
+  "description": "[DEPRECATED] Legacy combined extension. Use ivyhouse-terminal-injector + ivyhouse-terminal-monitor.",
+  "version": "0.0.3",
   "publisher": "ivyhouse-local",
   "engines": {
     "vscode": "^1.85.0"
@@ -15,71 +15,71 @@
     "commands": [
       {
         "command": "ivyhouseTerminalOrchestrator.startCodex",
-        "title": "IvyHouse: Start Codex Terminal"
+        "title": "[DEPRECATED] IvyHouse Legacy: Start Codex Terminal"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.restartCodex",
-        "title": "IvyHouse: Restart Codex Terminal"
+        "title": "[DEPRECATED] IvyHouse Legacy: Restart Codex Terminal"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.startOpenCode",
-        "title": "IvyHouse: Start OpenCode Terminal"
+        "title": "[DEPRECATED] IvyHouse Legacy: Start OpenCode Terminal"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.startAll",
-        "title": "IvyHouse: Start Codex + OpenCode Terminals"
+        "title": "[DEPRECATED] IvyHouse Legacy: Start Codex + OpenCode Terminals"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.sendToCodex",
-        "title": "IvyHouse: Send Text to Codex Terminal"
+        "title": "[DEPRECATED] IvyHouse Legacy: Send Text to Codex Terminal"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.sendToOpenCode",
-        "title": "IvyHouse: Send Text to OpenCode Terminal"
+        "title": "[DEPRECATED] IvyHouse Legacy: Send Text to OpenCode Terminal"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.captureCodexOutput",
-        "title": "IvyHouse: Capture Codex Output (sendText)"
+        "title": "[DEPRECATED] IvyHouse Legacy: Capture Codex Output (sendText)"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.openLastCodexCapture",
-        "title": "IvyHouse: Open Last Codex Capture"
+        "title": "[DEPRECATED] IvyHouse Legacy: Open Last Codex Capture"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.clearCodexCapture",
-        "title": "IvyHouse: Clear Codex Capture"
+        "title": "[DEPRECATED] IvyHouse Legacy: Clear Codex Capture"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.clearTerminalCaptureAfterQaPassAndLog",
-        "title": "IvyHouse: Clear .service/terminal_capture (after QA PASS + log)"
+        "title": "[DEPRECATED] IvyHouse Legacy: Clear .service/terminal_capture (after QA PASS + log)"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.codexCaptureDiagnostics",
-        "title": "IvyHouse: Codex Capture Diagnostics"
+        "title": "[DEPRECATED] IvyHouse Legacy: Codex Capture Diagnostics"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.autoCaptureCodexStatus",
-        "title": "IvyHouse: Auto-Capture Codex /status (no user input)"
+        "title": "[DEPRECATED] IvyHouse Legacy: Auto-Capture Codex /status (no user input)"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.restartAndCaptureCodexStatus",
-        "title": "IvyHouse: Restart Codex + Auto-Capture /status"
+        "title": "[DEPRECATED] IvyHouse Legacy: Restart Codex + Auto-Capture /status"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.resetSessionState",
-        "title": "IvyHouse: Reset Terminal Orchestrator Session State"
+        "title": "[DEPRECATED] IvyHouse Legacy: Reset Terminal Orchestrator Session State"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.startWorkflowLoop",
-        "title": "IvyHouse: Start Workflow Loop (Engineer→QA→Fix)"
+        "title": "[DEPRECATED] IvyHouse Legacy: Start Workflow Loop (Engineer→QA→Fix)"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.stopWorkflowLoop",
-        "title": "IvyHouse: Stop Workflow Loop"
+        "title": "[DEPRECATED] IvyHouse Legacy: Stop Workflow Loop"
       },
       {
         "command": "ivyhouseTerminalOrchestrator.showWorkflowStatus",
-        "title": "IvyHouse: Show Workflow Status"
+        "title": "[DEPRECATED] IvyHouse Legacy: Show Workflow Status"
       }
     ],
     "configuration": {
@@ -87,7 +87,7 @@
       "properties": {
         "ivyhouseTerminalOrchestrator.autoStart": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Automatically start Codex and OpenCode terminals on VS Code startup."
         },
         "ivyhouseTerminalOrchestrator.codexCommand": {

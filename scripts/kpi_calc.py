@@ -176,9 +176,9 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
             lambda r: (r["__value_truth"] / r["__spend"]) if r["__spend"] > 0 else 0.0, axis=1
         )
         d["__cpa_truth"] = d.apply(
-            lambda r: (r["__spend"] / r["__purchases_truth"])
-            if r["__purchases_truth"] > 0
-            else 0.0,
+            lambda r: (
+                (r["__spend"] / r["__purchases_truth"]) if r["__purchases_truth"] > 0 else 0.0
+            ),
             axis=1,
         )
 
@@ -189,9 +189,11 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
 
         # traffic diagnostics
         d["__ctr_link_pct_calc"] = d.apply(
-            lambda r: ((r["__link_clicks"] / r["__impressions"]) * 100.0)
-            if r["__impressions"] > 0
-            else 0.0,
+            lambda r: (
+                ((r["__link_clicks"] / r["__impressions"]) * 100.0)
+                if r["__impressions"] > 0
+                else 0.0
+            ),
             axis=1,
         )
 

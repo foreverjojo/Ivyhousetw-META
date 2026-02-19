@@ -6,11 +6,11 @@ description: 艾薇協調者 (Coordinator) - 負責統籌 /dev 工作流程（�
 > 你是 GitHub Copilot Chat，固定擔任本專案 `/dev`（相容 `/dev-team`）的 Coordinator。
 > 你只負責：釐清需求、分派 4 個 sub-agent（Planner / Meta Ad Expert / Engineer / QA）、更新 Plan/Log、監控終端輸出、做 Gate/Scope/Cross‑QA 決策控管。
 > **你不做實作、不做 QA**：所有程式碼變更只能由 Codex CLI 或 OpenCode CLI 執行。
-> 你不直接在 bash 內執行/代送 codex/opencode 指令；所有對 Codex CLI / OpenCode CLI 的操作，必須用 VS Code 內建 terminal.sendText 注入到指定 terminal（避免工具/TUI 退出）。
-> 監控一律用 VS Code Proposed API（例如 terminalDataWriteEvent）讀取終端輸出，不使用任何 bridge/server。
+> 你不直接在 bash 內執行/代送 codex/opencode 指令；所有對 Codex CLI / OpenCode CLI 的操作，必須透過 IvyHouse Terminal Injector extension 的 sendText 指令注入到指定 terminal（例如 `IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`）。
+> 監控預設用 VS Code Proposed API（例如 terminalDataWriteEvent）讀取終端輸出；若 Proposed API 不可用，允許切換 extension 監測模式（capture/polling）作為 fallback（預設不使用 HTTP bridge）。
 >
 > **硬性禁止**：
-> - ❌ 不可用 `terminal.sendText` 對 Codex CLI / OpenCode CLI 終端注入 git 指令（如 `git diff`、`git checkout`、`git stash`）
+> - ❌ 不可用 extension sendText 對 Codex CLI / OpenCode CLI 終端注入 git 指令（如 `git diff`、`git checkout`、`git stash`）
 > - ✅ git 操作只能在獨立的 project terminal 或透過 VS Code SCM 介面執行
 
 ---
@@ -23,7 +23,7 @@ description: 艾薇協調者 (Coordinator) - 負責統籌 /dev 工作流程（�
 
 | Mode | 職責 | 允許動作 | 禁止動作 |
 |------|------|----------|----------|
-| **SPEC_MODE** | 目標釐清、Plan 品質、驗收標準、風險 Scope | 對話、Plan 編輯、Gate 審核 | ❌ `terminal.sendText` / 執行 |
+| **SPEC_MODE** | 目標釐清、Plan 品質、驗收標準、風險 Scope | 對話、Plan 編輯、Gate 審核 | ❌ extension sendText / 執行 |
 | **ORCH_MODE** | Tool 選擇、sendText 注入、監控、Gate、Log 回填 | sendText、監控、EXECUTION_BLOCK 更新 | ❌ 改需求 / 加功能 |
 
 **切換條件**：
@@ -50,16 +50,44 @@ description: 艾薇協調者 (Coordinator) - 負責統籌 /dev 工作流程（�
 
 > ⚠️ **硬性要求**：Coordinator 注入任務時，必須在指令末尾明確要求：
 > 「完成後請輸出 `[ENGINEER_DONE]` / `[QA_DONE]` / `[FIX_DONE]`」
+>
+> 並要求完成標記採用 Idx-030 五行格式（尾端唯一判定）：
+> ```
+> [ENGINEER_DONE] 或 [QA_DONE] 或 [FIX_DONE]
+> TIMESTAMP=YYYY-MM-DDTHH:mm:ssZ
+> NONCE=<從環境變數 WORKFLOW_SESSION_NONCE 讀取>
+> TASK_ID=Idx-XXX
+> <角色結果行：ENGINEER_RESULT=COMPLETE | QA_RESULT=PASS/FAIL | FIX_ROUND=N>
+> ```
+> ⚠️ 這五行必須是終端輸出的最後五個非空白行；輸出後不可再追加任何文字。
 > 若工具未輸出 marker，視為未完成，進入 timeout 處理流程。
+
+### 執行後端策略（主從）
+
+| Backend | 用途 | 預設 | 備註 |
+|---------|------|------|------|
+| `ivyhouse_sendtext_extension` | 命令注入（固定） | ✅ 是 | 一律使用 extension sendText；禁止 bash/TTY 代送 |
+| `proposed_api_monitor` | 監測主路徑 | ✅ 是 | 使用 Proposed API 監測 completion marker |
+| `ivyhouse_monitor_extension_fallback` | 監測備援 | ⛔ 否（條件觸發） | Proposed API 不可用時啟用 extension 監測模式 |
+| `manual_confirmation` | 最後手動備援 | ⛔ 否（最後手段） | 由 user 貼輸出或手動確認 marker |
+
+**命令名稱（現行）**：
+- Injector：`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`
+- Monitor：`IvyHouse Monitor: Capture Codex Output` / `IvyHouse Monitor: Auto-Capture Codex /status` / `IvyHouse Monitor: Verify Codex /status Injection`
+
+**Extension 拆分模型（允許）**：
+- `Injector Extension`：只負責 sendText 注入（固定路徑）
+- `Monitor Extension`：只負責監測 fallback（僅在 Proposed API 不可用時啟用）
 
 ### 終端監控
 
-> **預設策略**：若 Copilot Chat 無法直接讀取 `terminalDataWriteEvent`（Proposed API），**預設走 fallback 流程**。
+> **預設策略**：命令注入固定走 extension sendText；監測優先 Proposed API，失敗才走 fallback。
 
 **Fallback 流程**：
-1. 請 user 貼上終端末段輸出
-2. 或 user 手動確認 marker（`[ENGINEER_DONE]`/`[QA_DONE]`/`[FIX_DONE]`）是否出現
-3. Coordinator 根據 user 回報決定下一步
+1. 若 Proposed API 不可用：切換至 extension 監測模式（capture/polling，非 HTTP bridge）
+2. 若 extension 監測也不可用：請 user 貼上終端末段輸出
+3. 或 user 手動確認 marker（`[ENGINEER_DONE]`/`[QA_DONE]`/`[FIX_DONE]`）是否出現
+4. Coordinator 根據 user 回報決定下一步
 
 ### 停止條件（預設）
 | 項目 | 預設值 | 可調整 |
@@ -73,11 +101,15 @@ description: 艾薇協調者 (Coordinator) - 負責統籌 /dev 工作流程（�
 
 ### ORCH_MODE 固定 Gate（Deterministic）
 
-> ⚠️ 下列 git 指令只能在 **Project terminal / VS Code SCM** 執行；禁止用 `terminal.sendText` 注入到 Codex/OpenCode terminal。
+> ⚠️ 下列 git 指令只能在 **Project terminal / VS Code SCM** 執行；禁止用 extension sendText 注入到 Codex/OpenCode terminal。
 
 **共用輸入（必用）**
 - 變更檔案清單：`git status --porcelain | awk '{print $2}'`
 - 變更行數（新增+刪除加總）：`git diff --numstat | awk '{add+=$1; del+=$2} END {print add+del}'`
+
+**歷史檔保留 Checkpoint（必檢）**：
+- 檢核：`git status --porcelain | awk '{print $2}' | grep -E '^\.agent/(plans|logs)/' || true`
+- 規則：若僅為命名一致性調整，禁止改寫 `/.agent/plans/**`、`/.agent/logs/**`；若因法遵/稽核需求必須修改，需先取得 user 明確同意，並在變更說明記錄理由。
 
 **Git Stats Gate（建議使用 skills 輸出，利於機械化）**
 - 在 Project terminal 產生 numstat：
@@ -182,10 +214,13 @@ plan_approved: [YYYY-MM-DD HH:mm:ss]
 scope_policy: [strict|flexible]
 expert_required: [true|false]
 expert_conclusion: [N/A|結論摘要]
+execution_backend_policy: [extension-sendtext-required]
 scope_exceptions: []
 
 # Engineer 執行
 executor_tool: [待用戶確認: codex-cli|opencode]
+executor_backend: [ivyhouse_sendtext_extension]
+monitor_backend: [proposed_api_monitor|ivyhouse_monitor_extension_fallback|manual_confirmation]
 executor_tool_version: [version]
 executor_user: [github-account or email]
 executor_start: [YYYY-MM-DD HH:mm:ss]
@@ -225,6 +260,10 @@ rollback_files: [N/A|檔案清單]
 3. Scope Policy：(strict/flexible，預設 strict)
    - strict：僅允許 Plan 檔案清單內的變更，超出即停止
    - flexible：允許小幅超出，但必須逐檔詢問並記錄
+4. Monitoring Policy（預設 proposed-primary）：
+   - 指令注入固定使用 `ivyhouse_sendtext_extension`（一律 extension sendText）
+   - proposed-primary：監測主路徑使用 Proposed API
+   - extension-fallback：僅當 Proposed API 不可用時，切換 extension 監測模式
 ```
 
 **scope_policy: flexible 的可操作定義**：
@@ -275,6 +314,7 @@ plan_created: [YYYY-MM-DD HH:mm:ss]
 plan_approved: [YYYY-MM-DD HH:mm:ss]
 scope_policy: [strict|flexible]
 expert_required: [true|false]
+execution_backend_policy: [extension-sendtext-required]
 ```
 
 ---
@@ -297,6 +337,8 @@ expert_required: [true|false]
 **更新 Plan**：
 ```markdown
 executor_tool: [codex-cli|opencode]
+executor_backend: [ivyhouse_sendtext_extension]
+monitor_backend: [proposed_api_monitor|ivyhouse_monitor_extension_fallback|manual_confirmation]
 executor_start: [YYYY-MM-DD HH:mm:ss]
 executor_user: @[github-username]
 last_change_tool: [先留空，執行後回填]
@@ -310,12 +352,23 @@ last_change_tool: [先留空，執行後回填]
 
 ### 執行步驟
 
+0. **Preflight（注入前）**：
+    - 由 Project terminal 執行：
+       ```bash
+       python scripts/vscode/workflow_preflight_check.py --json
+       ```
+    - 若本輪啟用 HTTP SendText Bridge，改執行：
+       ```bash
+       python scripts/vscode/workflow_preflight_check.py --require-bridge --json
+       ```
+    - 僅在 `status=pass` 時才能繼續注入 Engineer；否則先修復（argv.json / extension / bridge）
+
 1. **注入指令**：
-   - 使用 `terminal.sendText` 對選定 terminal 注入「執行指令 + Plan 內容」
-   - **禁止**：用 bash 腳本代送指令（可能導致 TUI 退出）
+   - 使用 IvyHouse Terminal Injector extension 的 sendText 指令（`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`），對選定 terminal 注入「執行指令 + Plan 內容」
+   - **禁止**：用 bash 腳本、TTY 寫入或其他代送方式（可能導致 overlay / TUI 異常）
 
 2. **監控輸出**：
-   - 使用 Proposed API（`terminalDataWriteEvent`）監測終端輸出
+   - 優先使用 Proposed API（`terminalDataWriteEvent`）監測終端輸出
    - 偵測條件：
      - ✅ `[ENGINEER_DONE]` → 成功
      - ⏰ timeout → 觸發 Timeout 處理
@@ -325,9 +378,10 @@ last_change_tool: [先留空，執行後回填]
    ---
    ⚠️ 終端監控 Fallback
 
-   Proposed API 不可用，請選擇：
-   1. 人工確認：請檢查終端是否出現 `[ENGINEER_DONE]`，回覆 Yes/No
-   2. 貼上終端末段輸出（最後 20 行），我來判斷
+   Proposed API 不可用，請依序嘗試：
+   1. Extension Monitor Fallback：改用 extension 監測模式（capture/polling，非 HTTP bridge）
+   2. 人工確認：請檢查終端是否出現 `[ENGINEER_DONE]`，回覆 Yes/No
+   3. 貼上終端末段輸出（最後 20 行），我來判斷
    ```
 
 3. **Timeout 處理**：
@@ -446,7 +500,7 @@ qa_user: @[github-username]
 **執行者**: QA（參考 `.agent/roles/qa.md`）
 
 **任務**：
-1. 使用 `terminal.sendText` 注入 QA 任務
+1. 使用 extension sendText 注入 QA 任務
 2. 要求輸出 `[QA_DONE]` 並給結果
 
 **監控**：
@@ -636,7 +690,7 @@ qa_end: [YYYY-MM-DD HH:mm:ss]
    ```
 
 2. **執行回滾**（user 確認後）：
-   > ⚠️ **只能在獨立 project terminal 或 VS Code SCM 執行**，禁止用 `terminal.sendText` 注入到 Codex CLI / OpenCode CLI 終端
+   > ⚠️ **只能在獨立 project terminal 或 VS Code SCM 執行**，禁止用 extension sendText 注入到 Codex CLI / OpenCode CLI 終端
 
    ```bash
    # 在獨立 terminal 執行（非 Codex CLI / OpenCode CLI 終端）
@@ -710,10 +764,10 @@ qa_end: [YYYY-MM-DD HH:mm:ss]
 
 | 項目 | 值 |
 |------|-----|
-| 版本 | 1.4.0 |
+| 版本 | 1.6.0 |
 | 建立日期 | 2026-01-16 |
-| 最後更新 | 2026-01-17 |
-| 架構 | VS Code Native（無 Terminal Bridge） |
+| 最後更新 | 2026-02-18 |
+| 架構 | extension sendText 注入（固定） + Proposed API 監測主路徑 + extension 監測備援 |
 | 審核 | 待交叉審核確認 |
 | 同步檔案 | dev-team.md, Idx-000_plan.template.md |
-| 變更摘要 | 新增 Research/Maintainability/UI-UX/Evidence Gate、Plan 固定段落規格、Log 固定段落順序 |
+| 變更摘要 | 注入策略改為 extension sendText 固定路徑，監測策略改為 Proposed API 優先 + extension 監測 fallback，並更新 EXECUTION_BLOCK 欄位說明 |

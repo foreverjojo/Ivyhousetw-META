@@ -19,11 +19,16 @@ Planner -> Meta Expert -> (Execution Gate) -> Engineer -> QA -> 完成
   - 由 GitHub Copilot Chat（Coordinator）詢問用戶選擇：
     - Engineer Tool：`codex-cli` 或 `opencode`
     - QA Tool：`codex-cli` 或 `opencode`（必須 ≠ last_change_tool）
+    - Execution Backend Policy：`extension-sendtext-required`（固定）
+    - Monitor Backend Policy：`proposed-primary-with-extension-fallback`（預設）
   - 在 Plan 的 `EXECUTION_BLOCK` 記錄：工具/操作者/時間戳/結果/last_change_tool。
 
 - Step 3 Engineer
   - 由用戶指定的終端工具（Codex CLI / OpenCode CLI）執行 Plan。
-  - Coordinator 透過 VS Code 內建 `terminal.sendText` 注入指令/Plan 文字（禁止以 bash 腳本代送，避免工具退出）。
+  - Coordinator 透過 extension sendText 注入指令/Plan 文字（禁止以 bash/TTY 代送，避免 overlay 或工具退出）。
+  - 注入命令：`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`。
+  - 監控主路徑使用 Proposed API；若不可用，切換 extension 監測模式備援。
+  - 監測命令：`IvyHouse Monitor: Capture Codex Output` / `IvyHouse Monitor: Auto-Capture Codex /status`。
   - 通用規範：中文註解、單檔 ≤500 行、無硬編 API Key、遵守 `ivy_house_rules.md`。
 
 - Step 4 QA（Cross‑QA）
@@ -40,12 +45,16 @@ Planner -> Meta Expert -> (Execution Gate) -> Engineer -> QA -> 完成
 監控與回滾：
 
 - 監控：Coordinator 使用 VS Code Proposed API 監測終端輸出（completion marker + timeout）。
+- 備援：若 Proposed API 不可用，先走 `ivyhouse_monitor_extension_fallback`；仍不可用才改人工回報。
+- 架構：允許拆分成兩個 extension（Injector 負責 sendText；Monitor 負責監測 fallback）。
 - 回滾：任何破壞性 git 操作（reset/clean）必須先取得用戶明確確認。
 
 快速 checklist（分享用）
 
 - 確認 Spec 已由使用者核准。
 - 在 Plan 的 `EXECUTION_BLOCK` 指定 executor_tool/qa_tool/last_change_tool。
+- 在 Plan 的 `EXECUTION_BLOCK` 指定 execution_backend_policy/executor_backend/monitor_backend。
+- 確認命令注入固定使用 extension sendText，監測採 Proposed API 主路徑 + extension fallback。
 - QA 工具必須與 last_change_tool 不同。
 - 無硬編 API Key，且檔案有中文用途註解。
 

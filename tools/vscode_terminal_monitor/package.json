@@ -1,0 +1,105 @@
+{
+  "name": "ivyhouse-terminal-monitor",
+  "displayName": "IvyHouse Terminal Monitor",
+  "description": "Terminal output monitor with Proposed API first and extension fallback capture.",
+  "version": "0.0.9",
+  "publisher": "ivyhouse-local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "enabledApiProposals": ["terminalDataWriteEvent"],
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "ivyhouseTerminalMonitor.ping",
+        "title": "IvyHouse Monitor: Ping"
+      },
+      {
+        "command": "ivyhouseTerminalMonitor.captureCodexOutput",
+        "title": "IvyHouse Monitor: Capture Codex Output"
+      },
+      {
+        "command": "ivyhouseTerminalMonitor.autoCaptureCodexStatus",
+        "title": "IvyHouse Monitor: Auto-Capture Codex /status"
+      },
+      {
+        "command": "ivyhouseTerminalMonitor.restartAndCaptureCodexStatus",
+        "title": "IvyHouse Monitor: Restart Codex + Auto-Capture /status"
+      },
+      {
+        "command": "ivyhouseTerminalMonitor.verifyCodexStatusInjection",
+        "title": "IvyHouse Monitor: Verify Codex /status Injection"
+      },
+      {
+        "command": "ivyhouseTerminalMonitor.openLastCodexCapture",
+        "title": "IvyHouse Monitor: Open Last Codex Capture"
+      },
+      {
+        "command": "ivyhouseTerminalMonitor.clearCodexCapture",
+        "title": "IvyHouse Monitor: Clear Codex Capture"
+      },
+      {
+        "command": "ivyhouseTerminalMonitor.codexCaptureDiagnostics",
+        "title": "IvyHouse Monitor: Codex Capture Diagnostics"
+      }
+    ],
+    "configuration": {
+      "title": "IvyHouse Terminal Monitor",
+      "properties": {
+        "ivyhouseTerminalMonitor.codexCommand": {
+          "type": "string",
+          "default": "codex",
+          "description": "Command word used to detect shell-integration fallback stream attachment."
+        },
+        "ivyhouseTerminalMonitor.codexTerminalName": {
+          "type": "string",
+          "default": "Codex CLI",
+          "description": "Name of the Codex terminal to monitor."
+        },
+        "ivyhouseTerminalMonitor.alwaysCaptureCodex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Always write a rolling capture of the Codex terminal output to codex_live.txt (best-effort)."
+        },
+        "ivyhouseTerminalMonitor.opencodeCommand": {
+          "type": "string",
+          "default": "opencode",
+          "description": "Command word used to detect shell-integration fallback stream attachment for OpenCode."
+        },
+        "ivyhouseTerminalMonitor.opencodeTerminalName": {
+          "type": "string",
+          "default": "OpenCode CLI",
+          "description": "Name of the OpenCode terminal to monitor."
+        },
+        "ivyhouseTerminalMonitor.alwaysCaptureOpenCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Always write a rolling capture of the OpenCode terminal output to opencode_live.txt (best-effort)."
+        },
+        "ivyhouseTerminalMonitor.captureMaxSeconds": {
+          "type": "number",
+          "default": 10,
+          "description": "Max seconds to capture terminal output after sending a command."
+        },
+        "ivyhouseTerminalMonitor.captureSilenceMs": {
+          "type": "number",
+          "default": 800,
+          "description": "Stop capture when no new output arrives for this long (ms)."
+        },
+        "ivyhouseTerminalMonitor.captureMaxBytes": {
+          "type": "number",
+          "default": 65536,
+          "description": "Max bytes for a single capture file."
+        },
+        "ivyhouseTerminalMonitor.captureDir": {
+          "type": "string",
+          "default": ".service/terminal_capture",
+          "description": "Workspace-relative directory to store capture files."
+        }
+      }
+    }
+  }
+}

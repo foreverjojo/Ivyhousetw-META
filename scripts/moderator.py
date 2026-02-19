@@ -14,8 +14,8 @@ from typing import Any
 
 import requests
 
-from core.config import MODEL_MODERATOR
 from core.llm_monitor import LLMCall, estimate_cost, get_monitor
+from core.model_settings import get_model, get_retry_model_chain
 from scripts.moderator_fallback import build_deterministic_workflow_state
 from utils import now_iso
 
@@ -86,6 +86,33 @@ def _openrouter_chat_completion(
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
     }
+
+
+def _openrouter_chat_completion_with_fallback(
+    messages,
+    *,
+    model: str,
+    role: str,
+    temperature: float = 0.2,
+    max_tokens: int = 10000,
+) -> tuple[str, dict[str, int], str, bool]:
+    """API 失敗時以 fallback model 重試一次。"""
+    retry_chain = get_retry_model_chain(role, primary_model=model)
+    errors: list[str] = []
+
+    for idx, candidate in enumerate(retry_chain):
+        try:
+            content, usage = _openrouter_chat_completion(
+                messages,
+                model=candidate,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return content, usage, candidate, idx > 0
+        except Exception as err:
+            errors.append(f"{candidate}: {err}")
+
+    raise RuntimeError("; ".join(errors))
 
 
 def _try_parse_json(s: str) -> dict[str, Any]:
@@ -166,7 +193,7 @@ def build_workflow_state(
     - 只引用輸入中的數字，不重算 KPI
     - 可選整合三顧問 consultant_notes
     """
-    model = model or os.getenv("MODEL_MODERATOR") or MODEL_MODERATOR
+    configured_model = model or get_model("moderator")
 
     guardrails = _guardrail_check(report_summary)
 
@@ -222,9 +249,19 @@ def build_workflow_state(
 
     total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
+    used_model = configured_model
+    retried_with_fallback_main = False
+    retried_with_fallback_repair = False
+
     try:
-        content, usage_main = _openrouter_chat_completion(
-            messages, model=model, temperature=0.2, max_tokens=2400
+        content, usage_main, used_model, retried_with_fallback_main = (
+            _openrouter_chat_completion_with_fallback(
+                messages,
+                model=configured_model,
+                role="moderator",
+                temperature=0.2,
+                max_tokens=2400,
+            )
         )
         total_usage = usage_main
     except Exception as e:
@@ -233,7 +270,7 @@ def build_workflow_state(
             llm_monitor.log_call(
                 LLMCall(
                     timestamp=now_iso(),
-                    model=model,
+                    model=configured_model,
                     prompt_tokens=0,
                     completion_tokens=0,
                     total_tokens=0,
@@ -245,10 +282,16 @@ def build_workflow_state(
                             "step": step,
                             "version_fp": version_fp,
                             "fallback": True,
+                            "configured_model": configured_model,
                             "error": str(e)[:200],
                         }
                         if version_fp
-                        else {"step": step, "fallback": True, "error": str(e)[:200]}
+                        else {
+                            "step": step,
+                            "fallback": True,
+                            "configured_model": configured_model,
+                            "error": str(e)[:200],
+                        }
                     ),
                 )
             )
@@ -276,9 +319,16 @@ def build_workflow_state(
             {"role": "user", "content": content_snippet},
         ]
         try:
-            content2, usage_repair = _openrouter_chat_completion(
-                repair_messages, model=model, temperature=0.0, max_tokens=2400
+            content2, usage_repair, repair_model, retried_with_fallback_repair = (
+                _openrouter_chat_completion_with_fallback(
+                    repair_messages,
+                    model=used_model,
+                    role="moderator",
+                    temperature=0.0,
+                    max_tokens=2400,
+                )
             )
+            used_model = repair_model
             total_usage = {
                 "prompt_tokens": int(total_usage.get("prompt_tokens", 0) or 0)
                 + int(usage_repair.get("prompt_tokens", 0) or 0),
@@ -300,18 +350,35 @@ def build_workflow_state(
         llm_monitor.log_call(
             LLMCall(
                 timestamp=now_iso(),
-                model=model,
+                model=used_model,
                 prompt_tokens=int(total_usage.get("prompt_tokens", 0) or 0),
                 completion_tokens=int(total_usage.get("completion_tokens", 0) or 0),
                 total_tokens=int(total_usage.get("total_tokens", 0) or 0),
                 cost_usd=estimate_cost(
-                    model,
+                    used_model,
                     int(total_usage.get("prompt_tokens", 0) or 0),
                     int(total_usage.get("completion_tokens", 0) or 0),
                 ),
                 function="build_workflow_state",
                 week_id=str(report_summary.get("week_id") or "").strip() or None,
-                extra={"step": step, "version_fp": version_fp} if version_fp else {"step": step},
+                extra=(
+                    {
+                        "step": step,
+                        "version_fp": version_fp,
+                        "configured_model": configured_model,
+                        "used_model": used_model,
+                        "fallback_retry_main": retried_with_fallback_main,
+                        "fallback_retry_repair": retried_with_fallback_repair,
+                    }
+                    if version_fp
+                    else {
+                        "step": step,
+                        "configured_model": configured_model,
+                        "used_model": used_model,
+                        "fallback_retry_main": retried_with_fallback_main,
+                        "fallback_retry_repair": retried_with_fallback_repair,
+                    }
+                ),
             )
         )
     except Exception:

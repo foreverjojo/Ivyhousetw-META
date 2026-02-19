@@ -6,8 +6,9 @@
   - 提供頁面快速連結
 """
 
-import streamlit as st
 from pathlib import Path
+
+import streamlit as st
 
 # 讀取版本號
 VERSION_FILE = Path(__file__).parent.parent / "VERSION"
@@ -95,12 +96,21 @@ def render_sidebar_settings():
         st.divider()
         st.markdown("### 🤖 AI 模型配置")
 
-        from core.config import AVAILABLE_MODELS, MODEL_INSIGHTS, MODEL_CONSULTANT_A, MODEL_CONSULTANT_B, MODEL_CONSULTANT_C, MODEL_MODERATOR
-        import os
+        from core.model_settings import (
+            AVAILABLE_MODELS,
+            get_model,
+            normalize_model_id,
+            set_model,
+        )
 
-        def model_selector(label, key, default_id):
+        def model_selector(label, key, role):
             options = list(AVAILABLE_MODELS.keys()) + ["自定義..."]
-            current_id = st.session_state.get(f"model_id_{key}", default_id)
+            current_id = st.session_state.get(f"model_id_{key}") or get_model(role)
+            current_id = normalize_model_id(current_id)
+
+            if current_id != st.session_state.get(f"model_id_{key}"):
+                st.session_state[f"model_id_{key}"] = current_id
+
             display_name = next((k for k, v in AVAILABLE_MODELS.items() if v == current_id), "自定義...")
             idx = options.index(display_name) if display_name in options else len(options)-1
             selected_label = st.selectbox(label, options, index=idx, key=f"sel_{key}")
@@ -110,20 +120,30 @@ def render_sidebar_settings():
             else:
                 final_id = AVAILABLE_MODELS[selected_label]
 
+            final_id = normalize_model_id(final_id)
             st.session_state[f"model_id_{key}"] = final_id
             return final_id
 
-        insights_model = model_selector("C. 洞察分析 (Insights)", "insights", MODEL_INSIGHTS)
-        consultant_a = model_selector("E. 成效顧問 (A)", "consultant_a", MODEL_CONSULTANT_A)
-        consultant_b = model_selector("E. 視覺顧問 (B)", "consultant_b", MODEL_CONSULTANT_B)
-        consultant_c = model_selector("E. 策略顧問 (C)", "consultant_c", MODEL_CONSULTANT_C)
-        moderator = model_selector("D/F. 會議主持 (Moderator)", "moderator", MODEL_MODERATOR)
-
-        os.environ["MODEL_INSIGHTS"] = insights_model
-        os.environ["MODEL_CONSULTANT_A"] = consultant_a
-        os.environ["MODEL_CONSULTANT_B"] = consultant_b
-        os.environ["MODEL_CONSULTANT_C"] = consultant_c
-        os.environ["MODEL_MODERATOR"] = moderator
+        insights_model = set_model(
+            "insights",
+            model_selector("C. 洞察分析 (Insights)", "insights", "insights"),
+        )
+        consultant_a = set_model(
+            "consultant_a",
+            model_selector("E. 成效顧問 (A)", "consultant_a", "consultant_a"),
+        )
+        consultant_b = set_model(
+            "consultant_b",
+            model_selector("E. 視覺顧問 (B)", "consultant_b", "consultant_b"),
+        )
+        consultant_c = set_model(
+            "consultant_c",
+            model_selector("E. 策略顧問 (C)", "consultant_c", "consultant_c"),
+        )
+        moderator = set_model(
+            "moderator",
+            model_selector("D/F. 會議主持 (Moderator)", "moderator", "moderator"),
+        )
 
         return {
             "detail_level": detail_level,

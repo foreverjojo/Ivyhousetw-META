@@ -153,6 +153,38 @@ WITH_DOCKER=1 WITH_VSCODE=1 curl -fsSL https://raw.githubusercontent.com/forever
    - `github.copilot`
    - `esbenp.prettier-vscode`
    - （完整清單見 `.vscode/extensions.json`）
+
+本 repo 另含 3 個 local terminal extensions（由 portable 安裝腳本 best-effort 打包安裝）：
+- `ivyhouse-local.ivyhouse-terminal-injector`
+- `ivyhouse-local.ivyhouse-terminal-monitor`
+- `ivyhouse-local.ivyhouse-terminal-orchestrator`（legacy）
+
+如果要手動補裝（容器內）：
+```bash
+bash scripts/vscode/install_terminal_orchestrator.sh
+```
+
+### 3.2 Proposed API runtime arguments（重要）
+
+若要讓 Monitor 主路徑生效，請設定 runtime `argv.json`：
+
+```json
+{
+   "enable-proposed-api": [
+      "ivyhouse-local.ivyhouse-terminal-monitor",
+      "ivyhouse-local.ivyhouse-terminal-orchestrator"
+   ]
+}
+```
+
+常見路徑：
+- Windows Insiders：`%APPDATA%\\Code - Insiders\\User\\argv.json`
+- Windows Stable：`%APPDATA%\\Code\\User\\argv.json`
+- macOS Insiders：`~/Library/Application Support/Code - Insiders/User/argv.json`
+- Linux Insiders：`~/.config/Code - Insiders/User/argv.json`
+
+儲存後請完整關閉並重啟 VS Code，再檢查 `.service/terminal_capture/monitor_debug.jsonl` 是否出現 `proposed_api: true`。
+
 本 repo 提供自動化工具確保三處 extensions 清單（devcontainer / .vscode / idx）保持同步：
 
 ```bash

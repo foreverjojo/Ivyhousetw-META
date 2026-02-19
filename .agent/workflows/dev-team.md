@@ -96,6 +96,14 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
 
 **任務**: 由用戶選擇 Engineer/QA 要使用的終端工具，Coordinator 更新 Plan 的 `EXECUTION_BLOCK`
 
+**執行後端策略（必填）**：
+- `extension-sendtext-required`（固定）：命令注入一律使用 IvyHouse Terminal Injector extension 的 sendText 指令（`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`）
+- `proposed-primary-with-extension-fallback`（預設）：監測優先 Proposed API；不可用時切換 extension 監測模式（capture/polling，預設不使用 HTTP bridge）
+
+**命令名稱（現行）**：
+- Injector：`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`
+- Monitor：`IvyHouse Monitor: Capture Codex Output` / `IvyHouse Monitor: Auto-Capture Codex /status` / `IvyHouse Monitor: Verify Codex /status Injection`
+
 **Research Gate（條件式，必先完成）**：
 - 若 Plan 的 `research_required: true` 或依賴檔案變更（`requirements.txt`、`pyproject.toml`、`*requirements*.txt`）
   - 必須先補齊 Plan 的 `RESEARCH & ASSUMPTIONS`（Link-required；無來源則標 `RISK: unverified`）
@@ -107,6 +115,24 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
   python .agent/skills/plan_validator.py <plan_file_path>
   ```
 - 若回傳 `status: fail|error` → 退回 Planner 修正 Plan，未通過不得進入 Engineer
+
+**Preflight Gate（Engineer 注入前必先完成）**：
+- 由 Coordinator 在 Project terminal 執行一鍵 preflight：
+  ```bash
+  python scripts/vscode/workflow_preflight_check.py --json
+  ```
+- 若本輪啟用 HTTP SendText Bridge（例如採 bridge 送 `/send`），改執行：
+  ```bash
+  python scripts/vscode/workflow_preflight_check.py --require-bridge --json
+  ```
+- 進入 Engineer 注入前，至少必須滿足：
+  - `checks.proposed_api_true.ok == true`
+  - （bridge 模式）`checks.sendtext_bridge_healthz.ok == true` 且 `checks.sendtext_bridge_token.ok == true`
+- 任一條件不符：禁止注入 Engineer，先做修復（重啟 VS Code / extension、修正 argv.json、恢復 bridge）
+
+**歷史檔保留 Checkpoint（必檢）**：
+- 檢核：`git status --porcelain | awk '{print $2}' | grep -E '^\.agent/(plans|logs)/' || true`
+- 規則：若僅為命名一致性調整，禁止改寫 `/.agent/plans/**`、`/.agent/logs/**`；若因法遵/稽核需求必須修改，需先取得 user 明確同意，並在變更說明記錄理由。
 
 **決策選項**:
 1. **Codex CLI（VS Code Terminal）**: 執行 / QA
@@ -127,10 +153,13 @@ plan_approved: [YYYY-MM-DD HH:mm:ss]
 scope_policy: [strict|flexible]
 expert_required: [true|false]
 expert_conclusion: [N/A|結論摘要]
+execution_backend_policy: [extension-sendtext-required]
 scope_exceptions: []
 
 # Engineer 執行
 executor_tool: [codex-cli|opencode]
+executor_backend: [ivyhouse_sendtext_extension]
+monitor_backend: [proposed_api_monitor|ivyhouse_monitor_extension_fallback|manual_confirmation]
 executor_tool_version: [version]
 executor_user: [github-account or email]
 executor_start: [YYYY-MM-DD HH:mm:ss]
@@ -158,11 +187,15 @@ rollback_files: [N/A|檔案清單]
 
 > ⚠️ **注意**：`last_change_tool` 只允許 `codex-cli` 或 `opencode`，不含 `copilot`（Copilot 固定為 Coordinator，不做實作）。
 
-**VS Code 原生模式**:
+**指令注入策略（固定）**:
 - Codex/OpenCode 一律在 VS Code 原生終端中執行（會話自然延續）
-- **指令注入**：由 Coordinator 使用 VS Code 內建 `terminal.sendText` 對指定終端送出指令/文字
-- **禁止**：用 bash 腳本「代送」指令到 Codex/OpenCode（可能導致程序/TUI 退出或狀態被重置）
-- **即時監控**：由 Coordinator 使用 VS Code Proposed API 監測終端輸出（例如 `terminalDataWriteEvent`）
+- **指令注入**：由 Coordinator 使用 IvyHouse Terminal Injector extension 的 sendText 指令對指定終端送出指令/文字
+- **禁止**：用 bash 腳本、TTY 寫入或其他代送機制（可能導致 overlay / TUI 狀態異常）
+
+**監測策略（主從）**:
+- **主路徑**：使用 VS Code Proposed API 監測終端輸出（例如 `terminalDataWriteEvent`）
+- **Fallback**：僅在 Proposed API 不可用時，切換 extension 監測模式（capture/polling）
+- 預設不使用 HTTP SendText Bridge；若要使用，必須有 user 明確同意並記錄於 Plan/Log
 
 ---
 
@@ -174,7 +207,7 @@ rollback_files: [N/A|檔案清單]
 **執行方式**（由 Step 2.5 決定）：
 
 #### 共同規則（Coordinator 必須落地）
-- **Plan 注入方式**：僅使用 VS Code 內建 `terminal.sendText` 對「已啟動的 Codex/OpenCode 終端」送出指令/Plan 文字
+- **Plan 注入方式**：僅使用 extension sendText 對「已啟動的 Codex/OpenCode 終端」送出指令/Plan 文字
 - **完成條件（Idx-030 格式）**：Engineer/QA/Fix 結束時在終端輸出 5 行 completion marker：
   ```
   [ENGINEER_DONE] 或 [QA_DONE] 或 [FIX_DONE]
@@ -188,6 +221,7 @@ rollback_files: [N/A|檔案清單]
   - Fix: `FIX_ROUND=N`
   - **⚠️ 硬性規則**：這 5 行必須是輸出的**最後 5 個非空白行**。完成標記後不可再輸出任何文字（包括確認訊息、說明等）。
 - **即時監控**：Coordinator 以 Proposed API 監測終端輸出，直到偵測 completion marker 或 timeout
+- **監控備援**：若 Proposed API 不可用，先嘗試 `ivyhouse_monitor_extension_fallback`；若仍不可用才改人工回報
 - **Scope Gate**：偵測到變更後，Coordinator 必須先確認變更檔案未超出 Plan 的檔案清單（超出則停下來請用戶決策）
 
 - **執行記錄**:
@@ -216,9 +250,10 @@ rollback_files: [N/A|檔案清單]
   ```bash
   python .agent/skills/test_runner.py [test_path]
   ```
-- **Coordinator 收集流程（VS Code 原生模式）**：
-  - Copilot Chat 透過 `terminal.sendText()` 對已啟動的 Codex/OpenCode 終端注入指令
+- **Coordinator 收集流程（Extension 注入 + Proposed API 監測）**：
+  - Copilot Chat 透過 extension sendText 對已啟動的 Codex/OpenCode 終端注入指令
   - 使用 VS Code Proposed API 監測終端輸出
+  - 若 Proposed API 不可用：先改走 `ivyhouse_monitor_extension_fallback`（extension 監測模式）
   - 從 stdout 擷取 JSON 結果
   - 將結果寫入 Log 的 `## 🛠️ SKILLS_EXECUTION_REPORT` 段落
 - **Skills Evaluation（建議每回合一次，產生可追溯統計）**：
@@ -322,8 +357,20 @@ rollback_files: [N/A|檔案清單]
 
 | 模式 | 適用情境 | 啟動方式 | 監測 | QA 觸發 |
 |------|---------|---------|------|---------|
-| Codex CLI（VS Code Terminal） | 批次處理、檔案操作、快速執行 | Coordinator 以 `terminal.sendText` 注入 | Proposed API（終端輸出 + marker） | marker 偵測後 |
-| OpenCode CLI（VS Code Terminal） | 需要互動式終端操作/實跑指令 | Coordinator 以 `terminal.sendText` 注入 | Proposed API（終端輸出 + marker） | marker 偵測後 |
+| Codex CLI（VS Code Terminal） | 批次處理、檔案操作、快速執行 | Coordinator 以 extension sendText 注入 | Proposed API（主）→ extension 監測 fallback | marker 偵測後 |
+| OpenCode CLI（VS Code Terminal） | 需要互動式終端操作/實跑指令 | Coordinator 以 extension sendText 注入 | Proposed API（主）→ extension 監測 fallback | marker 偵測後 |
+
+### 後端策略（主從）
+
+| 後端策略 | 說明 | 何時使用 |
+|---------|------|---------|
+| `extension-sendtext-required` | 命令注入固定走 IvyHouse Terminal Injector extension sendText | 預設且固定 |
+| `proposed_api_monitor` | 監測主路徑使用 VS Code Proposed API | 預設主路徑 |
+| `ivyhouse_monitor_extension_fallback` | Proposed API 不可用時，啟用 extension 監測模式 | 條件式啟用 |
+
+**Extension 拆分模型（允許）**：
+- `Injector Extension`：只負責 sendText 注入（固定）
+- `Monitor Extension`：只負責監測 fallback（僅在 Proposed API 不可用時）
 
 ---
 

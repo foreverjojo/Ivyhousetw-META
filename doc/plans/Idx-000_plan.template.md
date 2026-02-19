@@ -116,10 +116,13 @@ plan_approved: [YYYY-MM-DD HH:mm:ss]
 scope_policy: [strict|flexible]
 expert_required: [true|false]
 expert_conclusion: [N/A|結論摘要]
+execution_backend_policy: [extension-sendtext-required]
 scope_exceptions: []
 
 # Engineer 執行
 executor_tool: [待用戶確認: codex-cli|opencode]
+executor_backend: [ivyhouse_sendtext_extension]
+monitor_backend: [proposed_api_monitor|ivyhouse_monitor_extension_fallback|manual_confirmation]
 executor_tool_version: [version number]
 executor_user: [github-account or email]
 executor_start: [執行開始時間]
@@ -150,9 +153,22 @@ rollback_files: [N/A|檔案清單]
 
 | 工具 | 適用場景 | 優勢 | 限制 | 需要監控 |
 |------|---------|------|------|----------|
-| **GitHub Copilot Chat（Coordinator）** | 目標確認、分派、更新 Plan/Log | VS Code 內建 `terminal.sendText` 注入 + Proposed API 監控 | 不直接執行/QA（由終端工具負責） | ✅ 是 |
+| **GitHub Copilot Chat（Coordinator）** | 目標確認、分派、更新 Plan/Log | extension sendText 注入 + Proposed API 監控（含 extension 監測備援） | 不直接執行/QA（由終端工具負責） | ✅ 是 |
 | **Codex CLI（VS Code Terminal）** | 批次檔案操作、模板化工作、大規模重構 | 執行速度快、適合批次 | 需由 Coordinator 注入/監控 | ✅ 是 |
 | **OpenCode CLI（VS Code Terminal）** | 需要互動式終端操作/實跑指令 | 終端整合強、適合互動 | 需由 Coordinator 注入/監控 | ✅ 是 |
+
+### 執行後端策略（主從）
+
+| 策略 | 說明 | 使用時機 |
+|------|------|---------|
+| `extension-sendtext-required` | 命令注入固定使用 IvyHouse Terminal Injector extension sendText | 預設且固定 |
+| `proposed_api_monitor` | 監測主路徑使用 VS Code Proposed API | 預設 |
+| `ivyhouse_monitor_extension_fallback` | Proposed API 不可用時，使用 extension 監測模式（capture/polling） | 條件式啟用 |
+
+> ✅ 可採雙 extension：Injector（sendText）+ Monitor（監測 fallback）；兩者責任需在 Plan 明確記錄。
+> ✅ 命令名稱建議：Injector 使用 `IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`；Monitor 使用 `IvyHouse Monitor: Capture Codex Output` / `IvyHouse Monitor: Auto-Capture Codex /status`。
+
+> ⚠️ 預設不使用 HTTP SendText Bridge。若要啟用，必須先取得 user 明確同意，並在 Plan/Log 記錄原因。
 
 ### QA 模式建議
 
@@ -209,10 +225,12 @@ rollback_files: [N/A|檔案清單]
 - [ ] Spec 已確認，可進入 Step 2 (Meta Expert)
 - [ ] Engineer Tool 已選擇：`[codex-cli|opencode]`（並已寫入 EXECUTION_BLOCK）
 - [ ] QA Tool 已選擇：`[codex-cli|opencode]`（必須 ≠ last_change_tool，並已寫入 EXECUTION_BLOCK）
+- [ ] Execution Backend Policy 已確認：`[extension-sendtext-required]`（並已寫入 EXECUTION_BLOCK）
+- [ ] Monitor Backend Policy 已確認：`[proposed-primary-with-extension-fallback]`（並已寫入 EXECUTION_BLOCK）
 - [ ] Terminal 管理策略已確認
 
 ---
 
-**Template Version**: 2.3.0
-**Last Updated**: 2026-01-17
-**Synced With**: .agent/roles/coordinator.md v1.4.0
+**Template Version**: 2.5.0
+**Last Updated**: 2026-02-18
+**Synced With**: .agent/roles/coordinator.md v1.6.0

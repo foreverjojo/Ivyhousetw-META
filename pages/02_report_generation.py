@@ -47,6 +47,7 @@ from core import (
     HISTORY_ROOT,
     restore_from_version_dir,
 )
+from core.model_settings import get_model
 from utils import (
     read_csv,
     compute_inputs_fingerprint,
@@ -432,17 +433,9 @@ locked_vdir = st.session_state.get("locked_vdir")
 if locked_week or locked_vdir:
     render_status(locked_week, Path(locked_vdir) if locked_vdir else None)
 
-# 導入模型配置
-import os
-from core.config import (
-    MODEL_INSIGHTS,
-    MODEL_CONSULTANT_A, MODEL_CONSULTANT_B, MODEL_CONSULTANT_C,
-    MODEL_MODERATOR
-)
-
-def get_active_model(env_var: str, default: str) -> str:
+def get_active_model(role: str) -> str:
     """取得當前生效的模型 ID"""
-    return os.getenv(env_var) or default
+    return get_model(role)
 
 if btn_quick:
     mode = "oneclick_quick_BCD"
@@ -468,13 +461,13 @@ if btn_quick:
             status.update(label="✅ Step B 完成，進入 AI 分析...", state="running")
 
             # Step C
-            model_c_name = get_active_model("MODEL_INSIGHTS", MODEL_INSIGHTS)
+            model_c_name = get_active_model("insights")
             status.write(f"執行 Step C: LLM 洞察生成 (使用模型: **{model_c_name}**)...")
             run_step_c(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_status)
             restore_from_version_dir(vdir)
 
             # Step D
-            model_d_name = get_active_model("MODEL_MODERATOR", MODEL_MODERATOR)
+            model_d_name = get_active_model("moderator")
             status.write(f"執行 Step D: 草擬會議記錄 (使用模型: **{model_d_name}**)...")
             run_step_d_draft(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_status)
             restore_from_version_dir(vdir)
@@ -515,15 +508,15 @@ if btn_final:
                 step_e_display = st.container()
 
             # Step C
-            model_c_name = get_active_model("MODEL_INSIGHTS", MODEL_INSIGHTS)
+            model_c_name = get_active_model("insights")
             status.write(f"執行 Step C: LLM 洞察生成 (使用模型: **{model_c_name}**)...")
             run_step_c(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_status, realtime_container=step_c_display)
             restore_from_version_dir(vdir)
 
             # Step E
-            model_ea = get_active_model("MODEL_CONSULTANT_A", MODEL_CONSULTANT_A)
-            model_eb = get_active_model("MODEL_CONSULTANT_B", MODEL_CONSULTANT_B)
-            model_ec = get_active_model("MODEL_CONSULTANT_C", MODEL_CONSULTANT_C)
+            model_ea = get_active_model("consultant_a")
+            model_eb = get_active_model("consultant_b")
+            model_ec = get_active_model("consultant_c")
             status.write(f"執行 Step E: 三顧問諮詢...")
             status.caption(f"- 顧問 A (成效): **{model_ea}**\n- 顧問 B (圖文): **{model_eb}**\n- 顧問 C (策略): **{model_ec}**")
 
@@ -538,7 +531,7 @@ if btn_final:
             restore_from_version_dir(vdir)
 
             # Step F
-            model_f_name = get_active_model("MODEL_MODERATOR", MODEL_MODERATOR)
+            model_f_name = get_active_model("moderator")
             status.write(f"執行 Step F: 最終會議總結 (使用模型: **{model_f_name}**)...")
             run_step_f_final(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_status)
             restore_from_version_dir(vdir)

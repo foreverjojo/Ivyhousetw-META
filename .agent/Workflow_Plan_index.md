@@ -42,6 +42,8 @@
 | Idx-031 | 治理閉環：commit/push + log 不再追溯占位 + tasks 跨平台 | P0 | ✅ 已完成 | manual | PASS WITH RISK | 2026-01-23-v1 | `.agent/logs/Idx-031_log.md` | Plan：`.agent/plans/Idx-031_plan.md` |
 | Idx-032 | 健康檢查 + extensions 同步 + 一鍵恢復對齊現況 | P0 | ✅ 已完成 | manual | PASS WITH RISK | 2026-01-23-v1 | `.agent/logs/Idx-032_log.md` | Plan：`.agent/plans/Idx-032_plan.md` |
 | Idx-033 | 一鍵自檢入口 + Template workflow/skills 回推包（不含 portable） | P0 | ✅ 已完成 | manual | PASS WITH RISK | 2026-01-23-v1 | `.agent/logs/Idx-033_log.md` | Plan：`.agent/plans/Idx-033_plan.md` |
+| Idx-034 | 固定終端完整 /dev 流程演練（native-primary） | P1 | ✅ 已完成 | codex-cli | PASS | 2026-02-17-v1 | `.agent/logs/Idx-034_log.md` | Demo run：固定 Codex/OpenCode 終端完成 GOAL→PLAN Gate→EXECUTE→QA→LOG |
+| Idx-035 | 固定終端可視化 /dev 流程演練（terminal 可見 STEP） | P1 | ✅ 已完成 | codex-cli | PASS | 2026-02-17-v1 | `.agent/logs/Idx-035_log.md` | Visual run：terminal 顯示 STEP 1~5，固定 Codex/OpenCode 終端完成 marker |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)

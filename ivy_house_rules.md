@@ -61,9 +61,15 @@
 本專案採 **VS Code Native** 的多工具協作流程（GitHub Copilot Chat 作為 Coordinator + VS Code Terminals 執行 Codex/OpenCode）：
 
 - **終端持久化（以 VS Code 為準）**：
-  - Codex/OpenCode 會在 VS Code 內維持各自 terminal session；Coordinator 透過 VS Code 內建 `terminal.sendText` 注入指令/Plan 文字。
-  - ❌ 禁止使用任何 bridge/server 或自建「代送指令」機制（避免工具/TUI 退出或狀態重置）。
+  - Codex/OpenCode 會在 VS Code 內維持各自 terminal session；Coordinator 一律透過 IvyHouse Terminal Injector extension 的 sendText 注入指令/Plan 文字。
+  - 注入命令範例：`IvyHouse Injector: Send Text to Codex Terminal`、`IvyHouse Injector: Send Text to OpenCode Terminal`。
+  - ✅ 監測主路徑使用 Proposed API（如 `terminalDataWriteEvent`）。
+  - ⚠️ 若 Proposed API 不可用，改用 IvyHouse Terminal Monitor extension 監測模式（capture/polling）作為 fallback；HTTP bridge 預設停用，需 user 明確同意才可啟用。
+  - 監測命令範例：`IvyHouse Monitor: Capture Codex Output`、`IvyHouse Monitor: Auto-Capture Codex /status`。
+  - ✅ 允許將「注入」與「監測」拆分為兩個 extension：Injector extension 固定送指令；Monitor extension 僅在 Proposed API 不可用時接手。
+  - ❌ 禁止自建 bridge/server 或 bash 腳本「代送指令」機制（避免工具/TUI 退出或狀態重置）。
   - ✅ git/diff 類操作只能在獨立的 Project terminal 或 VS Code SCM 執行（不可注入到 Codex/OpenCode terminal）。
+  - ✅ 歷史稽核檔保留政策：`/.agent/plans/**`、`/.agent/logs/**` 屬於審計軌跡，預設不得為了命名一致性做回寫；命令命名遷移僅更新現行規範文件。若因法遵/稽核需求必須修改，需先取得使用者明確同意並在變更說明中記錄理由。
 
 - **可重複的 QA（建議）**：
   - 鼓勵將可自動化的驗證寫成可重跑腳本（例如 `tests/verify_xxx.py`），但若專案尚無測試基礎，至少需提供明確的可驗收步驟與風險說明。

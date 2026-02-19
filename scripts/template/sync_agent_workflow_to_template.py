@@ -77,7 +77,8 @@ def main(argv: list[str]) -> int:
         "--include-peripherals",
         action="store_true",
         help=(
-            "同步 VS Code 周邊（tools/vscode_terminal_orchestrator、scripts/vscode/、"
+            "同步 VS Code 周邊（tools/vscode_terminal_injector、tools/vscode_terminal_monitor、"
+            "tools/vscode_terminal_orchestrator、scripts/vscode/、"
             "scripts/sendtext_bridge_client.py、.vscode/）。預設不包含。"
         ),
     )
@@ -105,6 +106,8 @@ def main(argv: list[str]) -> int:
         allow_dirs.extend(
             [
                 REPO_ROOT / ".vscode",
+                REPO_ROOT / "tools" / "vscode_terminal_injector",
+                REPO_ROOT / "tools" / "vscode_terminal_monitor",
                 REPO_ROOT / "tools" / "vscode_terminal_orchestrator",
                 REPO_ROOT / "scripts" / "vscode",
             ]

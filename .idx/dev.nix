@@ -50,6 +50,9 @@
       "vscode-icons-team.vscode-icons"
       "yzhang.markdown-all-in-one"
       "sst-dev.opencode"
+      "ivyhouse-local.ivyhouse-terminal-injector"
+      "ivyhouse-local.ivyhouse-terminal-monitor"
+      "ivyhouse-local.ivyhouse-terminal-orchestrator"
     ];
 
     # Workspace settings

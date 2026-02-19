@@ -21,10 +21,16 @@ function Resolve-CodeCmd {
   $code = Get-Command code -ErrorAction SilentlyContinue
   if ($code) { return $code.Path }
 
+  $insiders = Get-Command code-insiders -ErrorAction SilentlyContinue
+  if ($insiders) { return $insiders.Path }
+
   $fallbacks = @(
     "$Env:LocalAppData\Programs\Microsoft VS Code\bin\code.cmd",
+    "$Env:LocalAppData\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd",
     "$Env:ProgramFiles\Microsoft VS Code\bin\code.cmd",
-    "$Env:ProgramFiles(x86)\Microsoft VS Code\bin\code.cmd"
+    "$Env:ProgramFiles\Microsoft VS Code Insiders\bin\code-insiders.cmd",
+    "$Env:ProgramFiles(x86)\Microsoft VS Code\bin\code.cmd",
+    "$Env:ProgramFiles(x86)\Microsoft VS Code Insiders\bin\code-insiders.cmd"
   )
 
   foreach ($p in $fallbacks) {
@@ -43,10 +49,71 @@ if (!$codeCmd) {
 }
 
 Write-Host "Installing VS Code extensions from $extensionsJson"
+
+$localExtensionMap = @{
+  "ivyhouse-local.ivyhouse-terminal-injector" = "tools\vscode_terminal_injector"
+  "ivyhouse-local.ivyhouse-terminal-monitor" = "tools\vscode_terminal_monitor"
+  "ivyhouse-local.ivyhouse-terminal-orchestrator" = "tools\vscode_terminal_orchestrator"
+}
+
+function Install-LocalExtension {
+  param(
+    [string]$ExtId,
+    [string]$RelativePath
+  )
+
+  $extDir = Join-Path $RepoRoot $RelativePath
+  if (!(Test-Path $extDir)) {
+    Write-Host "  [WARN] Local extension source not found: $extDir"
+    return $false
+  }
+
+  $npm = Get-Command npm -ErrorAction SilentlyContinue
+  if (!$npm) {
+    Write-Host "  [WARN] npm not found; cannot package local extension: $ExtId"
+    return $false
+  }
+
+  try {
+    Push-Location $extDir
+    npm -s exec --yes @vscode/vsce package -- --allow-missing-repository --skip-license | Out-Null
+  } catch {
+    Write-Host "  [WARN] Failed to package local extension: $ExtId"
+    Pop-Location
+    return $false
+  }
+
+  Pop-Location
+
+  $vsix = Get-ChildItem -Path $extDir -Filter "*.vsix" -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+
+  if (!$vsix) {
+    Write-Host "  [WARN] VSIX not found after packaging: $ExtId"
+    return $false
+  }
+
+  & $codeCmd --install-extension $vsix.FullName --force | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "  [WARN] Failed to install local VSIX: $($vsix.FullName)"
+    return $false
+  }
+
+  return $true
+}
+
 $failed = 0
 foreach ($ext in $exts) {
   if ([string]::IsNullOrWhiteSpace($ext)) { continue }
   Write-Host "- $ext"
+
+  if ($localExtensionMap.ContainsKey($ext)) {
+    $ok = Install-LocalExtension -ExtId $ext -RelativePath $localExtensionMap[$ext]
+    if (-not $ok) { $failed++ }
+    continue
+  }
+
   & $codeCmd --install-extension $ext | Out-Null
   if ($LASTEXITCODE -ne 0) {
     Write-Host "  [WARN] Failed: $ext"

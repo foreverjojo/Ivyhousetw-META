@@ -18,8 +18,8 @@ from typing import Any
 
 import requests
 
-from core.config import MODEL_CONSULTANT_A, MODEL_CONSULTANT_B, MODEL_CONSULTANT_C
 from core.llm_monitor import LLMCall, estimate_cost, get_monitor
+from core.model_settings import get_model, get_retry_model_chain
 from scripts.media_scanner import get_top_images, scan_media_assets
 from scripts.multimodal import create_image_content, openrouter_multimodal_completion
 from utils import now_iso
@@ -90,6 +90,33 @@ def _openrouter_chat_completion(
             "total_tokens": total_tokens,
         },
     )
+
+
+def _openrouter_chat_completion_with_fallback(
+    messages,
+    *,
+    model: str,
+    role: str,
+    temperature: float = 0.2,
+    max_tokens: int = 8000,
+) -> tuple[str, dict[str, int], str, bool]:
+    """API 失敗時以 fallback model 重試一次。"""
+    retry_chain = get_retry_model_chain(role, primary_model=model)
+    errors: list[str] = []
+
+    for idx, candidate in enumerate(retry_chain):
+        try:
+            content, usage = _openrouter_chat_completion(
+                messages,
+                model=candidate,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return content, usage, candidate, idx > 0
+        except Exception as err:
+            errors.append(f"{candidate}: {err}")
+
+    raise RuntimeError("; ".join(errors))
 
 
 def _try_parse_json(s: str) -> dict[str, Any]:
@@ -199,8 +226,12 @@ def _prepare_context(report_summary: dict[str, Any], report_insights: dict[str, 
 
 
 def _parse_or_repair(
-    content: str, usage: dict[str, int], model: str, system: str
-) -> tuple[dict[str, Any], dict[str, int]]:
+    content: str,
+    usage: dict[str, int],
+    model: str,
+    role: str,
+    system: str,
+) -> tuple[dict[str, Any], dict[str, int], str, bool]:
     """
     用途：解析模型輸出；若不是合法 JSON，會自動做一次「修復重試」。
     注意：_try_parse_json 解析失敗時會回傳含 error 的 dict（不會丟例外），因此需同時檢查 error key。
@@ -211,29 +242,32 @@ def _parse_or_repair(
         parsed = {"error": "unexpected_parse_exception", "raw_content": str(content)[:200]}
 
     if isinstance(parsed, dict) and "error" not in parsed:
-        return parsed, usage
+        return parsed, usage, model, False
 
     content_snippet = (
         content if len(content) <= 12000 else (content[:12000] + "\n...[TRUNCATED]...")
     )
-    repair, usage_repair = _openrouter_chat_completion(
-        [
-            {"role": "system", "content": system},
-            {
-                "role": "user",
-                "content": (
-                    "你上一次輸出不是合法 JSON。請重新輸出『單一 JSON object』，且：\n"
-                    "- 禁止 ```\n"
-                    "- 禁止多餘文字（包含前後說明、註解、…）\n"
-                    "- 不要輸出多個 JSON\n"
-                    "- 確保逗號/括號配對正確\n"
-                ),
-            },
-            {"role": "user", "content": content_snippet},
-        ],
-        model=model,
-        temperature=0.0,
-        max_tokens=8000,
+    repair, usage_repair, repair_model, retried_with_fallback = (
+        _openrouter_chat_completion_with_fallback(
+            [
+                {"role": "system", "content": system},
+                {
+                    "role": "user",
+                    "content": (
+                        "你上一次輸出不是合法 JSON。請重新輸出『單一 JSON object』，且：\n"
+                        "- 禁止 ```\n"
+                        "- 禁止多餘文字（包含前後說明、註解、…）\n"
+                        "- 不要輸出多個 JSON\n"
+                        "- 確保逗號/括號配對正確\n"
+                    ),
+                },
+                {"role": "user", "content": content_snippet},
+            ],
+            model=model,
+            role=role,
+            temperature=0.0,
+            max_tokens=8000,
+        )
     )
     total_usage = {
         "prompt_tokens": int(usage.get("prompt_tokens", 0) or 0)
@@ -243,7 +277,7 @@ def _parse_or_repair(
         "total_tokens": int(usage.get("total_tokens", 0) or 0)
         + int(usage_repair.get("total_tokens", 0) or 0),
     }
-    return _try_parse_json(repair), total_usage
+    return _try_parse_json(repair), total_usage, repair_model, retried_with_fallback
 
 
 def generate_consultant_notes(
@@ -262,9 +296,9 @@ def generate_consultant_notes(
     參數:
         on_consultant_done: 顧問完成時的回呼 (role, parsed_json)，用於即時 UI 更新
     """
-    model_a = model_a or os.getenv("MODEL_CONSULTANT_A") or MODEL_CONSULTANT_A
-    model_b = model_b or os.getenv("MODEL_CONSULTANT_B") or MODEL_CONSULTANT_B
-    model_c = model_c or os.getenv("MODEL_CONSULTANT_C") or MODEL_CONSULTANT_C
+    configured_model_a = model_a or get_model("consultant_a")
+    configured_model_b = model_b or get_model("consultant_b")
+    configured_model_c = model_c or get_model("consultant_c")
 
     # Prepare Context
     ctx_str = _prepare_context(report_summary, report_insights)
@@ -311,30 +345,57 @@ def generate_consultant_notes(
     ]
 
     if status_callback:
-        status_callback("A", model_a)
-    out_a, usage_a = _openrouter_chat_completion(
-        msgs_a, model=model_a, temperature=0.2, max_tokens=8000
+        status_callback("A", configured_model_a)
+    out_a, usage_a, model_a_used, retried_with_fallback_main_a = (
+        _openrouter_chat_completion_with_fallback(
+            msgs_a,
+            model=configured_model_a,
+            role="consultant_a",
+            temperature=0.2,
+            max_tokens=8000,
+        )
     )
-    j_a, usage_a_total = _parse_or_repair(out_a, usage_a, model_a, sys_a)
+    j_a, usage_a_total, model_a_final, retried_with_fallback_repair_a = _parse_or_repair(
+        out_a,
+        usage_a,
+        model_a_used,
+        "consultant_a",
+        sys_a,
+    )
     try:
         week_id = str(report_summary.get("week_id") or "").strip() or None
         llm_monitor.log_call(
             LLMCall(
                 timestamp=now_iso(),
-                model=model_a,
+                model=model_a_final,
                 prompt_tokens=int(usage_a_total.get("prompt_tokens", 0) or 0),
                 completion_tokens=int(usage_a_total.get("completion_tokens", 0) or 0),
                 total_tokens=int(usage_a_total.get("total_tokens", 0) or 0),
                 cost_usd=estimate_cost(
-                    model_a,
+                    model_a_final,
                     int(usage_a_total.get("prompt_tokens", 0) or 0),
                     int(usage_a_total.get("completion_tokens", 0) or 0),
                 ),
                 function="generate_consultant_notes",
                 week_id=week_id,
-                extra={"step": "E", "consultant": "A", "version_fp": version_fp}
+                extra={
+                    "step": "E",
+                    "consultant": "A",
+                    "version_fp": version_fp,
+                    "configured_model": configured_model_a,
+                    "used_model": model_a_final,
+                    "fallback_retry_main": retried_with_fallback_main_a,
+                    "fallback_retry_repair": retried_with_fallback_repair_a,
+                }
                 if version_fp
-                else {"step": "E", "consultant": "A"},
+                else {
+                    "step": "E",
+                    "consultant": "A",
+                    "configured_model": configured_model_a,
+                    "used_model": model_a_final,
+                    "fallback_retry_main": retried_with_fallback_main_a,
+                    "fallback_retry_repair": retried_with_fallback_repair_a,
+                },
             )
         )
     except Exception:
@@ -343,30 +404,57 @@ def generate_consultant_notes(
         on_consultant_done("A", j_a)
 
     if status_callback:
-        status_callback("B", model_b)
-    out_b, usage_b = _openrouter_chat_completion(
-        msgs_b, model=model_b, temperature=0.2, max_tokens=8000
+        status_callback("B", configured_model_b)
+    out_b, usage_b, model_b_used, retried_with_fallback_main_b = (
+        _openrouter_chat_completion_with_fallback(
+            msgs_b,
+            model=configured_model_b,
+            role="consultant_b",
+            temperature=0.2,
+            max_tokens=8000,
+        )
     )
-    j_b, usage_b_total = _parse_or_repair(out_b, usage_b, model_b, sys_b)
+    j_b, usage_b_total, model_b_final, retried_with_fallback_repair_b = _parse_or_repair(
+        out_b,
+        usage_b,
+        model_b_used,
+        "consultant_b",
+        sys_b,
+    )
     try:
         week_id = str(report_summary.get("week_id") or "").strip() or None
         llm_monitor.log_call(
             LLMCall(
                 timestamp=now_iso(),
-                model=model_b,
+                model=model_b_final,
                 prompt_tokens=int(usage_b_total.get("prompt_tokens", 0) or 0),
                 completion_tokens=int(usage_b_total.get("completion_tokens", 0) or 0),
                 total_tokens=int(usage_b_total.get("total_tokens", 0) or 0),
                 cost_usd=estimate_cost(
-                    model_b,
+                    model_b_final,
                     int(usage_b_total.get("prompt_tokens", 0) or 0),
                     int(usage_b_total.get("completion_tokens", 0) or 0),
                 ),
                 function="generate_consultant_notes",
                 week_id=week_id,
-                extra={"step": "E", "consultant": "B", "version_fp": version_fp}
+                extra={
+                    "step": "E",
+                    "consultant": "B",
+                    "version_fp": version_fp,
+                    "configured_model": configured_model_b,
+                    "used_model": model_b_final,
+                    "fallback_retry_main": retried_with_fallback_main_b,
+                    "fallback_retry_repair": retried_with_fallback_repair_b,
+                }
                 if version_fp
-                else {"step": "E", "consultant": "B"},
+                else {
+                    "step": "E",
+                    "consultant": "B",
+                    "configured_model": configured_model_b,
+                    "used_model": model_b_final,
+                    "fallback_retry_main": retried_with_fallback_main_b,
+                    "fallback_retry_repair": retried_with_fallback_repair_b,
+                },
             )
         )
     except Exception:
@@ -375,30 +463,57 @@ def generate_consultant_notes(
         on_consultant_done("B", j_b)
 
     if status_callback:
-        status_callback("C", model_c)
-    out_c, usage_c = _openrouter_chat_completion(
-        msgs_c, model=model_c, temperature=0.2, max_tokens=8000
+        status_callback("C", configured_model_c)
+    out_c, usage_c, model_c_used, retried_with_fallback_main_c = (
+        _openrouter_chat_completion_with_fallback(
+            msgs_c,
+            model=configured_model_c,
+            role="consultant_c",
+            temperature=0.2,
+            max_tokens=8000,
+        )
     )
-    j_c, usage_c_total = _parse_or_repair(out_c, usage_c, model_c, sys_c)
+    j_c, usage_c_total, model_c_final, retried_with_fallback_repair_c = _parse_or_repair(
+        out_c,
+        usage_c,
+        model_c_used,
+        "consultant_c",
+        sys_c,
+    )
     try:
         week_id = str(report_summary.get("week_id") or "").strip() or None
         llm_monitor.log_call(
             LLMCall(
                 timestamp=now_iso(),
-                model=model_c,
+                model=model_c_final,
                 prompt_tokens=int(usage_c_total.get("prompt_tokens", 0) or 0),
                 completion_tokens=int(usage_c_total.get("completion_tokens", 0) or 0),
                 total_tokens=int(usage_c_total.get("total_tokens", 0) or 0),
                 cost_usd=estimate_cost(
-                    model_c,
+                    model_c_final,
                     int(usage_c_total.get("prompt_tokens", 0) or 0),
                     int(usage_c_total.get("completion_tokens", 0) or 0),
                 ),
                 function="generate_consultant_notes",
                 week_id=week_id,
-                extra={"step": "E", "consultant": "C", "version_fp": version_fp}
+                extra={
+                    "step": "E",
+                    "consultant": "C",
+                    "version_fp": version_fp,
+                    "configured_model": configured_model_c,
+                    "used_model": model_c_final,
+                    "fallback_retry_main": retried_with_fallback_main_c,
+                    "fallback_retry_repair": retried_with_fallback_repair_c,
+                }
                 if version_fp
-                else {"step": "E", "consultant": "C"},
+                else {
+                    "step": "E",
+                    "consultant": "C",
+                    "configured_model": configured_model_c,
+                    "used_model": model_c_final,
+                    "fallback_retry_main": retried_with_fallback_main_c,
+                    "fallback_retry_repair": retried_with_fallback_repair_c,
+                },
             )
         )
     except Exception:
@@ -429,7 +544,7 @@ def run_visual_consultant(
     """
     media = scan_media_assets()
     images = get_top_images(media.images, n=max_images)
-    model = model_b or os.getenv("MODEL_CONSULTANT_B") or MODEL_CONSULTANT_B
+    model = model_b or get_model("consultant_b")
 
     if not images:
         return {
@@ -474,8 +589,12 @@ def run_visual_consultant(
         max_tokens=1800,
     )
 
-    parsed, _ = _parse_or_repair(
-        raw, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}, model, system
+    parsed, _, _, _ = _parse_or_repair(
+        raw,
+        {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        model,
+        "consultant_b",
+        system,
     )
     return {
         "visual_consultant_version": "visual_consultant.v1",

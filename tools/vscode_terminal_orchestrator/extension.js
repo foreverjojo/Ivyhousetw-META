@@ -872,7 +872,9 @@ async function workflowSendEnter(terminalName, kind, count = 1) {
   if (!t) return false;
 
   try {
-    t.show(true);
+    // Important: sendSequence targets the active terminal.
+    // Do NOT preserve focus here; we want this terminal to become active.
+    t.show(false);
   } catch {
     // ignore
   }
@@ -882,11 +884,14 @@ async function workflowSendEnter(terminalName, kind, count = 1) {
 
   const n = Math.max(1, Number(count) || 1);
   for (let i = 0; i < n; i += 1) {
-    // Prefer sendSequence (more like real keypress). Fall back to sendText.
-    const ok = await sendTerminalSequenceToActive("\r");
+    // Prefer sendSequence (more like real keypress) when the terminal is active.
+    // If VS Code cannot focus the terminal reliably, fall back to writing CR directly
+    // into the terminal input stream (does not depend on active terminal).
+    const isActive = vscode.window.activeTerminal?.name === t.name;
+    const ok = isActive ? await sendTerminalSequenceToActive("\r") : false;
     if (!ok) {
       try {
-        t.sendText("", true);
+        t.sendText("\r", false);
       } catch {
         // ignore
       }
@@ -3207,6 +3212,18 @@ function activate(context) {
 
   logLine("[activate] IvyHouse Terminal Orchestrator activated");
   logLine(`[activate] VS Code version: ${vscode.version}`);
+  vscode.window
+    .showWarningMessage(
+      "IvyHouse Terminal Orchestrator 已棄用（DEPRECATED）。請改用 IvyHouse Terminal Injector + IvyHouse Terminal Monitor。",
+    )
+    .then(
+      () => {
+        // ignore
+      },
+      () => {
+        // ignore
+      },
+    );
   logLine(
     `[activate] Proposed API onDidWriteTerminalData available: ${terminalDataWriteEventAvailable}`,
   );

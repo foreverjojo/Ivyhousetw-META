@@ -76,6 +76,20 @@
 - **Engineer Tool（執行者）**：`codex-cli` / `opencode`（VS Code Terminals）
 - **QA Tool（驗收者）**：`codex-cli` / `opencode`（VS Code Terminals）
   - **Cross-QA 硬規則**：`qa_tool ≠ last_change_tool`（例外需記錄在 `qa_compliance` 並由 user 明確允許）
+- **Execution Backend Policy（執行後端策略）**：`extension-sendtext-required`
+  - `extension-sendtext-required`（固定）：命令注入一律使用 IvyHouse Terminal Injector extension sendText（`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`）
+- **Monitor Backend Policy（監測後端策略）**：`proposed-primary-with-extension-fallback`
+  - `proposed-primary-with-extension-fallback`（預設）：可用時使用 Proposed API；不可用時改用 extension 監測模式（預設不使用 HTTP bridge）
+  - 監測命令範例：`IvyHouse Monitor: Capture Codex Output`、`IvyHouse Monitor: Auto-Capture Codex /status`
+  - 允許拆分為兩個 extension：Injector（sendText）與 Monitor（監測 fallback）
+
+> Gate 完成後，必須在 Plan 的 `EXECUTION_BLOCK` 回填：
+> `execution_backend_policy`、`executor_backend`、`monitor_backend`。
+
+> Execute 前必跑 preflight（Project terminal）：
+> - 一般模式：`python scripts/vscode/workflow_preflight_check.py --json`
+> - bridge 模式：`python scripts/vscode/workflow_preflight_check.py --require-bridge --json`
+> - 未達 `status=pass`：不得進入 Engineer 注入。
 
 > 注意：GitHub Copilot Chat 固定為 Coordinator（只做討論/分派/監控/回填 Plan），不作為 Engineer/QA 工具，也不得直接改 code。
 

@@ -6,7 +6,34 @@
 - 會嘗試安裝：VS Code / Docker / Git / Python（依作業系統與可用的套件管理工具而定）
 - 會下載（clone 或 zip）本 repo 到本機
 - 會依照本 repo 的 `.vscode/extensions.json` 一鍵安裝建議的 VS Code extensions
-- 另外，本 repo 有一個 local VS Code extension（terminal orchestrator），在 Dev Container 會由 `.devcontainer/devcontainer.json` 的 `postCreateCommand` 自動安裝；若需要也可手動執行 `scripts/vscode/install_terminal_orchestrator.sh`
+- 另外，本 repo 有兩個 local VS Code extensions（Injector / Monitor）：
+	- `tools/vscode_terminal_injector/`
+	- `tools/vscode_terminal_monitor/`
+	- `tools/vscode_terminal_orchestrator/`（legacy 相容）
+	若需要可手動打包後用 `code-insiders --install-extension <vsix>` 安裝。
+
+> 目前 `install_extensions.sh` / `install_extensions.ps1` 已支援自動打包並安裝上述 `ivyhouse-local.*` local extensions（best-effort）。
+
+## Proposed API（argv.json）
+
+若要啟用 Monitor 的 Proposed API 主路徑，請在 VS Code runtime `argv.json` 加入：
+
+```json
+{
+  "enable-proposed-api": [
+    "ivyhouse-local.ivyhouse-terminal-monitor",
+    "ivyhouse-local.ivyhouse-terminal-orchestrator"
+  ]
+}
+```
+
+常見路徑：
+- Windows Insiders：`%APPDATA%\\Code - Insiders\\User\\argv.json`
+- Windows Stable：`%APPDATA%\\Code\\User\\argv.json`
+- macOS Insiders：`~/Library/Application Support/Code - Insiders/User/argv.json`
+- Linux Insiders：`~/.config/Code - Insiders/User/argv.json`
+
+儲存後請完整關閉並重啟 VS Code。
 
 ## 快速開始（建議）
 
