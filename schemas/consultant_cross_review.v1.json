@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "consultant_cross_review.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "review_version",
+    "reviewer",
+    "reviewed_targets",
+    "strengths",
+    "critical_issues",
+    "assumptions_to_validate",
+    "recommended_edits",
+    "stoploss_or_guardrails",
+    "confidence",
+    "why"
+  ],
+  "properties": {
+    "review_version": {
+      "type": "string",
+      "const": "consultant_cross_review.v1"
+    },
+    "reviewer": {
+      "type": "string",
+      "enum": ["A", "B", "C"]
+    },
+    "reviewed_targets": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["A", "B", "C"] },
+      "uniqueItems": true,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "strengths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      }
+    },
+    "critical_issues": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issue", "evidence_ref"],
+        "properties": {
+          "issue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "evidence_ref": {
+            "type": "string",
+            "pattern": "^source:[A-Za-z0-9_]+(?:\\[[0-9]+\\])?(?:\\.[A-Za-z0-9_]+(?:\\[[0-9]+\\])?)+$",
+            "maxLength": 200
+          },
+          "impact": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "severity": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "suggested_fix": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      }
+    },
+    "assumptions_to_validate": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assumption", "validation_step"],
+        "properties": {
+          "assumption": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "validation_step": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        }
+      }
+    },
+    "recommended_edits": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      }
+    },
+    "stoploss_or_guardrails": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "why": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    }
+  },
+  "if": { "properties": { "reviewer": { "const": "A" } }, "required": ["reviewer"] },
+  "then": {
+    "properties": {
+      "reviewed_targets": {
+        "contains": { "const": "B" },
+        "minContains": 1
+      }
+    },
+    "allOf": [
+      {
+        "properties": {
+          "reviewed_targets": {
+            "contains": { "const": "C" },
+            "minContains": 1
+          }
+        }
+      }
+    ]
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "reviewer": { "const": "B" } }, "required": ["reviewer"] },
+      "then": {
+        "properties": {
+          "reviewed_targets": {
+            "contains": { "const": "A" },
+            "minContains": 1
+          }
+        },
+        "allOf": [
+          {
+            "properties": {
+              "reviewed_targets": {
+                "contains": { "const": "C" },
+                "minContains": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "reviewer": { "const": "C" } }, "required": ["reviewer"] },
+      "then": {
+        "properties": {
+          "reviewed_targets": {
+            "contains": { "const": "A" },
+            "minContains": 1
+          }
+        },
+        "allOf": [
+          {
+            "properties": {
+              "reviewed_targets": {
+                "contains": { "const": "B" },
+                "minContains": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
