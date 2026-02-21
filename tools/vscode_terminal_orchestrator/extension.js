@@ -613,40 +613,43 @@ function getWorkflowStatusForApi(context) {
   const startedAtIso = context.workspaceState.get(WORKFLOW_STATE_KEYS.startedAtIso, "");
 
   // Prefer active raw logs, then persisted.
-  const activeEngineer = workflowLoopState?.engineerRawLogAbs;
-  const activeQa = workflowLoopState?.qaRawLogAbs;
+  const isRunning = Boolean(workflowLoopState?.active);
+  const activeEngineer = isRunning ? workflowLoopState?.engineerRawLogAbs : "";
+  const activeQa = isRunning ? workflowLoopState?.qaRawLogAbs : "";
   const persistedEngineer = context.workspaceState.get(WORKFLOW_STATE_KEYS.engineerRawLogAbs, "");
   const persistedQa = context.workspaceState.get(WORKFLOW_STATE_KEYS.qaRawLogAbs, "");
 
-  let rawLogAbs;
-  let lastOutputSource = "none";
-  if (activeEngineer) {
-    rawLogAbs = activeEngineer;
-    lastOutputSource = "active_engineer";
-  } else if (activeQa) {
-    rawLogAbs = activeQa;
-    lastOutputSource = "active_qa";
-  } else if (persistedEngineer) {
-    rawLogAbs = persistedEngineer;
-    lastOutputSource = "persisted_engineer";
-  } else if (persistedQa) {
-    rawLogAbs = persistedQa;
-    lastOutputSource = "persisted_qa";
+  const candidates = [];
+  const addCandidate = (source, absPath) => {
+    const p = String(absPath || "").trim();
+    if (!p) return;
+    candidates.push({ source, absPath: p });
+  };
+
+  addCandidate("active_engineer", activeEngineer);
+  addCandidate("active_qa", activeQa);
+  addCandidate("persisted_engineer", persistedEngineer);
+  addCandidate("persisted_qa", persistedQa);
+
+  let chosen;
+  let chosenStat;
+  for (const c of candidates) {
+    try {
+      if (!fs.existsSync(c.absPath)) continue;
+      const st = fs.statSync(c.absPath);
+      if (!chosenStat || Number(st.mtimeMs) > Number(chosenStat.mtimeMs)) {
+        chosen = c;
+        chosenStat = st;
+      }
+    } catch {
+      // ignore
+    }
   }
 
-  let lastOutputTs;
-  let lastRawLogSizeBytes;
-  try {
-    if (rawLogAbs && fs.existsSync(rawLogAbs)) {
-      const st = fs.statSync(rawLogAbs);
-      lastOutputTs = st.mtime.toISOString();
-      lastRawLogSizeBytes = Number(st.size) || 0;
-    } else if (rawLogAbs) {
-      lastOutputSource = "raw_log_not_found";
-    }
-  } catch {
-    // ignore
-  }
+  const rawLogAbs = chosen?.absPath;
+  const lastOutputSource = chosen?.source || (candidates.length ? "raw_log_not_found" : "none");
+  const lastOutputTs = chosenStat ? chosenStat.mtime.toISOString() : undefined;
+  const lastRawLogSizeBytes = chosenStat ? Number(chosenStat.size) || 0 : undefined;
 
   return {
     workflowRunId,
@@ -1259,13 +1262,159 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
     .map((l) => String(l || "").trim())
     .filter(Boolean);
 
+  const expectedMarker =
+    phase === "ENGINEER" ? "[ENGINEER_DONE]" : phase === "QA" ? "[QA_DONE]" : "[FIX_DONE]";
+
+  function isMarkerLine(line, marker) {
+    const v = String(line || "").trim();
+    const markerName = String(marker || "").trim().replace(/^\[|\]$/g, "");
+    const esc = marker.replace(/[\[\]]/g, "\\$&");
+
+    // Strict forms (preferred)
+    if (
+      new RegExp(`^${esc}$`, "i").test(v) ||
+      new RegExp(`^【\\s*${markerName}\\s*】$`, "i").test(v) ||
+      new RegExp(`^［\\s*${markerName}\\s*］$`, "i").test(v) ||
+      new RegExp(`^${markerName}$`, "i").test(v)
+    ) {
+      return true;
+    }
+
+    // Relaxed forms: allow bullet/prefix/suffix text, e.g. "• [QA_DONE] › ...".
+    // We still require lines 2-5 (TIMESTAMP/NONCE/TASK_ID/RESULT) to validate strictly.
+    if (new RegExp(esc, "i").test(v)) return true;
+    if (new RegExp(`【\\s*${markerName}\\s*】`, "i").test(v)) return true;
+    if (new RegExp(`［\\s*${markerName}\\s*］`, "i").test(v)) return true;
+    return false;
+  }
+
+  function parseIdx030FiveLineBlock(blockLines) {
+    if (!Array.isArray(blockLines) || blockLines.length < 5) return { ok: false };
+
+    const tail = blockLines
+      .slice(0, 5)
+      .map((l) => String(l || "").trim())
+      .filter(Boolean);
+    if (tail.length < 5) return { ok: false };
+
+    const nearMiss = {};
+
+    // Line 1: marker
+    const line1 = tail[0];
+    const hasMarker = isMarkerLine(line1, expectedMarker);
+    if (!hasMarker) return { ok: false };
+
+    // Line 2: TIMESTAMP
+    const line2 = tail[1];
+    const timestampMatch = line2.match(/^TIMESTAMP\s*=\s*(.+)$/i);
+    if (!timestampMatch) {
+      nearMiss.missingTimestamp = true;
+      nearMiss.line2 = line2;
+      return { ok: false, nearMiss };
+    }
+    const timestamp = timestampMatch[1].trim();
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(timestamp)) {
+      nearMiss.timestampInvalid = true;
+      nearMiss.timestamp = timestamp;
+      nearMiss.line2 = line2;
+      return { ok: false, nearMiss };
+    }
+
+    // Line 3: NONCE
+    const line3 = tail[2];
+    const nonceMatch = line3.match(/^NONCE\s*=\s*(.+)$/i);
+    if (!nonceMatch) {
+      nearMiss.missingNonce = true;
+      nearMiss.line3 = line3;
+      return { ok: false, nearMiss };
+    }
+    const nonce = nonceMatch[1].trim();
+    const nonceLooksLikeLiteral =
+      nonce === "$WORKFLOW_SESSION_NONCE" ||
+      nonce === "${WORKFLOW_SESSION_NONCE}" ||
+      /^<[^>]+>$/.test(nonce);
+    if (nonceLooksLikeLiteral) {
+      nearMiss.nonceLooksLikeEnvVar = true;
+      nearMiss.nonce = nonce;
+      nearMiss.expectedNonce = expectedNonce;
+      nearMiss.line3 = line3;
+      return { ok: false, nearMiss };
+    }
+    if (String(nonce || "").toLowerCase() !== String(expectedNonce || "").toLowerCase()) {
+      nearMiss.nonceMismatch = true;
+      nearMiss.nonce = nonce;
+      nearMiss.expectedNonce = expectedNonce;
+      nearMiss.line3 = line3;
+      return { ok: false, nearMiss };
+    }
+
+    // Line 4: TASK_ID
+    const line4 = tail[3];
+    const taskIdMatch = line4.match(/^TASK_ID\s*=\s*(.+)$/i);
+    if (!taskIdMatch) {
+      nearMiss.missingTaskId = true;
+      nearMiss.line4 = line4;
+      return { ok: false, nearMiss };
+    }
+    const taskId = taskIdMatch[1].trim();
+    const normalizeId = (id) => String(id || "").toLowerCase().replace(/[-_]/g, "");
+    if (normalizeId(taskId) !== normalizeId(expectedTaskId)) {
+      nearMiss.taskIdMismatch = true;
+      nearMiss.taskId = taskId;
+      nearMiss.expectedTaskId = expectedTaskId;
+      nearMiss.line4 = line4;
+      return { ok: false, nearMiss };
+    }
+
+    // Line 5: phase-specific result
+    const line5 = tail[4];
+    let result;
+    if (phase === "ENGINEER") {
+      const m = line5.match(/^ENGINEER_RESULT\s*=\s*(.+)$/i);
+      if (!m) {
+        nearMiss.missingEngineerResult = true;
+        nearMiss.line5 = line5;
+        return { ok: false, nearMiss };
+      }
+      result = m[1].trim().toUpperCase();
+      if (result !== "COMPLETE") {
+        nearMiss.engineerResultInvalid = true;
+        nearMiss.engineerResult = result;
+        nearMiss.line5 = line5;
+        return { ok: false, nearMiss };
+      }
+    } else if (phase === "QA") {
+      const m = line5.match(/^QA_RESULT\s*=\s*(.+)$/i);
+      if (!m) {
+        nearMiss.missingQaResult = true;
+        nearMiss.line5 = line5;
+        return { ok: false, nearMiss };
+      }
+      result = m[1].trim().toUpperCase();
+      if (result !== "PASS" && result !== "FAIL") {
+        nearMiss.qaResultInvalid = true;
+        nearMiss.qaResult = result;
+        nearMiss.line5 = line5;
+        return { ok: false, nearMiss };
+      }
+    } else if (phase === "FIX") {
+      const m = line5.match(/^FIX_ROUND\s*=\s*(\d+)$/i);
+      if (!m) {
+        nearMiss.missingFixRound = true;
+        nearMiss.line5 = line5;
+        return { ok: false, nearMiss };
+      }
+      result = m[1].trim();
+    }
+
+    return { ok: true, result, timestamp, nonce, taskId };
+  }
+
   function tryParseInlineFallback() {
     // 某些 TUI 會因為重繪（redraw）造成換行遺失，導致「最後 5 行」規則無法可靠判斷。
     // 這裡改用尾端小視窗做 inline 解析，提升容錯。
     const window = s.slice(-12000);
 
-    const expectedMarker =
-      phase === "ENGINEER" ? "[ENGINEER_DONE]" : phase === "QA" ? "[QA_DONE]" : "[FIX_DONE]";
     const markerName = expectedMarker.slice(1, -1); // remove brackets
     const markerRe = new RegExp(`(\\[\\s*${markerName}\\s*\\]|【\\s*${markerName}\\s*】|［\\s*${markerName}\\s*］|\\b${markerName}\\b)`, "i");
     const mm = markerRe.exec(window);
@@ -1367,22 +1516,6 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
   const nearMiss = {};
 
   // Line 1: marker
-  const expectedMarker = phase === "ENGINEER" ? "[ENGINEER_DONE]" :
-                         phase === "QA" ? "[QA_DONE]" :
-                         "[FIX_DONE]";
-
-  function isMarkerLine(line, marker) {
-    const v = String(line || "").trim();
-    const markerName = String(marker || "").trim().replace(/^\[|\]$/g, "");
-    const esc = marker.replace(/[\[\]]/g, "\\$&");
-    return (
-      new RegExp(`^${esc}$`, "i").test(v) ||
-      new RegExp(`^【\\s*${markerName}\\s*】$`, "i").test(v) ||
-      new RegExp(`^［\\s*${markerName}\\s*］$`, "i").test(v) ||
-      new RegExp(`^${markerName}$`, "i").test(v)
-    );
-  }
-
   const line1 = tail[0];
   const hasMarker = isMarkerLine(line1, expectedMarker);
 
@@ -1395,27 +1528,32 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
       return { ok: false, nearMiss };
     }
 
-    // Fix #4: Check for extraTailNoise - marker present but not in final 5 lines
-    // Scan last 20 non-empty lines to detect if marker appears elsewhere
-    const widerTail = lines.slice(-20);
-    let markerFoundAtIndex = -1;
-    for (let i = 0; i < widerTail.length; i++) {
-      if (isMarkerLine(widerTail[i], expectedMarker)) {
-        markerFoundAtIndex = i;
-        break; // Find first occurrence (earliest in the window)
+    // Fix #4: Handle extraTailNoise - completion block exists, but extra output was appended.
+    // Scan a larger tail window for a valid 5-line block starting at the marker.
+    const windowMaxLines = 120;
+    const widerTail = lines.slice(-windowMaxLines);
+    let bestNearMiss;
+    let anyMarkerFoundAt = -1;
+
+    for (let i = widerTail.length - 5; i >= 0; i--) {
+      if (!isMarkerLine(widerTail[i], expectedMarker)) continue;
+      if (anyMarkerFoundAt === -1) anyMarkerFoundAt = i;
+
+      const parsed = parseIdx030FiveLineBlock(widerTail.slice(i, i + 5));
+      if (parsed.ok) {
+        return { ...parsed, scanned: true };
+      }
+      if (parsed.nearMiss && !bestNearMiss) {
+        bestNearMiss = parsed.nearMiss;
       }
     }
 
-    // If marker found in wider window but not at correct position (last 5 lines, line 1)
-    // => Tool outputted completion then added extra text
-    if (markerFoundAtIndex !== -1) {
-      const correctPosition = widerTail.length - 5; // Where it should be in wider window
-      if (markerFoundAtIndex < correctPosition) {
-        nearMiss.extraTailNoise = true;
-        nearMiss.markerFoundAt = markerFoundAtIndex;
-        nearMiss.expectedAt = correctPosition;
-        return { ok: false, nearMiss };
-      }
+    if (anyMarkerFoundAt !== -1) {
+      nearMiss.extraTailNoise = true;
+      nearMiss.markerFoundAt = anyMarkerFoundAt;
+      nearMiss.windowSize = widerTail.length;
+      if (bestNearMiss) nearMiss.blockNearMiss = bestNearMiss;
+      return { ok: false, nearMiss };
     }
 
     // Not even close via strict tail parsing; attempt inline fallback.
@@ -1677,6 +1815,12 @@ async function waitForWorkflowTerminalReady(cfg, terminalName, rawLogAbs) {
   const allowAssume = Boolean(workflowLoopState?.readyAssumeAllowedByTerminalName?.[terminalName]);
   let nudged = false;
 
+  // For some TUIs (notably OpenCode), the captured transcript may not contain a stable
+  // "ready" token after a completion marker near-miss. Track tail stability so we can
+  // safely assume readiness once output has settled.
+  let lastTailFp = "";
+  let lastTailChangeAtMs = Date.now();
+
   const startedAt = Date.now();
   appendWorkflowEvent({ action: "ready_wait_start", terminalName, kind, timeoutMs, pollMs });
 
@@ -1689,6 +1833,13 @@ async function waitForWorkflowTerminalReady(cfg, terminalName, rawLogAbs) {
 
     const rawTail = tailFile(rawLogAbs, 256 * 1024);
     const tail = cleanForTail(rawTail);
+
+    const tailFp = sha256Hex(tail);
+    if (tailFp && tailFp !== lastTailFp) {
+      lastTailFp = tailFp;
+      lastTailChangeAtMs = Date.now();
+    }
+
     if (isTerminalReadyFromTail(kind, tail)) {
       appendWorkflowEvent({ action: "ready_ok", terminalName, kind, elapsedMs: elapsed });
       return true;
@@ -1706,6 +1857,11 @@ async function waitForWorkflowTerminalReady(cfg, terminalName, rawLogAbs) {
       const tuiPaint = looksLikeTuiPaint(tail);
       const altScreen = looksLikeAltScreenTuiRaw(rawTail);
 
+      const stableForMs = Math.max(0, Date.now() - lastTailChangeAtMs);
+      const stableTail = stableForMs >= Math.max(1000, pollMs * 4);
+      const lastLine = String(tail || "").split(/\n/).slice(-1)[0] || "";
+      const shellPromptLike = /[$#>]\s*$/.test(lastLine) && /\S/.test(lastLine);
+
       if (emptyTail || tuiPaint || altScreen) {
         // When we don't restart terminals, we might not see a stable "ready" token in the transcript.
         // For existing TUIs, accept an empty tail or strong TUI paint/alt-screen signals.
@@ -1717,6 +1873,23 @@ async function waitForWorkflowTerminalReady(cfg, terminalName, rawLogAbs) {
           assumeReason: emptyTail ? "empty" : altScreen ? "alt_screen" : "tui_paint",
         });
         return true;
+      }
+
+      if (kind === "opencode") {
+        // OpenCode may render a lot of textual content (so looksLikeTuiPaint=false) and also
+        // omit the usual ready banner in the transcript. If output has been stable for a bit
+        // (or we're clearly at a shell prompt), assume the terminal can accept input.
+        if (shellPromptLike || (stableTail && tail.trim().length > 0)) {
+          appendWorkflowEvent({
+            action: "ready_assume_ok",
+            terminalName,
+            kind,
+            elapsedMs: elapsed,
+            assumeReason: shellPromptLike ? "shell_prompt" : "stable_tail",
+            stableForMs,
+          });
+          return true;
+        }
       }
     }
 
@@ -2222,9 +2395,9 @@ function clearDirectoryContents(dirAbs) {
   return removed;
 }
 
-async function offerClearCaptureOnQaPass(cfg) {
+async function offerClearCaptureOnQaPass(cfg, idxOverride = undefined) {
   try {
-    const idx = workflowLoopState?.idxName;
+    const idx = String(idxOverride || workflowLoopState?.idxName || "").trim();
     if (!idx) {
       logLine("[workflow] no idx associated with this run; skipping auto clear prompt");
       return;
@@ -3186,14 +3359,16 @@ async function workflowTick(cfg) {
 
     if (qaResult === "PASS") {
       logLine("[workflow] detected QA PASS (Idx-030 format)");
+
       // If configured, offer to clear terminal capture when PASS detected and log exists.
+      // IMPORTANT: do not block workflow stop on a modal/info message.
       if (cfg.workflowPromptClearCaptureOnPass) {
-        try {
-          await offerClearCaptureOnQaPass(cfg);
-        } catch (err) {
+        const idx = workflowLoopState?.idxName;
+        offerClearCaptureOnQaPass(cfg, idx).catch((err) => {
           console.error(err);
-        }
+        });
       }
+
       workflowLoopState.phase = WORKFLOW_PHASE.done;
       stopWorkflowLoop("PASS");
       return;

@@ -19,7 +19,7 @@ from typing import Any
 import requests
 
 from core.llm_monitor import LLMCall, estimate_cost, get_monitor
-from core.model_settings import get_model, get_retry_model_chain
+from core.model_settings import ModelRole, get_model, get_retry_model_chain
 from scripts.media_scanner import get_top_images, scan_media_assets
 from scripts.multimodal import create_image_content, openrouter_multimodal_completion
 from utils import now_iso
@@ -529,6 +529,246 @@ def generate_consultant_notes(
         "consultant_A": j_a,
         "consultant_B": j_b,
         "consultant_C": j_c,
+    }
+
+
+def _compact_consultant_note(note: dict[str, Any], max_chars: int = 2000) -> dict[str, Any]:
+    """
+    壓縮單位顧問 E1 輸出，避免 E2 prompt token 爆炸。
+    只保留最重要的欄位，其餘截斷或省略。
+    """
+    if not isinstance(note, dict) or "error" in note:
+        return {"error": note.get("error", "invalid") if isinstance(note, dict) else "invalid"}
+
+    compact: dict[str, Any] = {}
+    # 保留關鍵欄位
+    for key in [
+        "consultant_key",
+        "summary",
+        "opportunities",
+        "risks",
+        "overall_budget_action",
+        "next_7d_actions",
+    ]:
+        val = note.get(key)
+        if val is not None:
+            if isinstance(val, str) and len(val) > 500:
+                compact[key] = val[:500] + "…"
+            elif isinstance(val, list):
+                compact[key] = val[:4]  # 最多 4 條
+            else:
+                compact[key] = val
+
+    # 確保不超過 max_chars
+    raw = json.dumps(compact, ensure_ascii=False)
+    if len(raw) > max_chars:
+        # 逐步移除非關鍵欄位
+        for key in ["next_7d_actions", "opportunities"]:
+            compact.pop(key, None)
+            if len(json.dumps(compact, ensure_ascii=False)) <= max_chars:
+                break
+
+    return compact
+
+
+def _cross_review_system_prompt(reviewer: str) -> str:
+    """為交叉審核顧問建立 system prompt。"""
+    role_names = {
+        "A": "顧問A｜成效與數據分析專家",
+        "B": "顧問B｜創意與內容優化專家",
+        "C": "顧問C｜行銷策略與市場專家",
+    }
+    role_name = role_names.get(reviewer, f"顧問{reviewer}")
+    targets = [t for t in ["A", "B", "C"] if t != reviewer]
+    target_str = "、".join(f"顧問{t}" for t in targets)
+    return (
+        f"你是艾薇手工坊三顧問系統之一：{role_name}。\n"
+        f"你現在要執行「交叉審核（E2）」：審核{target_str}的建議。\n\n"
+        "硬規則：\n"
+        "1) 只能引用輸入 JSON 的數字，不可重新計算或改寫任何 KPI。\n"
+        "2) 輸出必須是『單一 JSON object』，不要```、不要多餘文字。\n"
+        "3) 每個結論都要寫『依據』：引用輸入中的哪個欄位。\n"
+        "4) evidence_ref 格式必須是 'source:欄位名稱.子欄位'（例如 source:consultant_B.risks[0].risk）。\n"
+    )
+
+
+def _cross_review_task_prompt(reviewer: str, targets: list[str]) -> str:
+    """建立交叉審核的 task prompt。"""
+    targets_str = " 和 ".join(f"顧問{t}" for t in targets)
+    return (
+        f"請針對{targets_str}的建議進行交叉審核，輸出 JSON（單一 object），欄位如下：\n"
+        f"- review_version: 'consultant_cross_review.v1'\n"
+        f"- reviewer: '{reviewer}'\n"
+        f"- reviewed_targets: {json.dumps(targets)}\n"
+        "- strengths: 1-3 條（兩位顧問分析中值得肯定的論點，每條附依據）\n"
+        "- critical_issues: 1-3 條物件（issue/evidence_ref/impact/severity/suggested_fix）\n"
+        "  evidence_ref 必須符合格式：source:consultant_X.欄位\n"
+        "- assumptions_to_validate: 0-2 條物件（assumption/validation_step）\n"
+        "- recommended_edits: 1-3 條（建議修正方向）\n"
+        "- stoploss_or_guardrails: 1-2 條（止損或防護欄）\n"
+        "- confidence: 0.0-1.0 之間的數字（你對審核結論的信心度）\n"
+        "- why: 1-2 句說明本次審核的核心關切\n"
+    )
+
+
+_REVIEWER_ROLE_MAP: dict[str, "ModelRole"] = {
+    "A": "consultant_a",
+    "B": "consultant_b",
+    "C": "consultant_c",
+}
+
+
+def _single_cross_review(
+    reviewer: str,
+    targets: list[str],
+    report_summary: dict[str, Any],
+    report_insights: dict[str, Any],
+    consultant_notes: dict[str, Any],
+    version_fp: str | None = None,
+) -> dict[str, Any]:
+    """
+    執行單位顧問的交叉審核（E2）。
+    失敗時回傳含 error 的 dict，不拋出例外（graceful degradation）。
+    """
+    role_key = _REVIEWER_ROLE_MAP.get(reviewer, "consultant_a")
+    model = get_model(role_key)
+    system = _cross_review_system_prompt(reviewer)
+    task = _cross_review_task_prompt(reviewer, targets)
+
+    # 組裝被審核顧問的壓縮輸出
+    reviewed_notes: dict[str, Any] = {}
+    for t in targets:
+        raw_note = consultant_notes.get(f"consultant_{t}")
+        reviewed_notes[f"consultant_{t}"] = _compact_consultant_note(
+            raw_note if isinstance(raw_note, dict) else {}
+        )
+
+    # 組裝 context（壓縮報表 + 被審核顧問輸出）
+    compact_report = _compact_inputs(report_summary, report_insights)
+    context_payload = {
+        "report_context": {
+            "week_id": compact_report.get("week_id"),
+            "date_range": compact_report.get("date_range"),
+            "meta_kpi": compact_report.get("meta_kpi"),
+            "web_kpi": compact_report.get("web_kpi"),
+        },
+        "consultant_notes_to_review": reviewed_notes,
+    }
+    ctx_str = json.dumps(context_payload, ensure_ascii=False)
+
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": task},
+        {"role": "user", "content": ctx_str},
+    ]
+
+    try:
+        content, usage, model_used, retried_main = _openrouter_chat_completion_with_fallback(
+            messages,
+            model=model,
+            role=role_key,
+            temperature=0.2,
+            max_tokens=3000,
+        )
+        parsed, usage_total, model_final, retried_repair = _parse_or_repair(
+            content, usage, model_used, role_key, system
+        )
+
+        # 記錄 LLM 監控
+        try:
+            week_id = str(report_summary.get("week_id") or "").strip() or None
+            llm_monitor.log_call(
+                LLMCall(
+                    timestamp=now_iso(),
+                    model=model_final,
+                    prompt_tokens=int(usage_total.get("prompt_tokens", 0) or 0),
+                    completion_tokens=int(usage_total.get("completion_tokens", 0) or 0),
+                    total_tokens=int(usage_total.get("total_tokens", 0) or 0),
+                    cost_usd=estimate_cost(
+                        model_final,
+                        int(usage_total.get("prompt_tokens", 0) or 0),
+                        int(usage_total.get("completion_tokens", 0) or 0),
+                    ),
+                    function="generate_consultant_cross_reviews",
+                    week_id=week_id,
+                    extra={
+                        "step": "E2",
+                        "reviewer": reviewer,
+                        "reviewed_targets": targets,
+                        "version_fp": version_fp,
+                        "configured_model": model,
+                        "used_model": model_final,
+                        "fallback_retry_main": retried_main,
+                        "fallback_retry_repair": retried_repair,
+                    },
+                )
+            )
+        except Exception:
+            pass
+
+        return parsed
+
+    except Exception as e:
+        return {
+            "error": f"E2 reviewer {reviewer} 失敗：{str(e)[:300]}",
+            "reviewer": reviewer,
+            "reviewed_targets": targets,
+        }
+
+
+def generate_consultant_cross_reviews(
+    report_summary: dict[str, Any],
+    report_insights: dict[str, Any],
+    consultant_notes: dict[str, Any],
+    status_callback: Callable[[str, str], None] | None = None,
+    version_fp: str | None = None,
+) -> dict[str, Any]:
+    """
+    E2 交叉審核：三位顧問各自審核另外兩位的 E1 結論。
+    - reviewer A → reviewed_targets: [B, C]
+    - reviewer B → reviewed_targets: [A, C]
+    - reviewer C → reviewed_targets: [A, B]
+
+    失敗策略（graceful degradation）：
+    - 若某位 reviewer 失敗，以含 error 的 dict 記錄，不阻擋整體流程。
+    - 若三位均失敗，仍回傳結構（每位各有 error），讓 Step F 可繼續。
+
+    參數:
+        status_callback: 開始審核某 reviewer 時的回呼 (reviewer_key, model)
+    """
+    reviewer_targets: dict[str, list[str]] = {
+        "A": ["B", "C"],
+        "B": ["A", "C"],
+        "C": ["A", "B"],
+    }
+
+    reviews: dict[str, Any] = {}
+    for reviewer, targets in reviewer_targets.items():
+        if status_callback:
+            role_key = _REVIEWER_ROLE_MAP.get(reviewer, "consultant_a")
+            status_callback(f"E2-{reviewer}", get_model(role_key))
+
+        review = _single_cross_review(
+            reviewer=reviewer,
+            targets=targets,
+            report_summary=report_summary,
+            report_insights=report_insights,
+            consultant_notes=consultant_notes,
+            version_fp=version_fp,
+        )
+        reviews[f"reviewer_{reviewer}"] = review
+
+    # 統計成功/失敗
+    success_count = sum(1 for r in reviews.values() if isinstance(r, dict) and "error" not in r)
+    error_count = len(reviews) - success_count
+
+    return {
+        "cross_reviews_version": "consultant_cross_reviews.v1",
+        "week_id": report_summary.get("week_id"),
+        "date_range": report_summary.get("date_range"),
+        "success_count": success_count,
+        "error_count": error_count,
+        "reviews": reviews,
     }
 
 

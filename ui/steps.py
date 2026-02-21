@@ -49,7 +49,7 @@ from utils.week_utils import get_prev_week_id as _get_prev_week_id_raw
 # Scripts imports
 from scripts.kpi_calc import build_report_summary
 from scripts.llm_insights import generate_report_insights
-from scripts.consultants import generate_consultant_notes
+from scripts.consultants import generate_consultant_notes, generate_consultant_cross_reviews
 from scripts.moderator import build_workflow_state
 from scripts.moderator_meeting import build_meeting_markdown, write_artifacts
 from scripts.adapters.shopee_adapter import adapt_shopee_ad_csv
@@ -823,6 +823,111 @@ def run_step_e(
     render_sidebar_status_fn(week_id, vdir)
 
 
+def run_step_e2(
+    mode_label: str,
+    week_id: str,
+    vdir: Path,
+    render_sidebar_status_fn,
+    status_callback=None,
+    force_rerun: bool = False,
+) -> None:
+    """
+    Step E2: 三顧問交叉審核（可選，預設 OFF）
+
+    E2 邏輯：A 審核 B/C，B 審核 A/C，C 審核 A/B。
+    落盤產物：consultant_cross_reviews.json
+
+    降級策略：
+    - E2 失敗（任一 reviewer 或全部）：記錄 error，不阻擋 Step F。
+    - schema 驗證失敗：以警告顯示，仍可繼續。
+    """
+    from core.validation import validate_consultant_cross_review
+    from core import SCHEMAS_DIR, SchemaValidationError
+
+    logger.info("Step E2 (交叉審核) 開始", week_id=week_id, mode=mode_label)
+
+    # 若 E2 落盤已存在，且不強制重跑，直接略過
+    cross_review_file = vdir / "consultant_cross_reviews.json"
+    if (not force_rerun) and cross_review_file.exists():
+        cr = read_json_if_exists(cross_review_file)
+        if cr:
+            st.session_state["consultant_cross_reviews"] = cr
+            write_pipeline_state(vdir, "E2(skip)", mode_label)
+            render_sidebar_status_fn(week_id, vdir)
+            logger.info("Step E2 略過（已有落盤）", week_id=week_id)
+            return
+
+    # 讀取 E1 consultant_notes
+    cn = load_or_session("consultant_notes", vdir / "consultant_notes.json")
+    if not cn:
+        st.warning("⚠️ Step E2：找不到 E1 consultant_notes，跳過交叉審核。")
+        logger.warning("Step E2 跳過：缺少 consultant_notes", week_id=week_id)
+        return
+
+    rs = load_or_session("report_summary", vdir / "report_summary.json")
+    ri = load_or_session("report_insights", vdir / "report_insights.json")
+    if not rs or not ri:
+        st.warning("⚠️ Step E2：缺少 report_summary/report_insights，跳過交叉審核。")
+        logger.warning("Step E2 跳過：缺少 report_summary 或 report_insights", week_id=week_id)
+        return
+
+    with st.spinner(f"{mode_label}｜Step E2：三顧問交叉審核（共 3 次 API 呼叫）..."):
+        try:
+            cross_reviews = generate_consultant_cross_reviews(
+                report_summary=rs,
+                report_insights=ri,
+                consultant_notes=cn,
+                status_callback=status_callback,
+                version_fp=vdir.name,
+            )
+        except Exception as e:
+            # E2 整體失敗：記錄 error 但不阻擋 Step F
+            err_msg = str(e)[:300]
+            logger.warning("Step E2 整體失敗，降級略過", week_id=week_id, error=err_msg)
+            st.warning(f"⚠️ E2 交叉審核整體失敗（降級，不影響 Step F）：{err_msg}")
+            write_pipeline_state(vdir, "E2(error)", mode_label)
+            render_sidebar_status_fn(week_id, vdir)
+            return
+
+        # Schema 驗證（逐筆，失敗只警告不阻擋）
+        validation_errors: list[str] = []
+        reviews = cross_reviews.get("reviews", {})
+        for reviewer_key, review in reviews.items():
+            if isinstance(review, dict) and "error" in review:
+                validation_errors.append(f"{reviewer_key}: {review['error']}")
+                continue
+            try:
+                validate_consultant_cross_review(review, SCHEMAS_DIR)
+            except SchemaValidationError as ve:
+                validation_errors.append(f"{reviewer_key} schema 驗證失敗：{ve}")
+                logger.warning(
+                    "E2 reviewer schema 驗證失敗",
+                    reviewer=reviewer_key,
+                    error=str(ve)[:200],
+                )
+
+        # 落盤（無論部分失敗，仍落盤）
+        write_json(cross_review_file, cross_reviews)
+        st.session_state["consultant_cross_reviews"] = cross_reviews
+
+        # 顯示驗證結果
+        success_count = cross_reviews.get("success_count", 0)
+        error_count = cross_reviews.get("error_count", 0)
+
+        if validation_errors:
+            st.warning(
+                f"⚠️ E2 部分審核有問題（{error_count} 失敗）：\n"
+                + "\n".join(f"- {e}" for e in validation_errors)
+            )
+        else:
+            st.success(f"✅ E2 交叉審核完成（{success_count}/3 成功）")
+
+    write_pipeline_state(vdir, "E2", mode_label)
+    logger.info("Step E2 (交叉審核) 完成", week_id=week_id, mode=mode_label,
+                success_count=success_count, error_count=error_count)
+    render_sidebar_status_fn(week_id, vdir)
+
+
 def run_step_f_final(
     mode_label: str,
     week_id: str,
@@ -860,8 +965,20 @@ def run_step_f_final(
                 "缺少 report_summary/report_insights/consultant_notes（Step B/C/E 未成功）"
             )
 
+        # 嘗試讀取 E2 交叉審核產物（若有則傳給 Moderator；若無則正常執行）
+        cross_reviews = load_or_session(
+            "consultant_cross_reviews", vdir / "consultant_cross_reviews.json"
+        )
+
         rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]
-        ws = build_workflow_state(rs_ctx, ri, consultant_notes=cn, step="F", version_fp=vdir.name)
+        ws = build_workflow_state(
+            rs_ctx,
+            ri,
+            consultant_notes=cn,
+            step="F",
+            version_fp=vdir.name,
+            cross_reviews=cross_reviews if isinstance(cross_reviews, dict) else None,
+        )
         md = build_meeting_markdown(ws, rs_ctx, ri)
         write_artifacts(vdir, md, ws)
 

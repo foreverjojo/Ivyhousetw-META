@@ -57,3 +57,13 @@ def validate_report_summary(rs: dict, schemas_dir: Path) -> None:
     """驗證 report_summary.json"""
     schema = _load_schema("report_summary.v1.json", schemas_dir)
     validate_json(rs, schema, label="report_summary.v1")
+
+
+def validate_consultant_cross_review(review: dict, schemas_dir: Path) -> None:
+    """
+    驗證單筆 consultant_cross_review（E2 交叉審核產物）。
+    使用 schemas/consultant_cross_review.v1.json 進行驗證。
+    失敗時拋出 SchemaValidationError。
+    """
+    schema = _load_schema("consultant_cross_review.v1.json", schemas_dir)
+    validate_json(review, schema, label="consultant_cross_review.v1")

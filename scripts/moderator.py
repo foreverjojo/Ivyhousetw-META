@@ -187,15 +187,47 @@ def build_workflow_state(
     *,
     step: str = "F",
     version_fp: str | None = None,
+    cross_reviews: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Moderator 輸出 workflow_state.json（乾淨 JSON）
     - 只引用輸入中的數字，不重算 KPI
     - 可選整合三顧問 consultant_notes
+    - 可選整合 E2 交叉審核 cross_reviews（critical_issues/recommended_edits/guardrails 摘要）
     """
     configured_model = model or get_model("moderator")
 
     guardrails = _guardrail_check(report_summary)
+
+    # 若有 E2 交叉審核，提取關鍵摘要（critical_issues/recommended_edits/guardrails）
+    cross_reviews_summary: dict[str, Any] | None = None
+    if cross_reviews and isinstance(cross_reviews, dict):
+        reviews = cross_reviews.get("reviews", {})
+        all_critical_issues: list[str] = []
+        all_recommended_edits: list[str] = []
+        all_guardrails: list[str] = []
+        for reviewer_key, review in reviews.items():
+            if not isinstance(review, dict) or "error" in review:
+                continue
+            for issue in (review.get("critical_issues") or [])[:2]:
+                if isinstance(issue, dict):
+                    issue_text = issue.get("issue", "")
+                    if issue_text:
+                        all_critical_issues.append(f"[{reviewer_key}] {issue_text}")
+            for edit in (review.get("recommended_edits") or [])[:2]:
+                if isinstance(edit, str) and edit:
+                    all_recommended_edits.append(f"[{reviewer_key}] {edit}")
+            for guard in (review.get("stoploss_or_guardrails") or [])[:1]:
+                if isinstance(guard, str) and guard:
+                    all_guardrails.append(f"[{reviewer_key}] {guard}")
+
+        cross_reviews_summary = {
+            "success_count": cross_reviews.get("success_count", 0),
+            "error_count": cross_reviews.get("error_count", 0),
+            "critical_issues": all_critical_issues[:6],
+            "recommended_edits": all_recommended_edits[:6],
+            "stoploss_or_guardrails": all_guardrails[:3],
+        }
 
     compact_input = {
         "week_id": report_summary.get("week_id"),
@@ -208,15 +240,25 @@ def build_workflow_state(
         "skills": (report_summary.get("_context") or {}).get("skills") or {},
         "guardrails": guardrails,
     }
+    if cross_reviews_summary:
+        compact_input["cross_reviews_summary"] = cross_reviews_summary
 
     system = (
         "你是艾薇手工坊的週會 Moderator（決策與交辦）。"
         "你只能引用輸入中的數字，不可重新計算或改寫 KPI。"
         "若輸入含 'skills' (Metric Tree/Fatigue/Budget)，請摘要其觸發的警告與建議。"
+        "若輸入含 'cross_reviews_summary'（E2 交叉審核摘要），請在 consultant_summary 或 risks 中引用其 critical_issues 與 stoploss_or_guardrails。"
         "你要輸出『單一 JSON object』作為 workflow_state.json。"
         "禁止輸出```，禁止多餘文字。語言繁中。"
         "輸出必須可被 JSON.parse。"
     )
+
+    cross_reviews_hint = ""
+    if cross_reviews_summary:
+        cross_reviews_hint = (
+            "\n11) 若有 cross_reviews_summary：請在 consultant_summary 末尾加一條摘要，"
+            "格式：'【E2 交叉審核】' + critical_issues 與 stoploss_or_guardrails 的精煉摘要（1-2句）\n"
+        )
 
     user = (
         "請根據輸入 JSON 產出 workflow_state.json，欄位要求：\n"
@@ -230,8 +272,9 @@ def build_workflow_state(
         "   每個任務包含：task, owner_role, deliverable, due, kpi, stoploss\n"
         "8) risks: Top3（描述/機率/影響/緩解/替代方案）\n"
         "9) validation_plan: 3天/7天/14天（指標/門檻/達標→下一步/未達→止損）\n"
-        "10) artifacts: 檔名清單（inputs.json, report_summary.json, report_insights.json, consultant_notes.json, meeting.md, workflow_state.json）\n\n"
-        f"{json.dumps(compact_input, ensure_ascii=False)}"
+        "10) artifacts: 檔名清單（inputs.json, report_summary.json, report_insights.json, consultant_notes.json, meeting.md, workflow_state.json）\n"
+        f"{cross_reviews_hint}"
+        f"\n{json.dumps(compact_input, ensure_ascii=False)}"
     )
 
     if consultant_notes:

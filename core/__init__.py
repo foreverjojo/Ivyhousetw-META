@@ -11,6 +11,7 @@ from core.pipeline_state import (
 )
 from core.validation import (
     SchemaValidationError,
+    validate_consultant_cross_review,
     validate_json,
     validate_report_summary,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "SchemaValidationError",
     "validate_json",
     "validate_report_summary",
+    "validate_consultant_cross_review",
     # pipeline_state
     "write_pipeline_state",
     "restore_from_version_dir",

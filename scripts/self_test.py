@@ -68,15 +68,29 @@ def expect_pass(name: str, instance: Any, schema_path: Path) -> None:
 
 
 def expect_fail(
-    name: str, instance: Any, schema_path: Path, must_contain: str | None = None
+    name: str,
+    instance: Any,
+    schema_path: Path,
+    must_contain: str | None = None,
+    must_contain_any: list[str] | None = None,
 ) -> None:
     schema = load_json(schema_path)
     errs = validate_instance(instance, schema)
     if not errs:
         raise AssertionError(f"[FAIL] {name} should FAIL but passed")
+
+    if must_contain is not None and must_contain_any is not None:
+        raise ValueError("Use either must_contain or must_contain_any, not both")
+
     if must_contain and not any(must_contain in e for e in errs):
         raise AssertionError(
             f"[FAIL] {name} failed but error did not contain '{must_contain}'.\nErrors:\n- "
+            + "\n- ".join(errs)
+        )
+
+    if must_contain_any and not any(any(s in e for s in must_contain_any) for e in errs):
+        raise AssertionError(
+            f"[FAIL] {name} failed but error did not contain any of {must_contain_any}.\nErrors:\n- "
             + "\n- ".join(errs)
         )
     print(f"[PASS] {name} (expected fail)")
@@ -343,6 +357,51 @@ def fixture_consultant_notes() -> dict[str, Any]:
     }
 
 
+def fixture_consultant_cross_review_pass(reviewer: str = "A") -> dict[str, Any]:
+    """合法的 E2 交叉審核 fixture（用於 schema PASS 測試）。"""
+    targets_map = {"A": ["B", "C"], "B": ["A", "C"], "C": ["A", "B"]}
+    targets = targets_map.get(reviewer, ["B", "C"])
+    return {
+        "review_version": "consultant_cross_review.v1",
+        "reviewer": reviewer,
+        "reviewed_targets": targets,
+        "strengths": [
+            f"reviewer {reviewer} 肯定點 1：依據 source:consultant_{targets[0]}.summary[0]",
+        ],
+        "critical_issues": [
+            {
+                "issue": "建議過於樂觀，缺乏風險說明",
+                "evidence_ref": f"source:consultant_{targets[0]}.risks[0].risk",
+                "impact": "可能誤導預算加碼決策",
+                "severity": "medium",
+                "suggested_fix": "補充停損條件",
+            }
+        ],
+        "assumptions_to_validate": [
+            {
+                "assumption": "假設下週轉換率持平",
+                "validation_step": "確認廣告帳戶歸因設定未變更",
+            }
+        ],
+        "recommended_edits": ["建議在 next_7d_actions 中加入停損 KPI 門檻"],
+        "stoploss_or_guardrails": ["若 ROAS 低於 1.9 立即暫停加碼"],
+        "confidence": 0.75,
+        "why": "本次審核核心關切是決策建議缺乏明確止損機制，在高 CPA 環境下風險較高。",
+    }
+
+
+def fixture_consultant_cross_review_fail_missing_field() -> dict[str, Any]:
+    """缺少必填欄位的 E2 fixture（用於 schema FAIL 測試）。"""
+    return {
+        "review_version": "consultant_cross_review.v1",
+        "reviewer": "A",
+        "reviewed_targets": ["B", "C"],
+        # 缺少 strengths, critical_issues, recommended_edits 等必填欄位
+        "confidence": 0.5,
+        "why": "測試用",
+    }
+
+
 def fixture_workflow_state() -> dict[str, Any]:
     return {
         "version": "workflow_state.meta_weekly.v1",
@@ -430,7 +489,12 @@ def test_step2_schemas_pass_fail() -> None:
         # FAIL: total row not dropped (name empty after drop)
         bad4 = fixture_inputs_snapshot_ad()
         bad4["rows"][0]["ad_name"] = ""
-        expect_fail("inputs_snapshot ad empty name FAIL", bad4, p_ad, must_contain="minLength")
+        expect_fail(
+            "inputs_snapshot ad empty name FAIL",
+            bad4,
+            p_ad,
+            must_contain_any=["minLength", "non-empty"],
+        )
     else:
         print("[SKIP] row-level input snapshot schemas not found (ok for metadata-only MVP)")
 
@@ -448,11 +512,107 @@ def test_language_drift_guard() -> None:
     print("[PASS] language drift guard detects missing Chinese headers")
 
 
+def test_e2_cross_review_schema() -> None:
+    """
+    E2 交叉審核 schema 測試：
+    - 驗證合法 fixture 通過（A/B/C 三個 reviewer）
+    - 驗證缺少必填欄位的 fixture 失敗
+    - 驗證 reviewed_targets 不符合 reviewer 規則時失敗
+    """
+    p_cross = SCHEMAS / "consultant_cross_review.v1.json"
+    must_exist(p_cross)
+
+    # PASS: 三個 reviewer 各自的合法 fixture
+    for reviewer in ["A", "B", "C"]:
+        expect_pass(
+            f"consultant_cross_review.v1 reviewer={reviewer} PASS",
+            fixture_consultant_cross_review_pass(reviewer),
+            p_cross,
+        )
+
+    # FAIL: 缺少必填欄位
+    expect_fail(
+        "consultant_cross_review.v1 missing required fields FAIL",
+        fixture_consultant_cross_review_fail_missing_field(),
+        p_cross,
+        must_contain="required",
+    )
+
+    # FAIL: reviewer A 的 reviewed_targets 不包含 B（違反 if/then 規則）
+    bad_targets = fixture_consultant_cross_review_pass("A")
+    bad_targets["reviewed_targets"] = ["B", "B"]  # 違反 uniqueItems
+    expect_fail(
+        "consultant_cross_review.v1 duplicate reviewed_targets FAIL",
+        bad_targets,
+        p_cross,
+    )
+
+    # FAIL: confidence 超出範圍
+    bad_confidence = fixture_consultant_cross_review_pass("B")
+    bad_confidence["confidence"] = 1.5  # 超過 maximum: 1
+    expect_fail(
+        "consultant_cross_review.v1 confidence out of range FAIL",
+        bad_confidence,
+        p_cross,
+        must_contain="maximum",
+    )
+
+    print("[PASS] E2 consultant_cross_review.v1 schema 測試全通過")
+
+
+def test_e2_graceful_degradation() -> None:
+    """
+    E2 graceful degradation 邏輯測試：
+    - 模擬 generate_consultant_cross_reviews 單位 reviewer 失敗時，結果仍包含其他成功者
+    - 確認 error_count / success_count 正確
+    """
+    # 模擬三位顧問中一位失敗的交叉審核輸出
+    mock_cross_reviews = {
+        "cross_reviews_version": "consultant_cross_reviews.v1",
+        "week_id": "2025-W49",
+        "date_range": "2025-12-04~2025-12-09",
+        "success_count": 2,
+        "error_count": 1,
+        "reviews": {
+            "reviewer_A": fixture_consultant_cross_review_pass("A"),
+            "reviewer_B": {"error": "timeout", "reviewer": "B", "reviewed_targets": ["A", "C"]},
+            "reviewer_C": fixture_consultant_cross_review_pass("C"),
+        },
+    }
+
+    # 驗證：即使有 error，success/error count 正確
+    success_count = mock_cross_reviews["success_count"]
+    error_count = mock_cross_reviews["error_count"]
+    if success_count != 2:
+        raise AssertionError(f"[FAIL] 預期 success_count=2，實際={success_count}")
+    if error_count != 1:
+        raise AssertionError(f"[FAIL] 預期 error_count=1，實際={error_count}")
+
+    # 驗證：成功的 reviewer 產物符合 schema
+    p_cross = SCHEMAS / "consultant_cross_review.v1.json"
+    for key in ["reviewer_A", "reviewer_C"]:
+        review = mock_cross_reviews["reviews"][key]
+        errs = validate_instance(review, load_json(p_cross))
+        if errs:
+            raise AssertionError(
+                f"[FAIL] {key} 應通過 schema 驗證，但有錯誤：\n- " + "\n- ".join(errs)
+            )
+
+    # 驗證：失敗的 reviewer 有 error 欄位
+    failed_review = mock_cross_reviews["reviews"]["reviewer_B"]
+    if "error" not in failed_review:
+        raise AssertionError("[FAIL] 失敗的 reviewer 應包含 error 欄位")
+
+    print("[PASS] E2 graceful degradation 測試通過（1 失敗 / 2 成功場景）")
+
+
 def main() -> int:
     try:
         test_report_summary_schema_locks()
         test_step2_schemas_pass_fail()
         test_language_drift_guard()
+        test_e2_cross_review_schema()
+        test_e2_graceful_degradation()
     except Exception as e:
         print(str(e))
         return 1

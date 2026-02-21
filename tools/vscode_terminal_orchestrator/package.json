@@ -2,7 +2,7 @@
   "name": "ivyhouse-terminal-orchestrator",
   "displayName": "IvyHouse Terminal Orchestrator (DEPRECATED)",
   "description": "[DEPRECATED] Legacy combined extension. Use ivyhouse-terminal-injector + ivyhouse-terminal-monitor.",
-  "version": "0.0.7",
+  "version": "0.0.10",
   "publisher": "ivyhouse-local",
   "engines": {
     "vscode": "^1.85.0"

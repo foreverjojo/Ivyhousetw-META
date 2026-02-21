@@ -145,12 +145,30 @@ def render_sidebar_settings():
             model_selector("D/F. 會議主持 (Moderator)", "moderator", "moderator"),
         )
 
+        st.divider()
+        st.markdown("### 🔍 E2 交叉審核設定")
+
+        enable_cross_review = st.checkbox(
+            "啟用 E2 交叉審核",
+            value=False,
+            key="enable_cross_review",
+            help=(
+                "E2 交叉審核：A/B/C 三位顧問各自審核另外兩位的分析結論。\n"
+                "⚠️ 將增加 3 次 LLM 呼叫，延遲約增加 30-90 秒。預設關閉。"
+            ),
+        )
+        if enable_cross_review:
+            st.caption("✅ E2 交叉審核已啟用（每次執行增加 3 次 API 呼叫）")
+        else:
+            st.caption("💡 E2 交叉審核關閉（Step F 直接使用 E1 結論）")
+
         return {
             "detail_level": detail_level,
             "schema_validate": schema_validate,
             "version_mode": version_mode,
             "force_rerun": version_mode == "force_rerun",
             "auto_new_version": version_mode == "auto_new_version",
+            "enable_cross_review": enable_cross_review,
             "models": {
                 "insights": insights_model,
                 "consultant_a": consultant_a,

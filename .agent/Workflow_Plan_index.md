@@ -44,6 +44,7 @@
 | Idx-033 | 一鍵自檢入口 + Template workflow/skills 回推包（不含 portable） | P0 | ✅ 已完成 | manual | PASS WITH RISK | 2026-01-23-v1 | `.agent/logs/Idx-033_log.md` | Plan：`.agent/plans/Idx-033_plan.md` |
 | Idx-034 | 固定終端完整 /dev 流程演練（native-primary） | P1 | ✅ 已完成 | codex-cli | PASS | 2026-02-17-v1 | `.agent/logs/Idx-034_log.md` | Demo run：固定 Codex/OpenCode 終端完成 GOAL→PLAN Gate→EXECUTE→QA→LOG |
 | Idx-035 | 固定終端可視化 /dev 流程演練（terminal 可見 STEP） | P1 | ✅ 已完成 | codex-cli | PASS | 2026-02-17-v1 | `.agent/logs/Idx-035_log.md` | Visual run：terminal 顯示 STEP 1~5，固定 Codex/OpenCode 終端完成 marker |
+| Idx-038 | Workflow Loop：注入穩定性修復（submit/不重啟/script 汙染防護） | P0 | ✅ 已完成 | opencode | PASS | 2026-02-20-v1 | `.agent/logs/Idx-038_log.md` | VSIX 0.0.10：PASS 後立即 stop，狀態不再卡 running |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
