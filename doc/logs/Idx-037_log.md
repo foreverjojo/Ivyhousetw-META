@@ -55,7 +55,7 @@
 
 ## Evidence
 
-- Commit: `ecefc8d`
+- Commit: `54ef69f`
 
 ### Workflow Captures
 - Events：`.service/terminal_capture/workflow_20260221181253_events.jsonl`

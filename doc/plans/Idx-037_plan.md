@@ -184,7 +184,7 @@ qa_compliance: qa_tool!=last_change_tool；Codex TUI transcript 曾截斷 prompt
 
 # 收尾
 log_file_path: doc/logs/Idx-037_log.md
-commit_hash: ecefc8d
+commit_hash: 54ef69f
 rollback_at: N/A
 rollback_reason: N/A
 rollback_files: N/A
