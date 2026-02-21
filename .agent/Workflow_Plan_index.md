@@ -32,7 +32,7 @@
 | Idx-021 | Restore service_manager --pty + add OpenCode retry recovery | P0 | ✅ 已完成 | opencode | PASS | 2026-01-20-v1 | `.agent/logs/Idx-021_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |
 | Idx-022 | SendText + read terminal output (Codex /status capture) | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-20-v1 | （尚未產出） | 原預期 log：.agent/logs/Idx-022_log.md |
 | Idx-023 | Workflow Loop：sendText 編排（Engineer→QA→Fix 直到 PASS）+ 落檔輪詢 | P0 | ✅ 已完成 | opencode | PASS | 2026-01-20-v1 | `.agent/logs/Idx-023_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |
-| Idx-024 | Workflow Loop Reliability Hardening（ready/retry/observability） | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-21-v1 | `.agent/logs/Idx-024_log.md` | 修補 workflow loop：以 ready gate 取代固定 sleep，加入注入重試與 events log，降低「停在啟動畫面不執行」風險 |
+| Idx-024 | Workflow Loop Reliability Hardening（ready/retry/observability） | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-21-v1 | `.agent/logs/Idx-024_log.md` | 修補 workflow loop：以 ready gate 取代固定 sleep，加入注入重試與 events log，降低「停在啟動畫面不執行」風險；目前僅 [ENGINEER_DONE]，尚無 [QA_DONE] |
 | Idx-025 | Restore/Standardize HTTP SendText Bridge (Chat→sendText) | P0 | ✅ 已完成 | opencode | PASS | 2026-01-21-v1 | `.agent/logs/Idx-025_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |
 | Idx-026 | SendText Bridge Hardening + Evidence/Docs Consistency | P0 | 🔄 進行中 | opencode | T.B.D. | 2026-01-22-v1 | （尚未產出） | 原預期 log：.agent/logs/Idx-026_log.md |
 | Idx-027 | Workflow Marker Detection Hardening（避免誤判） | P0 | ✅ 已完成 | opencode | PASS | 2026-01-22-v1 | `.agent/logs/Idx-027_log.md` | 不再追溯：歷史 log 缺失，僅補占位以維持稽核鏈 |

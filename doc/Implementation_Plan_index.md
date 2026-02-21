@@ -18,7 +18,7 @@
 | Idx-001 | 建立 `doc/logs/` 資料夾 + Log 範本 | P0 | ✅ 已完成 | Manual | PASS | — | — | 已建立範本 `Idx-000_log.template.md` |
 | Idx-002 | 更新 Index 表欄位與治理資訊 | P0 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v1 | `doc/logs/Idx-002_log.md` | Index 清理與統一完成 |
 | Idx-003 | Workflow 治理框架落地 | P0 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v1 | `doc/logs/Idx-003_log.md` | 26 檔案 + smoke tests 全數通過 |
-| Idx-004 | 補齊 `engineer.md` 加入「Scope 檢測 Checklist」 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v2 | `doc/logs/Idx-004_ld` | 9 項檢核 + 違規處理機制 |
+| Idx-004 | 補齊 `engineer.md` 加入「Scope 檢測 Checklist」 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v2 | `doc/logs/Idx-004_log.md` | 9 項檢核 + 違規處理機制 |
 | Idx-005 | 建立 `.agent/execution_log.json` Schema | P2 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v2 | `doc/logs/Idx-005_log.md` | 會話級別 Schema + 範例檔 |
 | Idx-006 | 清償 TD-001：修復 skill_converter.py 語法錯誤 | P2 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v3 | `doc/logs/Idx-006_log.md` | 修正縮排錯誤，TD-001 已清償 |
 | Idx-007 | 補齊 Plan.md 產出規範 | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v4 | `doc/logs/Idx-007_log.md` | 建立 plan template + 更新 workflow |
