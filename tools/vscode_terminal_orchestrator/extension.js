@@ -22,6 +22,7 @@ const WORKFLOW_STATE_KEYS = {
 
 let sendtextBridgeServer;
 let sendtextBridgeServerStartedAtIso;
+let extensionContext;
 
 function getConfig() {
   const cfg = vscode.workspace.getConfiguration("ivyhouseTerminalOrchestrator");
@@ -49,6 +50,11 @@ function getConfig() {
     workflowPostSendEnterDelayMs: cfg.get("workflowPostSendEnterDelayMs", 250),
     workflowPostSendEnterCount: cfg.get("workflowPostSendEnterCount", 1),
     workflowQaEngineerSummaryMaxChars: cfg.get("workflowQaEngineerSummaryMaxChars", 1800),
+
+    // Workflow safety defaults (avoid breaking interactive TUIs by injecting shell commands).
+    workflowRestartTerminals: cfg.get("workflowRestartTerminals", false),
+    workflowAllowScriptCapture: cfg.get("workflowAllowScriptCapture", false),
+    workflowReadyAssumeReadyAfterMs: cfg.get("workflowReadyAssumeReadyAfterMs", 1200),
 
     sendtextBridgeEnabled: cfg.get("sendtextBridgeEnabled", true),
     // Security hard rule: host must be 127.0.0.1. Setting exists for documentation parity only.
@@ -297,7 +303,19 @@ function extractPlanSections(planText) {
   const spec = extractByHeading("SPEC");
 
   const out = [goal, spec].filter(Boolean).join("\n").trim();
-  return out || s.trim();
+  const combined = out || s.trim();
+
+  // Guardrail: keep prompts under sane size for interactive TUIs.
+  // The full plan is still available in doc/plans/*.md.
+  const MAX_CHARS = 12000;
+  if (combined.length > MAX_CHARS) {
+    return (
+      combined.slice(0, MAX_CHARS).trimEnd() +
+      "\n\n...(已截斷；請以 doc/plans/ 中的 plan 檔案為準)"
+    );
+  }
+
+  return combined;
 }
 
 function resolvePlanAbs(planId, scope) {
@@ -346,15 +364,17 @@ async function startWorkflowLoopCore(context, params) {
 
   const scriptOk = isScriptAvailable();
   let captureMode = "none";
-  if (scriptOk) {
-    captureMode = "script";
-  } else if (terminalDataWriteEventAvailable) {
+  // Prefer Proposed API capture. Using `script -c` is risky because if the terminal is already
+  // running an interactive TUI, the injected `script ...` line can end up as TUI input.
+  if (terminalDataWriteEventAvailable) {
     captureMode = "terminalData";
+  } else if (scriptOk && cfg.workflowAllowScriptCapture) {
+    captureMode = "script";
   }
 
   if (captureMode === "none") {
     throw new Error(
-      "Workflow loop cannot start: missing `script` and Proposed API terminalDataWriteEvent is not enabled",
+      "Workflow loop cannot start: Proposed API terminalDataWriteEvent is not enabled; script mode is disabled by default to avoid polluting Codex/OpenCode TUI. Enable `ivyhouseTerminalOrchestrator.workflowAllowScriptCapture` only if you accept the risk.",
     );
   }
 
@@ -382,6 +402,8 @@ async function startWorkflowLoopCore(context, params) {
     qaOffset: 0,
     engineerMarkerBuf: "",
     qaMarkerBuf: "",
+    engineerPromptSentinel: "",
+    engineerSeenPromptSentinel: false,
     pollIntervalMs: Math.max(200, Number(cfg.workflowPollIntervalMs) || 10000),
     maxRounds: Math.max(1, Number(cfg.workflowMaxRounds) || 10),
     timeoutMs: Math.max(1000, Number(cfg.workflowTimeoutMs) || 1800000),
@@ -421,14 +443,18 @@ async function startWorkflowLoopCore(context, params) {
     // ignore
   }
 
-  // Start / restart terminals to ensure clean session.
-  for (const terminalName of [engineerTerminalName, qaTerminalName]) {
-    const stateKey = getStateKeyForTerminal(cfg, terminalName);
-    if (stateKey) {
-      await context.workspaceState.update(stateKey, false);
+  // IMPORTANT: Do NOT restart terminals by default.
+  // Restarting interactive TUIs is disruptive, and injecting shell commands like `script -c ...`
+  // into an already-running TUI can cause it to exit/restart.
+  if (cfg.workflowRestartTerminals) {
+    for (const terminalName of [engineerTerminalName, qaTerminalName]) {
+      const stateKey = getStateKeyForTerminal(cfg, terminalName);
+      if (stateKey) {
+        await context.workspaceState.update(stateKey, false);
+      }
+      disposeTerminalByName(terminalName);
+      await waitForTerminalToClose(terminalName, 3000);
     }
-    disposeTerminalByName(terminalName);
-    await waitForTerminalToClose(terminalName, 3000);
   }
 
   const engineerStart = getStartCommandForTerminal(cfg, engineerTerminalName);
@@ -440,17 +466,26 @@ async function startWorkflowLoopCore(context, params) {
 
   // Idx-030: inject session nonce via terminal env
   const workflowEnv = { WORKFLOW_SESSION_NONCE: sessionNonce };
-  const engineerTerm = getOrCreateTerminal(engineerTerminalName, workflowEnv);
-  const qaTerm = getOrCreateTerminal(qaTerminalName, workflowEnv);
+  const engineerExisting = findTerminalByName(engineerTerminalName);
+  const qaExisting = findTerminalByName(qaTerminalName);
+  const engineerTerm = engineerExisting || getOrCreateTerminal(engineerTerminalName, workflowEnv);
+  const qaTerm = qaExisting || getOrCreateTerminal(qaTerminalName, workflowEnv);
   workflowLoopState.engineerTerminal = engineerTerm;
   workflowLoopState.qaTerminal = qaTerm;
 
+  let engineerDidStart = false;
+  let qaDidStart = false;
+
   if (captureMode === "script") {
+    if (!cfg.workflowRestartTerminals) {
+      stopWorkflowLoop("script capture requires workflowRestartTerminals=true");
+      throw new Error("script capture requires workflowRestartTerminals=true");
+    }
     const engineerCmd =
-      `script -q -f -c ${bashSingleQuote(engineerStart)} ` +
+      `script -q -f -a -c ${bashSingleQuote(engineerStart)} ` +
       bashSingleQuote(workflowLoopState.engineerRawLogAbs);
     const qaCmd =
-      `script -q -f -c ${bashSingleQuote(qaStart)} ` + bashSingleQuote(workflowLoopState.qaRawLogAbs);
+      `script -q -f -a -c ${bashSingleQuote(qaStart)} ` + bashSingleQuote(workflowLoopState.qaRawLogAbs);
 
     const engineerKey = getStateKeyForTerminal(cfg, engineerTerminalName);
     const qaKey = getStateKeyForTerminal(cfg, qaTerminalName);
@@ -460,32 +495,54 @@ async function startWorkflowLoopCore(context, params) {
       stopWorkflowLoop("failed to start terminals (script mode)");
       throw new Error("failed to start terminals (script mode)");
     }
+
+    engineerDidStart = true;
+    qaDidStart = true;
   } else {
     const engineerKey = getStateKeyForTerminal(cfg, engineerTerminalName);
     const qaKey = getStateKeyForTerminal(cfg, qaTerminalName);
-    const ok1 = await startTerminalIfNeeded(context, engineerTerm, engineerKey, engineerStart, true);
-    const ok2 = await startTerminalIfNeeded(context, qaTerm, qaKey, qaStart, true);
+    // In terminalData mode, avoid injecting start commands into already-running interactive TUIs.
+    // Only start if we restarted terminals or if the terminal didn't exist yet.
+    const engineerShouldStart = Boolean(cfg.workflowRestartTerminals) || !engineerExisting;
+    const qaShouldStart = Boolean(cfg.workflowRestartTerminals) || !qaExisting;
+
+    const ok1 = engineerShouldStart
+      ? await startTerminalIfNeeded(context, engineerTerm, engineerKey, engineerStart, true)
+      : true;
+    const ok2 = qaShouldStart ? await startTerminalIfNeeded(context, qaTerm, qaKey, qaStart, true) : true;
     if (!ok1 || !ok2) {
       stopWorkflowLoop("failed to start terminals (terminalData mode)");
       throw new Error("failed to start terminals (terminalData mode)");
     }
+
+    engineerDidStart = engineerShouldStart;
+    qaDidStart = qaShouldStart;
   }
 
+  // Allow assume-ready only when we did NOT start the terminal in this run.
+  // This avoids deadlock when existing TUIs emit only ANSI/control sequences (cleaned tail becomes empty),
+  // while still requiring real readiness signals for freshly started terminals.
+  workflowLoopState.readyAssumeAllowedByTerminalName = {
+    [engineerTerminalName]: !engineerDidStart,
+    [qaTerminalName]: !qaDidStart,
+  };
+
   // Avoid false-positive marker detection from transcript echo of our own prompt.
+  workflowLoopState.engineerPromptSentinel = generatePromptSentinel("engineer", workflowLoopState.round, 0);
+  workflowLoopState.engineerSeenPromptSentinel = false;
+  if (workflowLoopState.engineerRawLogAbs) {
+    // Start reading from the current end; sentinel gating prevents prompt-echo parsing.
+    workflowLoopState.engineerOffset = safeGetFileSize(workflowLoopState.engineerRawLogAbs);
+    workflowLoopState.engineerMarkerBuf = "";
+  }
   workflowLoopState.engineerPauseUntilMs = Date.now() + 2000;
   const firstSendOk = await workflowSendInstructionWithRetry(
     cfg,
     workflowLoopState.engineerTerminalName,
-    buildEngineerPrompt(workflowLoopState.taskDescription),
+    buildEngineerPrompt(workflowLoopState.taskDescription, workflowLoopState.engineerPromptSentinel),
   );
   if (!firstSendOk || !workflowLoopState.active) {
     throw new Error("failed to send first prompt to engineer");
-  }
-
-  if (workflowLoopState.engineerRawLogAbs) {
-    await sleepMs(400);
-    workflowLoopState.engineerOffset = safeGetFileSize(workflowLoopState.engineerRawLogAbs);
-    workflowLoopState.engineerMarkerBuf = "";
   }
 
   workflowLoopState.timer = setInterval(() => {
@@ -702,7 +759,9 @@ function startSendtextBridgeServer(context) {
 
       const terminalKind = body?.terminalKind;
       const text = body?.text;
-      const submit = Boolean(body?.submit);
+      // Default submit to true so callers don't need to pass it explicitly.
+      // (Bugfix: Boolean(undefined) was false, causing "text entered but not submitted" in TUIs.)
+      const submit = body?.submit === undefined ? true : Boolean(body?.submit);
       const mode = body?.mode || "single";
 
       const sendRes = await sendInstructionWithIdx024Pipeline(cfg, terminalKind, text, submit, mode);
@@ -1041,6 +1100,8 @@ let workflowLoopState = {
   qaOffset: 0,
   engineerMarkerBuf: "",
   qaMarkerBuf: "",
+  engineerPromptSentinel: "",
+  engineerSeenPromptSentinel: false,
   qaWrongMarkerNudgedRound: 0,
   qaPromptSentinel: "",
   qaSeenPromptSentinel: false,
@@ -1099,13 +1160,29 @@ function bashSingleQuote(s) {
 }
 
 function stripAnsi(s) {
-  // Minimal ANSI stripper for marker detection.
-  // Covers CSI + a few common ESC sequences.
+  // Minimal-but-robust ANSI stripper for marker detection.
+  // Cover CSI/OSC/DCS/APC and single-char ESC sequences.
+  // Note: CSI params are not limited to digits/;/? (e.g. \x1b[<u).
   return String(s)
-    // CSI 可能包含 '?' 參數（例如 \x1b[?25h），終止字元也不一定是字母。
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    // DCS: ESC P ... ESC \
+    .replace(/\x1bP[\s\S]*?\x1b\\/g, "")
+    // APC: ESC _ ... ESC \
+    .replace(/\x1b_[\s\S]*?\x1b\\/g, "")
+    // OSC: ESC ] ... BEL or ESC \
     .replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, "")
+    // CSI: ESC [ params intermediates final
+    .replace(/\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/g, "")
+    // Single-char ESC (e.g. ESC E)
+    .replace(/\x1b[@-Z\\-_]/g, "")
+    // Charset selection (ESC ( X)
     .replace(/\x1b\([^)]/g, "");
+}
+
+function sanitizeForMarkerDetection(buf) {
+  // Terminal transcripts may contain ANSI sequences and C0 control bytes.
+  // Strip them while preserving LF for line-based completion formats.
+  const noAnsi = stripAnsi(String(buf || "")).replace(/\r/g, "\n");
+  return noAnsi.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 }
 
 function detectCompletionMarker(buf, markerName) {
@@ -1120,7 +1197,7 @@ function detectCompletionMarker(buf, markerName) {
   if (!m) return { found: false, mode: "none" };
 
   const esc = m.replace(/[-/\\^$*+?.()|[\\]{}]/g, "\\$&");
-  const s = String(buf || "");
+  const s = sanitizeForMarkerDetection(buf);
 
   const bracketedAscii = `\\[\\s*${esc}\\s*\\]`;
   const bracketedFullwidth = `【\\s*${esc}\\s*】|［\\s*${esc}\\s*］`;
@@ -1152,9 +1229,10 @@ function hasCompletionMarker(buf, markerName) {
 function getQaResult(buf) {
   // Accept both strict and spaced variants. Do NOT require newline boundaries;
   // TUIs may not emit newlines in captured transcripts.
-  const s = String(buf || "");
-  if (/QA_RESULT\s*=\s*PASS\b/i.test(s)) return "PASS";
-  if (/QA_RESULT\s*=\s*FAIL\b/i.test(s)) return "FAIL";
+  const s = sanitizeForMarkerDetection(buf);
+  // Allow trailing non-letter noise (e.g. FAIL5) caused by redraw/control artifacts.
+  if (/QA_RESULT\s*=\s*PASS(?![A-Z_])/i.test(s)) return "PASS";
+  if (/QA_RESULT\s*=\s*FAIL(?![A-Z_])/i.test(s)) return "FAIL";
   return undefined;
 }
 
@@ -1175,16 +1253,114 @@ function getQaResult(buf) {
  * @returns {{ ok: true, result: string } | { ok: false, nearMiss?: {...} }}
  */
 function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTaskId) {
-  const s = String(buf || "");
+  const s = sanitizeForMarkerDetection(buf);
   const lines = s
     .split(/\r?\n/)
     .map((l) => String(l || "").trim())
     .filter(Boolean);
 
+  function tryParseInlineFallback() {
+    // 某些 TUI 會因為重繪（redraw）造成換行遺失，導致「最後 5 行」規則無法可靠判斷。
+    // 這裡改用尾端小視窗做 inline 解析，提升容錯。
+    const window = s.slice(-12000);
+
+    const expectedMarker =
+      phase === "ENGINEER" ? "[ENGINEER_DONE]" : phase === "QA" ? "[QA_DONE]" : "[FIX_DONE]";
+    const markerName = expectedMarker.slice(1, -1); // remove brackets
+    const markerRe = new RegExp(`(\\[\\s*${markerName}\\s*\\]|【\\s*${markerName}\\s*】|［\\s*${markerName}\\s*］|\\b${markerName}\\b)`, "i");
+    const mm = markerRe.exec(window);
+    if (!mm) return { ok: false };
+
+    const start = Math.max(0, Number(mm.index) || 0);
+    const block = window.slice(start, start + 2000);
+
+    const nearMiss = { inline: true };
+
+    const timestampMatch = block.match(/TIMESTAMP\s*=\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)/i);
+    if (!timestampMatch) {
+      nearMiss.missingTimestamp = true;
+      return { ok: false, nearMiss };
+    }
+    const timestamp = String(timestampMatch[1] || "").trim();
+
+    const nonceMatch = block.match(/NONCE\s*=\s*([0-9a-f]{16}|\$\{?WORKFLOW_SESSION_NONCE\}?|<[^>]+>)/i);
+    if (!nonceMatch) {
+      nearMiss.missingNonce = true;
+      return { ok: false, nearMiss };
+    }
+    const nonce = String(nonceMatch[1] || "").trim();
+    const nonceLooksLikeLiteral =
+      nonce === "$WORKFLOW_SESSION_NONCE" || nonce === "${WORKFLOW_SESSION_NONCE}" || /^<[^>]+>$/.test(nonce);
+    if (nonceLooksLikeLiteral) {
+      nearMiss.nonceLooksLikeEnvVar = true;
+      nearMiss.nonce = nonce;
+      nearMiss.expectedNonce = expectedNonce;
+      return { ok: false, nearMiss };
+    }
+    if (nonce.toLowerCase() !== String(expectedNonce || "").toLowerCase()) {
+      nearMiss.nonceMismatch = true;
+      nearMiss.nonce = nonce;
+      nearMiss.expectedNonce = expectedNonce;
+      return { ok: false, nearMiss };
+    }
+
+    const taskIdMatch = block.match(/TASK_ID\s*=\s*([A-Za-z0-9_-]+)/i);
+    if (!taskIdMatch) {
+      nearMiss.missingTaskId = true;
+      return { ok: false, nearMiss };
+    }
+    const taskId = String(taskIdMatch[1] || "").trim();
+    const normalizeId = (id) => String(id || "").toLowerCase().replace(/[-_]/g, "");
+    if (normalizeId(taskId) !== normalizeId(expectedTaskId)) {
+      nearMiss.taskIdMismatch = true;
+      nearMiss.taskId = taskId;
+      nearMiss.expectedTaskId = expectedTaskId;
+      return { ok: false, nearMiss };
+    }
+
+    let result;
+    if (phase === "ENGINEER") {
+      const m = block.match(/ENGINEER_RESULT\s*=\s*([A-Za-z_]+)/i);
+      if (!m) {
+        nearMiss.missingEngineerResult = true;
+        return { ok: false, nearMiss };
+      }
+      result = String(m[1] || "").trim().toUpperCase();
+      if (result !== "COMPLETE") {
+        nearMiss.engineerResultInvalid = true;
+        nearMiss.engineerResult = result;
+        return { ok: false, nearMiss };
+      }
+    } else if (phase === "QA") {
+      const m = block.match(/QA_RESULT\s*=\s*(PASS|FAIL)/i);
+      if (!m) {
+        nearMiss.missingQaResult = true;
+        return { ok: false, nearMiss };
+      }
+      result = String(m[1] || "").trim().toUpperCase();
+      if (result !== "PASS" && result !== "FAIL") {
+        nearMiss.qaResultInvalid = true;
+        nearMiss.qaResult = result;
+        return { ok: false, nearMiss };
+      }
+    } else if (phase === "FIX") {
+      const m = block.match(/FIX_ROUND\s*=\s*(\d+)/i);
+      if (!m) {
+        nearMiss.missingFixRound = true;
+        return { ok: false, nearMiss };
+      }
+      result = String(m[1] || "").trim();
+    }
+
+    return { ok: true, result, timestamp, nonce, taskId, inline: true };
+  }
+
   // Tail-only: last 5 non-empty lines
   const tail = lines.slice(-5);
   if (tail.length < 5) {
-    // Not enough lines => incomplete output (not a near-miss yet)
+    // Not enough lines: attempt inline parsing to handle TUI redraw capture.
+    const inline = tryParseInlineFallback();
+    if (inline.ok || inline.nearMiss) return inline;
     return { ok: false };
   }
 
@@ -1197,10 +1373,14 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
 
   function isMarkerLine(line, marker) {
     const v = String(line || "").trim();
-    const esc = marker.replace(/[[\]]/g, "\\$&");
-    return new RegExp(`^${esc}$`, "i").test(v) ||
-           new RegExp(`^【${marker.slice(1, -1)}】$`, "i").test(v) ||
-           new RegExp(`^［${marker.slice(1, -1)}］$`, "i").test(v);
+    const markerName = String(marker || "").trim().replace(/^\[|\]$/g, "");
+    const esc = marker.replace(/[\[\]]/g, "\\$&");
+    return (
+      new RegExp(`^${esc}$`, "i").test(v) ||
+      new RegExp(`^【\\s*${markerName}\\s*】$`, "i").test(v) ||
+      new RegExp(`^［\\s*${markerName}\\s*］$`, "i").test(v) ||
+      new RegExp(`^${markerName}$`, "i").test(v)
+    );
   }
 
   const line1 = tail[0];
@@ -1238,7 +1418,9 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
       }
     }
 
-    // Not even close
+    // Not even close via strict tail parsing; attempt inline fallback.
+    const inline = tryParseInlineFallback();
+    if (inline.ok || inline.nearMiss) return inline;
     return { ok: false };
   }
 
@@ -1283,7 +1465,7 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
     return { ok: false, nearMiss };
   }
 
-  if (nonce !== expectedNonce) {
+  if (String(nonce || "").toLowerCase() !== String(expectedNonce || "").toLowerCase()) {
     nearMiss.nonceMismatch = true;
     nearMiss.nonce = nonce;
     nearMiss.expectedNonce = expectedNonce;
@@ -1353,6 +1535,17 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
 
   // All checks passed
   return { ok: true, result, timestamp, nonce, taskId };
+}
+
+function generatePromptSentinel(kind, round, nudgeCount) {
+  const safeKind = String(kind || "sentinel")
+    .toLowerCase()
+    .replace(/[^a-z0-9_\-]/g, "_")
+    .slice(0, 32);
+  const r = Number(round) || 0;
+  const n = Number(nudgeCount) || 0;
+  const rand = crypto.randomBytes(4).toString("hex");
+  return `PROMPT_END_ID=${safeKind}_${r}_${n}_${Date.now()}_${rand}`;
 }
 
 function isScriptAvailable() {
@@ -1452,10 +1645,37 @@ function isTerminalReadyFromTail(kind, cleanedTail) {
   return s.trim().length > 0;
 }
 
+function looksLikeTuiPaint(cleanedTail) {
+  const s = String(cleanedTail || "");
+  const trimmed = s.trim();
+  if (!trimmed) return false;
+
+  const nonWs = trimmed.replace(/\s+/g, "");
+  if (nonWs.length < 20) return false;
+
+  // Count any letters/numbers (unicode-aware). TUIs often draw using box/block chars.
+  const lettersOrNums = (nonWs.match(/[\p{L}\p{N}]/gu) || []).length;
+  if (lettersOrNums > 8) return false;
+
+  // Heavy box/block drawing suggests an alternate-screen TUI.
+  const hasBoxOrBlock = /[\u2500-\u257F\u2580-\u259F]/u.test(trimmed);
+  return hasBoxOrBlock || lettersOrNums === 0;
+}
+
+function looksLikeAltScreenTuiRaw(rawTail) {
+  const s = String(rawTail || "");
+  if (!s) return false;
+  // Alternate screen buffer / private mode sequences are strong TUI signals.
+  return /\x1b\[\?(1049|47)h/.test(s) || /\x1b\[\?(1049|47)l/.test(s);
+}
+
 async function waitForWorkflowTerminalReady(cfg, terminalName, rawLogAbs) {
   const kind = detectWorkflowTerminalKind(cfg, terminalName);
   const timeoutMs = Math.max(1000, Number(cfg.workflowReadyTimeoutMs) || 60000);
   const pollMs = Math.max(100, Number(cfg.workflowReadyPollIntervalMs) || 300);
+  const assumeReadyAfterMs = Math.max(0, Number(cfg.workflowReadyAssumeReadyAfterMs) || 0);
+  const allowAssume = Boolean(workflowLoopState?.readyAssumeAllowedByTerminalName?.[terminalName]);
+  let nudged = false;
 
   const startedAt = Date.now();
   appendWorkflowEvent({ action: "ready_wait_start", terminalName, kind, timeoutMs, pollMs });
@@ -1467,10 +1687,37 @@ async function waitForWorkflowTerminalReady(cfg, terminalName, rawLogAbs) {
       return false;
     }
 
-    const tail = cleanForTail(tailFile(rawLogAbs, 256 * 1024));
+    const rawTail = tailFile(rawLogAbs, 256 * 1024);
+    const tail = cleanForTail(rawTail);
     if (isTerminalReadyFromTail(kind, tail)) {
       appendWorkflowEvent({ action: "ready_ok", terminalName, kind, elapsedMs: elapsed });
       return true;
+    }
+
+    // If we see no output at all, nudge once with an Enter to encourage the TUI to redraw.
+    // This is safe even if the terminal is at a shell prompt.
+    if (!nudged && tail.trim().length === 0 && elapsed >= Math.min(500, pollMs * 2)) {
+      nudged = true;
+      await workflowSendEnter(terminalName, kind, 1);
+    }
+
+    if (allowAssume && assumeReadyAfterMs > 0 && elapsed >= assumeReadyAfterMs) {
+      const emptyTail = tail.trim().length === 0;
+      const tuiPaint = looksLikeTuiPaint(tail);
+      const altScreen = looksLikeAltScreenTuiRaw(rawTail);
+
+      if (emptyTail || tuiPaint || altScreen) {
+        // When we don't restart terminals, we might not see a stable "ready" token in the transcript.
+        // For existing TUIs, accept an empty tail or strong TUI paint/alt-screen signals.
+        appendWorkflowEvent({
+          action: "ready_assume_ok",
+          terminalName,
+          kind,
+          elapsedMs: elapsed,
+          assumeReason: emptyTail ? "empty" : altScreen ? "alt_screen" : "tui_paint",
+        });
+        return true;
+      }
     }
 
     await sleepMs(pollMs);
@@ -2071,6 +2318,16 @@ function stopWorkflowLoop(reason) {
     clearInterval(workflowLoopState.timer);
   }
   workflowLoopState.timer = undefined;
+
+  // 將狀態寫回 workspaceState，讓 /workflow/status 在 window reload 後仍能正確反映已結束。
+  // 否則可能出現 workflow 已停但 API 仍顯示 "running" 的誤判。
+  try {
+    if (extensionContext?.workspaceState) {
+      extensionContext.workspaceState.update(WORKFLOW_STATE_KEYS.state, "idle");
+    }
+  } catch {
+    // ignore
+  }
   logLine(`[workflow] stopped: ${reason || "stopped"}`);
   vscode.window.showInformationMessage(`Workflow loop stopped${reason ? `: ${reason}` : ""}.`);
 }
@@ -2144,14 +2401,21 @@ function workflowSendInstruction(terminalName, text) {
   }
 }
 
-function buildEngineerPrompt(taskDescription) {
+function buildEngineerPrompt(taskDescription, promptSentinel) {
   // Idx-030: Updated prompt with 5-line completion format (no line numbers to avoid inducing numbered output)
   const nonce = workflowLoopState?.sessionNonce || "<nonce>";
   const taskId = workflowLoopState?.idxName || "Idx-XXX";
 
+  const planPath = /^Idx-\d+$/i.test(taskId) ? `doc/plans/${taskId}_plan.md` : "doc/plans/<Idx-NNN>_plan.md";
+  // OpenCode TUI can be sensitive to very large pasted instructions.
+  // Provide a brief excerpt and point to the on-disk plan.
+  const td = String(taskDescription || "").trim();
+  const EXCERPT_MAX = 900;
+  const excerpt = td.length > EXCERPT_MAX ? td.slice(0, EXCERPT_MAX).trimEnd() + " ...(略)" : td;
+
   return (
     "你是 Engineer（負責實作）。請遵守 repo 規範：不要在此終端執行 git 指令（git/pytest/ruff 請用 Project terminal）。" +
-    ` 任務：${taskDescription}。` +
+    ` 任務：請依 ${planPath} 的 SPEC/whitelist 實作；以下為摘要：${excerpt}。` +
     " 請勿自行做 QA；只要完成實作即可。" +
     " 完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出：\n\n" +
     "```\n" +
@@ -2161,7 +2425,8 @@ function buildEngineerPrompt(taskDescription) {
     `TASK_ID=${taskId}\n` +
     "ENGINEER_RESULT=COMPLETE\n" +
     "```\n\n" +
-    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。"
+    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。" +
+    (promptSentinel ? `\n\n${promptSentinel}` : "")
   );
 }
 
@@ -2426,7 +2691,7 @@ function buildIdx030NearMissNudgePrompt(phase, nearMiss, expectedNonce, expected
   return parts.join("\n");
 }
 
-function buildFixPrompt(round, qaSummary) {
+function buildFixPrompt(round, qaSummary, promptSentinel) {
   // Idx-030: Updated prompt with 5-line completion format (no line numbers)
   const nonce = workflowLoopState?.sessionNonce || "<nonce>";
   const taskId = workflowLoopState?.idxName || "Idx-XXX";
@@ -2442,7 +2707,8 @@ function buildFixPrompt(round, qaSummary) {
     `TASK_ID=${taskId}\n` +
     `FIX_ROUND=${round}\n` +
     "```\n\n" +
-    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。"
+    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。" +
+    (promptSentinel ? `\n\n${promptSentinel}` : "")
   );
 }
 
@@ -2484,7 +2750,41 @@ async function workflowTick(cfg) {
     workflowLoopState.engineerOffset = nextOffset;
     if (text) {
       const cleaned = stripAnsi(text).replace(/\r/g, "\n");
-      workflowLoopState.engineerMarkerBuf = (workflowLoopState.engineerMarkerBuf + cleaned).slice(-20000);
+
+      // Gate marker parsing until we see the end-of-prompt sentinel.
+      // This prevents false positives from prompt echo (which contains marker strings).
+      const sentinel = String(workflowLoopState.engineerPromptSentinel || "").trim();
+      const combined = (workflowLoopState.engineerMarkerBuf || "") + cleaned;
+
+      if (!workflowLoopState.engineerSeenPromptSentinel) {
+        if (!sentinel) {
+          // Fallback: if no sentinel was set, proceed as before.
+          workflowLoopState.engineerSeenPromptSentinel = true;
+          workflowLoopState.engineerMarkerBuf = combined.slice(-20000);
+        } else {
+          const idx = combined.lastIndexOf(sentinel);
+          if (idx === -1) {
+            // Keep a larger window pre-sentinel so we don't trim it out under heavy TUI output.
+            workflowLoopState.engineerMarkerBuf = combined.slice(-120000);
+            return;
+          }
+
+          workflowLoopState.engineerSeenPromptSentinel = true;
+          appendWorkflowEvent({
+            action: "engineer_prompt_sentinel_seen",
+            phase: workflowLoopState.phase,
+            round: workflowLoopState.round,
+            sentinel,
+          });
+
+          workflowLoopState.engineerMarkerBuf = combined
+            .slice(idx + sentinel.length)
+            .trimStart()
+            .slice(-20000);
+        }
+      } else {
+        workflowLoopState.engineerMarkerBuf = combined.slice(-20000);
+      }
 
       // Idx-030: unified Engineer completion detection
       if (workflowLoopState.phase === WORKFLOW_PHASE.waitEngineerDone) {
@@ -2573,6 +2873,17 @@ async function workflowTick(cfg) {
             nudgeAttempt: workflowLoopState.engineerNudgeCount,
           });
 
+          const nudgeSentinel = generatePromptSentinel(
+            "engineer_nudge",
+            workflowLoopState.round,
+            workflowLoopState.engineerNudgeCount,
+          );
+          workflowLoopState.engineerPromptSentinel = nudgeSentinel;
+          workflowLoopState.engineerSeenPromptSentinel = false;
+          if (workflowLoopState.engineerRawLogAbs) {
+            workflowLoopState.engineerOffset = safeGetFileSize(workflowLoopState.engineerRawLogAbs);
+            workflowLoopState.engineerMarkerBuf = "";
+          }
           workflowLoopState.engineerPauseUntilMs = Date.now() + 1500;
           await workflowSendInstructionWithRetry(
             cfg,
@@ -2582,7 +2893,7 @@ async function workflowTick(cfg) {
               completion.nearMiss,
               workflowLoopState.sessionNonce,
               workflowLoopState.idxName || "Idx-XXX",
-              undefined
+              nudgeSentinel
             ),
           );
           return;
@@ -2678,6 +2989,17 @@ async function workflowTick(cfg) {
             nudgeAttempt: workflowLoopState.fixNudgeCount,
           });
 
+          const nudgeSentinel = generatePromptSentinel(
+            "fix_nudge",
+            workflowLoopState.round,
+            workflowLoopState.fixNudgeCount,
+          );
+          workflowLoopState.engineerPromptSentinel = nudgeSentinel;
+          workflowLoopState.engineerSeenPromptSentinel = false;
+          if (workflowLoopState.engineerRawLogAbs) {
+            workflowLoopState.engineerOffset = safeGetFileSize(workflowLoopState.engineerRawLogAbs);
+            workflowLoopState.engineerMarkerBuf = "";
+          }
           workflowLoopState.engineerPauseUntilMs = Date.now() + 1500;
           await workflowSendInstructionWithRetry(
             cfg,
@@ -2687,7 +3009,7 @@ async function workflowTick(cfg) {
               completion.nearMiss,
               workflowLoopState.sessionNonce,
               workflowLoopState.idxName || "Idx-XXX",
-              undefined
+              nudgeSentinel
             ),
           );
           return;
@@ -2714,7 +3036,7 @@ async function workflowTick(cfg) {
     if (!text) return;
 
     const cleaned = stripAnsi(text).replace(/\r/g, "\n");
-    workflowLoopState.qaMarkerBuf = (workflowLoopState.qaMarkerBuf + cleaned).slice(-40000);
+    const combined = (workflowLoopState.qaMarkerBuf || "") + cleaned;
 
     // Gate marker parsing until we see the end-of-prompt sentinel.
     if (!workflowLoopState.qaSeenPromptSentinel) {
@@ -2722,9 +3044,14 @@ async function workflowTick(cfg) {
       if (!sentinel) {
         // Fallback: if no sentinel was set, proceed as before.
         workflowLoopState.qaSeenPromptSentinel = true;
+        workflowLoopState.qaMarkerBuf = combined.slice(-40000);
       } else {
-        const idx = workflowLoopState.qaMarkerBuf.lastIndexOf(sentinel);
-        if (idx === -1) return;
+        const idx = combined.lastIndexOf(sentinel);
+        if (idx === -1) {
+          // Keep a larger window pre-sentinel so we don't trim it out under heavy output.
+          workflowLoopState.qaMarkerBuf = combined.slice(-120000);
+          return;
+        }
 
         workflowLoopState.qaSeenPromptSentinel = true;
         appendWorkflowEvent({
@@ -2732,10 +3059,13 @@ async function workflowTick(cfg) {
           round: workflowLoopState.round,
           sentinel,
         });
-        workflowLoopState.qaMarkerBuf = workflowLoopState.qaMarkerBuf
+        workflowLoopState.qaMarkerBuf = combined
           .slice(idx + sentinel.length)
-          .trimStart();
+          .trimStart()
+          .slice(-40000);
       }
+    } else {
+      workflowLoopState.qaMarkerBuf = combined.slice(-40000);
     }
 
     // Wrong-marker detection (QA 輸出 Engineer/Fix markers)
@@ -2882,17 +3212,19 @@ async function workflowTick(cfg) {
 
     workflowLoopState.phase = WORKFLOW_PHASE.waitFixDone;
     workflowLoopState.fixNudgeCount = 0; // Reset fix nudge counter
-    workflowLoopState.engineerPauseUntilMs = Date.now() + 600;
-    await workflowSendInstructionWithRetry(
-      cfg,
-      workflowLoopState.engineerTerminalName,
-      buildFixPrompt(workflowLoopState.round, qaSummary || "(no QA output captured)"),
-    );
-
+    const fixSentinel = generatePromptSentinel("fix", workflowLoopState.round, 0);
+    workflowLoopState.engineerPromptSentinel = fixSentinel;
+    workflowLoopState.engineerSeenPromptSentinel = false;
     if (workflowLoopState.engineerRawLogAbs) {
       workflowLoopState.engineerOffset = safeGetFileSize(workflowLoopState.engineerRawLogAbs);
       workflowLoopState.engineerMarkerBuf = "";
     }
+    workflowLoopState.engineerPauseUntilMs = Date.now() + 600;
+    await workflowSendInstructionWithRetry(
+      cfg,
+      workflowLoopState.engineerTerminalName,
+      buildFixPrompt(workflowLoopState.round, qaSummary || "(no QA output captured)", fixSentinel),
+    );
   }
 } finally {
     workflowLoopState.tickBusy = false;
@@ -3188,7 +3520,20 @@ async function startAll(context) {
 }
 
 function activate(context) {
+  extensionContext = context;
   const cfg = getConfig();
+
+  // 防呆：workflow loop 無法跨 extension host 重啟持續運作。
+  // 若 workspaceState 殘留 running/starting，會讓 /workflow/status 在 reload 後誤顯示為 running。
+  // 這裡在啟動時自動清回 idle（保留 workflowRunId/planId 供事後追蹤）。
+  try {
+    const persisted = context.workspaceState.get(WORKFLOW_STATE_KEYS.state, "idle");
+    if (!workflowLoopState.active && (persisted === "running" || persisted === "starting")) {
+      context.workspaceState.update(WORKFLOW_STATE_KEYS.state, "idle");
+    }
+  } catch {
+    // ignore
+  }
 
   try {
     if (vscode.window.onDidWriteTerminalData) {

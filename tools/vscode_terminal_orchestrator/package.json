@@ -2,7 +2,7 @@
   "name": "ivyhouse-terminal-orchestrator",
   "displayName": "IvyHouse Terminal Orchestrator (DEPRECATED)",
   "description": "[DEPRECATED] Legacy combined extension. Use ivyhouse-terminal-injector + ivyhouse-terminal-monitor.",
-  "version": "0.0.3",
+  "version": "0.0.7",
   "publisher": "ivyhouse-local",
   "engines": {
     "vscode": "^1.85.0"
@@ -160,6 +160,21 @@
           "default": 300,
           "description": "Workflow loop: polling interval (ms) for ready detection based on transcript tail."
         },
+        "ivyhouseTerminalOrchestrator.workflowReadyAssumeReadyAfterMs": {
+          "type": "number",
+          "default": 1200,
+          "description": "Workflow loop: when raw transcript remains empty, assume terminal is ready after this many ms (0 disables)."
+        },
+        "ivyhouseTerminalOrchestrator.workflowRestartTerminals": {
+          "type": "boolean",
+          "default": false,
+          "description": "Workflow loop: when true, dispose and restart the Codex/OpenCode terminals before starting (safer for script capture, but disruptive for interactive TUIs)."
+        },
+        "ivyhouseTerminalOrchestrator.workflowAllowScriptCapture": {
+          "type": "boolean",
+          "default": false,
+          "description": "Workflow loop: allow fallback to `script -c` capture when Proposed API terminalDataWriteEvent is unavailable. Disabled by default to avoid polluting interactive TUIs."
+        },
         "ivyhouseTerminalOrchestrator.workflowSendRetryCount": {
           "type": "number",
           "default": 3,
@@ -184,6 +199,56 @@
           "type": "boolean",
           "default": true,
           "description": "When true, Workflow Loop will automatically prompt to clear `.service/terminal_capture` after detecting QA PASS and the associated `.agent/logs/<Idx-XXX>_log.md` exists. Set to false to disable automatic prompt."
+        },
+        "ivyhouseTerminalOrchestrator.workflowPostSendEnterDelayMs": {
+          "type": "number",
+          "default": 250,
+          "description": "Workflow loop: delay (ms) after injecting the prompt before sending extra Enter keystrokes (workflowPostSendEnterCount). Set to 0 to disable."
+        },
+        "ivyhouseTerminalOrchestrator.workflowPostSendEnterCount": {
+          "type": "number",
+          "default": 1,
+          "description": "Workflow loop: number of extra Enter keystrokes sent after the prompt inject delay. Helps ensure TUI acceptance of the injected text. Set to 0 to disable."
+        },
+        "ivyhouseTerminalOrchestrator.workflowQaEngineerSummaryMaxChars": {
+          "type": "number",
+          "default": 1800,
+          "description": "Workflow loop: maximum characters of the engineer/QA tail summary injected into the next-role prompt. Truncated at head if exceeded."
+        },
+        "ivyhouseTerminalOrchestrator.sendtextBridgeEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the local HTTP bridge server (sendtext bridge) that accepts /send, /status, and /stop-workflow requests."
+        },
+        "ivyhouseTerminalOrchestrator.sendtextBridgeHost": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host/IP the sendtext bridge HTTP server binds to. Default is loopback-only (127.0.0.1) for security."
+        },
+        "ivyhouseTerminalOrchestrator.sendtextBridgePort": {
+          "type": "number",
+          "default": 8765,
+          "description": "TCP port the sendtext bridge HTTP server listens on."
+        },
+        "ivyhouseTerminalOrchestrator.sendtextBridgeMaxPayloadBytes": {
+          "type": "number",
+          "default": 32768,
+          "description": "Maximum size (bytes) of the `text` field in a single /send request. Requests exceeding this are rejected with HTTP 413."
+        },
+        "ivyhouseTerminalOrchestrator.sendtextBridgeMaxRequestBytes": {
+          "type": "number",
+          "default": 65536,
+          "description": "Maximum total size (bytes) of the HTTP request body accepted by the bridge. Requests exceeding this are rejected with HTTP 413."
+        },
+        "ivyhouseTerminalOrchestrator.sendtextBridgeRateLimit": {
+          "type": "number",
+          "default": 1.0,
+          "description": "Sustained rate limit (requests per second) for the sendtext bridge. Set to 0 to disable rate limiting."
+        },
+        "ivyhouseTerminalOrchestrator.sendtextBridgeRateBurst": {
+          "type": "number",
+          "default": 2,
+          "description": "Burst allowance (number of requests) above the sustained rate limit for the sendtext bridge. Set to 0 to disable burst."
         }
       }
     }

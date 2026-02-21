@@ -1,7 +1,7 @@
 ---
 description: 全端工程師 (Engineer) - 負責撰寫程式碼
 mode: primary
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   read: true
   grep: true

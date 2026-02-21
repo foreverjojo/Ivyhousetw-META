@@ -191,7 +191,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_flags(p_send)
     p_send.add_argument("--terminal-kind", required=True, choices=["codex", "opencode"])
     p_send.add_argument("--text", required=True)
-    p_send.add_argument("--submit", action="store_true")
+    p_send.add_argument(
+        "--submit",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="是否在傳送後自動 submit（Enter）。省略時預設為 True；傳入 --no-submit 可關閉。",
+    )
     p_send.add_argument("--mode", default="single", choices=["single", "chunked"])
     p_send.set_defaults(func=cmd_send)
 

@@ -114,7 +114,7 @@ function appendLiveCapture(cfg, terminal, data) {
   if (!target) return;
   try {
     fs.mkdirSync(paths.dir, { recursive: true });
-    const buf = Buffer.from(String(data), "utf8");
+    const buf = Buffer.from(sanitizeForCapture(data), "utf8");
     const maxBytes = Math.max(0, Number(cfg.captureMaxBytes) || 0);
     appendRollingFile(target.filePath, buf, maxBytes);
   } catch {
@@ -126,11 +126,67 @@ function findTerminalByName(name) {
   return vscode.window.terminals.find((terminal) => terminal.name === name);
 }
 
+async function focusTerminal(terminal) {
+  if (!terminal) return;
+  try {
+    if (vscode.window.activeTerminal?.name !== terminal.name) {
+      terminal.show(false);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 function stripAnsi(s) {
   return String(s || "")
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .replace(/\x1bP[\s\S]*?\x1b\\/g, "")
+    .replace(/\x1b_[\s\S]*?\x1b\\/g, "")
     .replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, "")
+    .replace(/\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/g, "")
+    .replace(/\x1b[@-Z\\-_]/g, "")
     .replace(/\x1b\([^)]/g, "");
+}
+
+function isForbiddenTerminalCommand(cmd) {
+  const s = String(cmd || "").trim();
+  if (!s) return false;
+
+  // Hard block: Python environment auto-activation leaking into interactive TUIs.
+  // We never want this in Codex/OpenCode terminals.
+  if (/^source\s+.+\/\.venv\/bin\/activate\s*$/i.test(s)) return true;
+  if (/^\.\s+.+\/\.venv\/bin\/activate\s*$/i.test(s)) return true;
+  if (/^source\s+\.venv\/bin\/activate\s*$/i.test(s)) return true;
+  if (/^\.\s+\.venv\/bin\/activate\s*$/i.test(s)) return true;
+  return false;
+}
+
+async function interruptTerminalBestEffort(terminal) {
+  if (!terminal) return false;
+  // Ctrl+C
+  try {
+    terminal.sendText("\x03", false);
+  } catch {
+    // ignore
+  }
+  try {
+    await focusTerminal(terminal);
+    if (vscode.window.activeTerminal?.name === terminal.name) {
+      await vscode.commands.executeCommand("workbench.action.terminal.sendSequence", {
+        text: "\x03",
+      });
+    }
+  } catch {
+    // ignore
+  }
+  return true;
+}
+
+function sanitizeForCapture(data) {
+  // Keep LF for readability and marker scanning.
+  const noAnsi = stripAnsi(String(data ?? "")).replace(/\r/g, "\n");
+  // Remove other C0 control chars (including ESC) but preserve LF.
+  return noAnsi.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 }
 
 function readLastCaptureRaw(cfg) {
@@ -224,7 +280,7 @@ function appendCapture(cfg, terminal, data) {
   if (!captureState.lastFile || !captureState.terminalName) return;
   if (terminal.name !== captureState.terminalName) return;
 
-  const buf = Buffer.from(String(data), "utf8");
+  const buf = Buffer.from(sanitizeForCapture(data), "utf8");
   const maxBytes = Math.max(0, Number(cfg.captureMaxBytes) || 0);
 
   if (maxBytes > 0 && captureState.bytesWritten + buf.length > maxBytes) {
@@ -370,6 +426,18 @@ function activate(context) {
 
             const cmdValue = e.execution?.commandLine?.value;
             const cmdLine = typeof cmdValue === "string" ? cmdValue : "";
+
+            // Guardrail: detect venv activation injections.
+            // IMPORTANT: do NOT send Ctrl+C automatically here.
+            // Ctrl+C may kill interactive TUIs (codex/opencode) if the injection was written
+            // into their input stream (not a shell execution). We only log for diagnosis.
+            if (isForbiddenTerminalCommand(cmdLine)) {
+              appendDebugEvent(cfg, {
+                type: "forbidden_command_detected",
+                terminalName,
+                commandLine: cmdLine,
+              });
+            }
 
             if (typeof e.execution?.read !== "function") {
               appendDebugEvent(cfg, {
