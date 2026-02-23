@@ -48,7 +48,7 @@ from utils.week_utils import get_prev_week_id as _get_prev_week_id_raw
 
 # Scripts imports
 from scripts.kpi_calc import build_report_summary
-from scripts.llm_insights import generate_report_insights
+from scripts.llm_insights import generate_report_insights, is_report_insights_renderable
 from scripts.consultants import generate_consultant_notes, generate_consultant_cross_reviews
 from scripts.moderator import build_workflow_state
 from scripts.moderator_meeting import build_meeting_markdown, write_artifacts
@@ -553,7 +553,7 @@ def run_step_c(
 
     if (not force_rerun) and step_exists(vdir, "report_insights.json"):
         ri = load_or_session("report_insights", vdir / "report_insights.json")
-        if ri:
+        if ri and is_report_insights_renderable(ri):
             # 即使 skip，仍可顯示既有結果
             if realtime_container is not None:
                 try:
@@ -564,6 +564,18 @@ def run_step_c(
             write_pipeline_state(vdir, "C1(skip)", mode_label)
             render_sidebar_status_fn(week_id, vdir)
             return
+
+        if ri:
+            # 既有檔案存在但結構異常（常見：LLM 回傳 error payload JSON）
+            st.warning(
+                "⚠️ 偵測到既有 report_insights.json 結構異常或內容為空，將自動重跑 Step C 以修復。"
+            )
+            logger.warning(
+                "Existing report_insights.json is not renderable; rerunning Step C",
+                week_id=week_id,
+                vdir=str(vdir),
+            )
+            st.session_state.pop("report_insights", None)
 
     with st.status(f"{mode_label}｜Step C：LLM 洞察生成中...", expanded=True) as status:
         if realtime_container is not None:

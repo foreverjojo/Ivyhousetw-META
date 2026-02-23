@@ -25,6 +25,91 @@ from utils import now_iso
 llm_monitor = get_monitor()
 
 
+def _to_nonempty_str_list(v: Any) -> list[str]:
+    """Coerce common LLM outputs into a list[str] with non-empty items."""
+    if isinstance(v, list):
+        out: list[str] = []
+        for it in v:
+            if it is None:
+                continue
+            s = str(it).strip()
+            if s:
+                out.append(s)
+        return out
+
+    if isinstance(v, str):
+        s = v.strip()
+        return [s] if s else []
+
+    return []
+
+
+def is_report_insights_renderable(report_insights: Any) -> bool:
+    """Minimal contract for meeting/UI rendering.
+
+    We treat report_insights as renderable iff it has a non-empty `executive_summary` list.
+    """
+    if not isinstance(report_insights, dict):
+        return False
+    executive = _to_nonempty_str_list(report_insights.get("executive_summary"))
+    return len(executive) > 0
+
+
+def _insights_v1_issues(report_insights: Any) -> list[str]:
+    issues: list[str] = []
+    if not isinstance(report_insights, dict):
+        return ["root: not an object"]
+
+    executive = report_insights.get("executive_summary")
+    if not isinstance(executive, list):
+        issues.append("executive_summary: expected array")
+    elif not _to_nonempty_str_list(executive):
+        issues.append("executive_summary: empty")
+
+    return issues
+
+
+def _normalize_insights_v1(
+    report_summary: dict[str, Any],
+    report_insights: Any,
+    *,
+    fallback_reason: str | None = None,
+) -> dict[str, Any]:
+    """Normalize and guarantee minimal fields used by the app.
+
+    Important: This is a deterministic safety net. It does NOT recalc KPIs.
+    """
+    out: dict[str, Any] = dict(report_insights) if isinstance(report_insights, dict) else {}
+
+    out.setdefault("insights_version", "insights.v1")
+    out.setdefault("week_id", report_summary.get("week_id"))
+    out.setdefault("date_range", report_summary.get("date_range"))
+
+    executive = _to_nonempty_str_list(out.get("executive_summary"))
+    if not executive:
+        reason_parts: list[str] = []
+        if fallback_reason:
+            reason_parts.append(fallback_reason)
+        for key in ["message", "error", "code", "status"]:
+            v = out.get(key)
+            if isinstance(v, str) and v.strip():
+                reason_parts.append(f"{key}={v.strip()}")
+        reason = "｜".join(reason_parts) if reason_parts else "洞察內容缺失或格式不符"
+        out["executive_summary"] = [f"⚠️ Step C 洞察產物異常：{reason}（建議重新執行 Step C）"]
+    else:
+        out["executive_summary"] = executive
+
+    # Keep other fields present as lists/dicts when possible (best-effort)
+    out.setdefault("what_worked", [])
+    out.setdefault("what_didnt", [])
+    out.setdefault("diagnostics", {})
+    out.setdefault("actions", [])
+    out.setdefault("data_issues", [])
+    out.setdefault("open_questions", [])
+
+    return out
+
+
 def _openrouter_chat_completion(
     messages,
     model: str,
@@ -227,6 +312,7 @@ def generate_report_insights(
     out = _try_parse_json(content)
     total_usage = usage_main
     retried_with_fallback_repair = False
+    schema_repair_attempted = False
 
     # 若解析失敗（含 error key），做一次修復重試，並累計 token usage（避免低估成本）
     if isinstance(out, dict) and out.get("error"):
@@ -251,10 +337,63 @@ def generate_report_insights(
         total_usage = _add_usage(total_usage, usage_repair)
         out = _try_parse_json(content2)
 
-    # 最小保險：補必要欄位
-    out.setdefault("insights_version", "insights.v1")
-    out.setdefault("week_id", report_summary.get("week_id"))
-    out.setdefault("date_range", report_summary.get("date_range"))
+    # 若 JSON 可解析但結構不符（例如回傳 error payload JSON），做一次 schema repair 重試。
+    if not is_report_insights_renderable(out):
+        schema_repair_attempted = True
+        issues = _insights_v1_issues(out)
+
+        # 避免把過長內容塞回 repair prompt 造成 context 超限
+        if isinstance(out, dict):
+            prev_snippet = json.dumps(out, ensure_ascii=False)
+        else:
+            prev_snippet = str(out)
+        prev_snippet = (
+            prev_snippet
+            if len(prev_snippet) <= 12000
+            else (prev_snippet[:12000] + "\n...[TRUNCATED]...")
+        )
+        repair_messages2 = [
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": (
+                    "你上一次輸出雖然可被 JSON.parse，但結構不符合 insights.v1 欄位要求（"
+                    + ", ".join(issues)
+                    + "）。"
+                    "請重新輸出符合欄位要求的『單一 JSON object』，禁止輸出 error/status 類型回應。"
+                    "至少要包含 executive_summary（3-5 條）與 actions（6 條）。"
+                    "禁止輸出```或多餘文字。"
+                ),
+            },
+            {"role": "user", "content": "你上一次的輸出（供修正）：\n" + prev_snippet},
+        ]
+
+        try:
+            content3, usage_repair2, repair_model2, retried2 = (
+                _openrouter_chat_completion_with_fallback(
+                    repair_messages2,
+                    model=active_model,
+                    role="insights",
+                    temperature=0.0,
+                    max_tokens=8000,
+                )
+            )
+            active_model = repair_model2
+            retried_with_fallback_repair = retried_with_fallback_repair or retried2
+            total_usage = _add_usage(total_usage, usage_repair2)
+            out = _try_parse_json(content3)
+        except Exception as e:
+            out = {
+                "error": f"schema repair failed: {type(e).__name__}: {str(e)[:200]}",
+                "raw_content": prev_snippet,
+            }
+
+    # 最終保底：確保 meeting/UI 至少可渲染 executive_summary，避免顯示（待補）
+    out = _normalize_insights_v1(
+        report_summary,
+        out,
+        fallback_reason=("已嘗試結構修復" if schema_repair_attempted else None),
+    )
 
     # 統一在此記錄一次 Step C token usage（包含 repair）
     try:
@@ -281,6 +420,7 @@ def generate_report_insights(
                         "used_model": active_model,
                         "fallback_retry_main": retried_with_fallback_main,
                         "fallback_retry_repair": retried_with_fallback_repair,
+                        "schema_repair_attempted": schema_repair_attempted,
                     }
                     if version_fp
                     else {
@@ -289,6 +429,7 @@ def generate_report_insights(
                         "used_model": active_model,
                         "fallback_retry_main": retried_with_fallback_main,
                         "fallback_retry_repair": retried_with_fallback_repair,
+                        "schema_repair_attempted": schema_repair_attempted,
                     }
                 ),
             )

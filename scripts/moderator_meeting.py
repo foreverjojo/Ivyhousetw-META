@@ -167,7 +167,17 @@ def build_meeting_markdown(
         for i, s in enumerate(exec_sum, 1):
             lines.append(f"- {i}. {s}")
     else:
-        lines.append("- （待補）")
+        msg_parts: list[str] = []
+        if isinstance(report_insights, dict):
+            for key in ["message", "error", "code", "status"]:
+                v = report_insights.get(key)
+                if isinstance(v, str) and v.strip():
+                    msg_parts.append(f"{key}={v.strip()}")
+        msg = "｜".join(msg_parts)
+        if msg:
+            lines.append(f"- ⚠️ 洞察產物格式異常：{msg}（建議重新執行 Step C）")
+        else:
+            lines.append("- ⚠️ report_insights.executive_summary 缺失或為空（建議重新執行 Step C）")
     lines.append("")
 
     lines.append("## 三顧問摘要（共識 / 分歧）")
@@ -291,8 +301,8 @@ def build_meeting_markdown(
                     idx += 1
                     added = True
 
-        key_observations = cs.get("key_observations") or cs.get("keyObservations") or cs.get(
-            "observations"
+        key_observations = (
+            cs.get("key_observations") or cs.get("keyObservations") or cs.get("observations")
         )
         if isinstance(key_observations, str) and key_observations.strip():
             lines.append(f"- {idx}. 觀察：{key_observations.strip()}")
