@@ -172,24 +172,24 @@ scope_exceptions:
   - "utils/openrouter_http.py 已於 /dev 前新增；用戶允許納入 Idx-039 白名單保留"
 
 # Engineer 執行
-executor_tool: [待用戶確認: codex-cli|opencode]
+executor_tool: opencode
 executor_backend: ivyhouse_sendtext_extension
 monitor_backend: proposed_api_monitor
-executor_tool_version: [version]
-executor_user: [github-account or email]
-executor_start: [執行開始時間]
-executor_end: [執行結束時間]
-session_id: [terminal session ID if available]
-last_change_tool: [codex-cli|opencode]
+executor_tool_version: 1.2.6
+executor_user: foreverjojo
+executor_start: 2026-02-23 17:21:31
+executor_end: pending
+session_id: N/A
+last_change_tool: opencode
 
 # QA 執行
-qa_tool: [待用戶確認: codex-cli|opencode]
-qa_tool_version: [version]
-qa_user: [github-account or email]
-qa_start: [QA 開始時間]
-qa_end: [QA 結束時間]
-qa_result: [PASS|PASS_WITH_RISK|FAIL]
-qa_compliance: [✅ 符合|⚠️ 例外：原因]
+qa_tool: codex-cli
+qa_tool_version: 0.104.0
+qa_user: foreverjojo
+qa_start: pending
+qa_end: pending
+qa_result: pending
+qa_compliance: ✅ 符合
 
 # 收尾
 log_file_path: doc/logs/Idx-039_log.md
@@ -203,8 +203,8 @@ rollback_files: N/A
 
 ## ✅ 用戶確認
 
-- [ ] Spec 已確認，可進入 Step 2 (Meta Expert：本任務 expert_required=false，可跳過)
-- [ ] Engineer Tool 已選擇：`[codex-cli|opencode]`
-- [ ] QA Tool 已選擇：`[codex-cli|opencode]`（必須 ≠ last_change_tool）
-- [ ] Execution Backend Policy 已確認：`extension-sendtext-required`
-- [ ] Monitor Backend Policy 已確認：`proposed-primary-with-extension-fallback`
+- [x] Spec 已確認，可進入 Step 2 (Meta Expert：本任務 expert_required=false，可跳過)
+- [x] Engineer Tool 已選擇：`opencode`
+- [x] QA Tool 已選擇：`codex-cli`（必須 ≠ last_change_tool）
+- [x] Execution Backend Policy 已確認：`extension-sendtext-required`
+- [x] Monitor Backend Policy 已確認：`proposed-primary-with-extension-fallback`

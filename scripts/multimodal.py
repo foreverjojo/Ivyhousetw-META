@@ -8,12 +8,11 @@
 from __future__ import annotations
 
 import base64
-import json
 import os
 from pathlib import Path
 from typing import Any
 
-import requests
+from utils.openrouter_http import OpenRouterRetryConfig, post_chat_completions_json
 
 
 def encode_image_to_base64(image_path: str | Path) -> str:
@@ -99,9 +98,14 @@ def openrouter_multimodal_completion(
         else:
             payload["response_format"] = response_format
 
-    resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=timeout_s)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"OpenRouter error {resp.status_code}: {resp.text}")
+    data = post_chat_completions_json(
+        url=url,
+        headers=headers,
+        payload=payload,
+        retry=OpenRouterRetryConfig(timeout_s=float(timeout_s)),
+    )
 
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    if not data.get("choices"):
+        raise RuntimeError(f"OpenRouter returned no choices. Model: {model}.")
+
+    return str(data["choices"][0]["message"].get("content") or "")

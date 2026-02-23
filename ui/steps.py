@@ -757,11 +757,29 @@ def run_step_e(
         realtime_container: Streamlit 容器，用於即時顯示顧問分析結果
     """
     logger.info("Step E (三顧問) 開始", week_id=week_id, mode=mode_label)
+    from utils.openrouter_http import OpenRouterTransientError
+
     sync_manual_inputs_to_inputs_json(vdir)
 
     if (not force_rerun) and step_exists(vdir, "consultant_notes.json"):
         cn = read_json_if_exists(vdir / "consultant_notes.json")
         if cn:
+            notes = {
+                "A": cn.get("consultant_A") or {},
+                "B": cn.get("consultant_B") or {},
+                "C": cn.get("consultant_C") or {},
+            }
+            if any(isinstance(note, dict) and "error" in note for note in notes.values()):
+                st.error("⚠️ 已有顧問產物但內容含錯誤，請開啟 Force re-run 重新產生。")
+                write_pipeline_state(
+                    vdir,
+                    "E(error)",
+                    mode_label,
+                    details=["existing consultant_notes contains error"],
+                )
+                render_sidebar_status_fn(week_id, vdir)
+                raise RuntimeError("顧問產物含錯誤，已中止流程（請 Force re-run 重新產生）。")
+
             st.session_state["consultant_notes"] = cn
 
             # 若先前版本尚未寫入自然語句檔，補寫到 history（不影響流程）
@@ -793,13 +811,58 @@ def run_step_e(
             raise RuntimeError("缺少 report_summary/report_insights（Step B/C 未成功）")
 
         rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]
-        cn = generate_consultant_notes(
-            rs_ctx,
-            ri,
-            status_callback=status_callback,
-            on_consultant_done=None,  # Step E 移除即時渲染（避免被 Step F 覆蓋且意義不大）
-            version_fp=vdir.name,
-        )
+        try:
+            cn = generate_consultant_notes(
+                rs_ctx,
+                ri,
+                status_callback=status_callback,
+                on_consultant_done=None,  # Step E 移除即時渲染（避免被 Step F 覆蓋且意義不大）
+                version_fp=vdir.name,
+            )
+        except OpenRouterTransientError as e:
+            err_msg = str(e)[:300]
+            logger.warning("Step E 顧問輸出中斷（暫時性錯誤）", week_id=week_id, error=err_msg)
+            st.error("⚠️ 顧問輸出中斷（連線逾時/暫時性錯誤），請稍後再試。")
+            write_pipeline_state(
+                vdir,
+                "E(error)",
+                mode_label,
+                details=[f"transient: {err_msg}"],
+            )
+            render_sidebar_status_fn(week_id, vdir)
+            raise RuntimeError("顧問輸出中斷，請稍後再試。") from e
+        except Exception as e:
+            err_msg = str(e)[:300]
+            logger.warning("Step E 顧問輸出失敗", week_id=week_id, error=err_msg)
+            st.error(f"⚠️ 顧問輸出失敗：{err_msg}")
+            write_pipeline_state(
+                vdir,
+                "E(error)",
+                mode_label,
+                details=[f"error: {err_msg}"],
+            )
+            render_sidebar_status_fn(week_id, vdir)
+            raise
+
+        notes = {
+            "A": cn.get("consultant_A") if isinstance(cn, dict) else None,
+            "B": cn.get("consultant_B") if isinstance(cn, dict) else None,
+            "C": cn.get("consultant_C") if isinstance(cn, dict) else None,
+        }
+        error_roles = [
+            role for role, note in notes.items() if isinstance(note, dict) and "error" in note
+        ]
+        if error_roles:
+            st.error("⚠️ 顧問輸出不完整（解析失敗），已中止流程。請稍後再試。")
+            write_pipeline_state(
+                vdir,
+                "E(error)",
+                mode_label,
+                details=[f"consultant output contains error roles={','.join(error_roles)}"],
+            )
+            render_sidebar_status_fn(week_id, vdir)
+            raise RuntimeError(f"顧問輸出不完整（roles={','.join(error_roles)}），已中止流程。")
+
         write_json(vdir / "consultant_notes.json", cn)
         st.session_state["consultant_notes"] = cn
 
@@ -837,12 +900,13 @@ def run_step_e2(
     E2 邏輯：A 審核 B/C，B 審核 A/C，C 審核 A/B。
     落盤產物：consultant_cross_reviews.json
 
-    降級策略：
-    - E2 失敗（任一 reviewer 或全部）：記錄 error，不阻擋 Step F。
-    - schema 驗證失敗：以警告顯示，仍可繼續。
+    嚴格停止策略：
+    - enable_cross_review=ON 時，只要 E2 失敗（含任一 reviewer 失敗）就中止流程。
+    - schema 驗證失敗：以警告顯示（不阻擋），但 reviewer 產出缺失/含 error 仍視為失敗。
     """
     from core.validation import validate_consultant_cross_review
     from core import SCHEMAS_DIR, SchemaValidationError
+    from utils.openrouter_http import OpenRouterTransientError
 
     logger.info("Step E2 (交叉審核) 開始", week_id=week_id, mode=mode_label)
 
@@ -904,16 +968,16 @@ def run_step_e2(
                             changed = True
                             continue
 
-                        normalized = normalize_consultant_cross_review(raw_review, reviewer, targets)
+                        normalized = normalize_consultant_cross_review(
+                            raw_review, reviewer, targets
+                        )
                         if normalized != raw_review:
                             reviews[reviewer_key] = normalized
                             changed = True
 
                     # 更新 success/error count（讓 Step F 與 artifact 更一致）
                     success_count = sum(
-                        1
-                        for r in reviews.values()
-                        if isinstance(r, dict) and "error" not in r
+                        1 for r in reviews.values() if isinstance(r, dict) and "error" not in r
                     )
                     error_count = len(reviews) - success_count
                     cr["success_count"] = success_count
@@ -940,6 +1004,24 @@ def run_step_e2(
             except Exception as e:
                 logger.warning("Step E2 skip normalize 失敗", week_id=week_id, error=str(e)[:200])
 
+            # 若落盤內容已標示失敗，嚴格停止（避免用壞檔繼續產出報告）
+            try:
+                error_count = int(cr.get("error_count", 0) or 0) if isinstance(cr, dict) else 0
+            except Exception:
+                error_count = 0
+            if error_count > 0:
+                st.error("⚠️ E2 已有落盤，但包含失敗結果，請開啟 Force re-run 重新產生。")
+                write_pipeline_state(
+                    vdir,
+                    "E2(error)",
+                    mode_label,
+                    details=["existing consultant_cross_reviews contains error"],
+                )
+                render_sidebar_status_fn(week_id, vdir)
+                raise RuntimeError(
+                    "E2 交叉審核產物含錯誤，已中止流程（請 Force re-run 重新產生）。"
+                )
+
             st.session_state["consultant_cross_reviews"] = cr
             write_pipeline_state(vdir, "E2(skip)", mode_label)
             render_sidebar_status_fn(week_id, vdir)
@@ -949,30 +1031,30 @@ def run_step_e2(
     # 讀取 E1 consultant_notes
     cn = load_or_session("consultant_notes", vdir / "consultant_notes.json")
     if not cn:
-        st.warning("⚠️ Step E2：找不到 E1 consultant_notes，跳過交叉審核。")
-        logger.warning("Step E2 跳過：缺少 consultant_notes", week_id=week_id)
+        st.error("⚠️ Step E2：找不到 E1 consultant_notes，無法交叉審核（已中止）。")
+        logger.warning("Step E2 失敗：缺少 consultant_notes", week_id=week_id)
         write_pipeline_state(
             vdir,
-            "E2(skip)",
+            "E2(error)",
             mode_label,
-            details=["missing consultant_notes (Step E not completed or artifact missing)"]
+            details=["missing consultant_notes"],
         )
         render_sidebar_status_fn(week_id, vdir)
-        return
+        raise RuntimeError("缺少 consultant_notes，E2 無法執行。")
 
     rs = load_or_session("report_summary", vdir / "report_summary.json")
     ri = load_or_session("report_insights", vdir / "report_insights.json")
     if not rs or not ri:
-        st.warning("⚠️ Step E2：缺少 report_summary/report_insights，跳過交叉審核。")
-        logger.warning("Step E2 跳過：缺少 report_summary 或 report_insights", week_id=week_id)
+        st.error("⚠️ Step E2：缺少 report_summary/report_insights，無法交叉審核（已中止）。")
+        logger.warning("Step E2 失敗：缺少 report_summary 或 report_insights", week_id=week_id)
         write_pipeline_state(
             vdir,
-            "E2(skip)",
+            "E2(error)",
             mode_label,
-            details=["missing report_summary/report_insights (Step B/C not completed or artifact missing)"]
+            details=["missing report_summary/report_insights"],
         )
         render_sidebar_status_fn(week_id, vdir)
-        return
+        raise RuntimeError("缺少 report_summary/report_insights，E2 無法執行。")
 
     with st.spinner(f"{mode_label}｜Step E2：三顧問交叉審核（共 3 次 API 呼叫）..."):
         try:
@@ -983,14 +1065,30 @@ def run_step_e2(
                 status_callback=status_callback,
                 version_fp=vdir.name,
             )
-        except Exception as e:
-            # E2 整體失敗：記錄 error 但不阻擋 Step F
+        except OpenRouterTransientError as e:
             err_msg = str(e)[:300]
-            logger.warning("Step E2 整體失敗，降級略過", week_id=week_id, error=err_msg)
-            st.warning(f"⚠️ E2 交叉審核整體失敗（降級，不影響 Step F）：{err_msg}")
-            write_pipeline_state(vdir, "E2(error)", mode_label)
+            logger.warning("Step E2 交叉審核中斷（暫時性錯誤）", week_id=week_id, error=err_msg)
+            st.error("⚠️ E2 交叉審核中斷（連線逾時/暫時性錯誤），請稍後再試。")
+            write_pipeline_state(
+                vdir,
+                "E2(error)",
+                mode_label,
+                details=[f"transient: {err_msg}"],
+            )
             render_sidebar_status_fn(week_id, vdir)
-            return
+            raise RuntimeError("E2 交叉審核中斷，請稍後再試。") from e
+        except Exception as e:
+            err_msg = str(e)[:300]
+            logger.warning("Step E2 交叉審核失敗", week_id=week_id, error=err_msg)
+            st.error(f"⚠️ E2 交叉審核失敗：{err_msg}")
+            write_pipeline_state(
+                vdir,
+                "E2(error)",
+                mode_label,
+                details=[f"error: {err_msg}"],
+            )
+            render_sidebar_status_fn(week_id, vdir)
+            raise
 
         # Schema 驗證（逐筆，失敗只警告不阻擋）
         validation_errors: list[str] = []
@@ -1017,6 +1115,18 @@ def run_step_e2(
         success_count = cross_reviews.get("success_count", 0)
         error_count = cross_reviews.get("error_count", 0)
 
+        # 嚴格停止：只要 reviewer 結果含 error，就中止（避免產出不完整報告）
+        if int(error_count or 0) > 0:
+            st.error("⚠️ E2 交叉審核包含失敗結果，已中止（請稍後再試或 Force re-run）。")
+            write_pipeline_state(
+                vdir,
+                "E2(error)",
+                mode_label,
+                details=[f"error_count={error_count}"],
+            )
+            render_sidebar_status_fn(week_id, vdir)
+            raise RuntimeError("E2 交叉審核未完整成功，已中止流程。")
+
         if validation_errors:
             st.warning(
                 f"⚠️ E2 部分審核有問題（{error_count} 失敗）：\n"
@@ -1026,8 +1136,13 @@ def run_step_e2(
             st.success(f"✅ E2 交叉審核完成（{success_count}/3 成功）")
 
     write_pipeline_state(vdir, "E2", mode_label)
-    logger.info("Step E2 (交叉審核) 完成", week_id=week_id, mode=mode_label,
-                success_count=success_count, error_count=error_count)
+    logger.info(
+        "Step E2 (交叉審核) 完成",
+        week_id=week_id,
+        mode=mode_label,
+        success_count=success_count,
+        error_count=error_count,
+    )
     render_sidebar_status_fn(week_id, vdir)
 
 

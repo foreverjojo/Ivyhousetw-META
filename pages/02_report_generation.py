@@ -560,7 +560,13 @@ if btn_final:
         # Step G: 技能包管理員 (New Feature) - 在 status 外部渲染
         run_step_g(st.session_state)
     except Exception as e:
-        st.error(f"一鍵最終中斷：{e}")
+        msg = str(e)
+        if "請稍後再試" in msg:
+            st.error(f"一鍵最終中斷：{msg}")
+        elif ("顧問" in msg) or ("E2" in msg):
+            st.error("一鍵最終中斷：顧問輸出中斷/失敗，請稍後再試。")
+        else:
+            st.error(f"一鍵最終中斷：{msg}")
 
 # ============================================================================
 # 底部資訊

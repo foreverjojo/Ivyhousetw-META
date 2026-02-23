@@ -17,15 +17,22 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-import requests
-
 from core.llm_monitor import LLMCall, estimate_cost, get_monitor
 from core.model_settings import ModelRole, get_model, get_retry_model_chain
 from scripts.media_scanner import get_top_images, scan_media_assets
 from scripts.multimodal import create_image_content, openrouter_multimodal_completion
 from utils import now_iso
+from utils.openrouter_http import OpenRouterTransientError, post_chat_completions_json
 
 llm_monitor = get_monitor()
+
+
+def _raise_if_consultant_result_has_error(role: str, result: Any) -> None:
+    if not isinstance(result, dict):
+        raise RuntimeError(f"顧問{role} 輸出型別錯誤：{type(result).__name__}")
+    if "error" in result:
+        err = str(result.get("error") or "unknown_error")
+        raise RuntimeError(f"顧問{role} 輸出解析失敗：{err[:200]}")
 
 
 def _openrouter_chat_completion(
@@ -57,17 +64,7 @@ def _openrouter_chat_completion(
         # 移除 response_format 以避免與 OpenRouter Web Search 衝突
     }
 
-    resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=120)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"OpenRouter error {resp.status_code}: {resp.text}")
-
-    try:
-        data = resp.json()
-    except Exception as err:
-        raise RuntimeError(f"OpenRouter returned non-JSON response: {resp.text[:200]}") from err
-
-    if "error" in data:
-        raise RuntimeError(f"OpenRouter API Error: {json.dumps(data['error'])}")
+    data = post_chat_completions_json(url=url, headers=headers, payload=payload)
 
     if not data.get("choices"):
         raise RuntimeError(
@@ -101,9 +98,12 @@ def _openrouter_chat_completion_with_fallback(
     temperature: float = 0.2,
     max_tokens: int = 8000,
 ) -> tuple[str, dict[str, int], str, bool]:
-    """API 失敗時以 fallback model 重試一次。"""
+    """暫時性錯誤時以 fallback chain 嘗試 backup model。
+
+    只對 `OpenRouterTransientError` 進行 fallback；非暫時性錯誤直接中止，避免產出不完整報告。
+    """
     retry_chain = get_retry_model_chain(role, primary_model=model)
-    errors: list[str] = []
+    transient_errors: list[str] = []
 
     for idx, candidate in enumerate(retry_chain):
         try:
@@ -114,10 +114,17 @@ def _openrouter_chat_completion_with_fallback(
                 max_tokens=max_tokens,
             )
             return content, usage, candidate, idx > 0
+        except OpenRouterTransientError as err:
+            transient_errors.append(f"{candidate}: {err}")
         except Exception as err:
-            errors.append(f"{candidate}: {err}")
+            # 非暫時性錯誤：不嘗試其他模型，直接 fail-fast
+            raise RuntimeError(
+                f"OpenRouter 呼叫失敗（model={candidate}）：{str(err)[:200]}"
+            ) from err
 
-    raise RuntimeError("; ".join(errors))
+    raise OpenRouterTransientError(
+        "; ".join(transient_errors) or "OpenRouter 呼叫失敗，請稍後再試。"
+    )
 
 
 def _try_parse_json(s: str) -> dict[str, Any]:
@@ -404,6 +411,8 @@ def generate_consultant_notes(
     if on_consultant_done:
         on_consultant_done("A", j_a)
 
+    _raise_if_consultant_result_has_error("A", j_a)
+
     if status_callback:
         status_callback("B", configured_model_b)
     out_b, usage_b, model_b_used, retried_with_fallback_main_b = (
@@ -463,6 +472,8 @@ def generate_consultant_notes(
     if on_consultant_done:
         on_consultant_done("B", j_b)
 
+    _raise_if_consultant_result_has_error("B", j_b)
+
     if status_callback:
         status_callback("C", configured_model_c)
     out_c, usage_c, model_c_used, retried_with_fallback_main_c = (
@@ -521,6 +532,8 @@ def generate_consultant_notes(
         pass
     if on_consultant_done:
         on_consultant_done("C", j_c)
+
+    _raise_if_consultant_result_has_error("C", j_c)
 
     return {
         "consultants_version": "consultants.v1",
@@ -913,7 +926,7 @@ def _single_cross_review(
 ) -> dict[str, Any]:
     """
     執行單位顧問的交叉審核（E2）。
-    失敗時回傳含 error 的 dict，不拋出例外（graceful degradation）。
+    失敗時直接拋出例外（嚴格停止），避免 E2 缺失仍繼續產出報告。
     """
     role_key = _REVIEWER_ROLE_MAP.get(reviewer, "consultant_a")
     model = get_model(role_key)
@@ -947,69 +960,56 @@ def _single_cross_review(
         {"role": "user", "content": ctx_str},
     ]
 
+    content, usage, model_used, retried_main = _openrouter_chat_completion_with_fallback(
+        messages,
+        model=model,
+        role=role_key,
+        temperature=0.2,
+        max_tokens=3000,
+    )
+    parsed, usage_total, model_final, retried_repair = _parse_or_repair(
+        content, usage, model_used, role_key, system
+    )
+
+    if isinstance(parsed, dict) and "error" in parsed:
+        raise RuntimeError(
+            f"E2 reviewer {reviewer} JSON 解析失敗：{str(parsed.get('error'))[:200]}"
+        )
+
+    parsed = normalize_consultant_cross_review(parsed, reviewer, targets)
+
     try:
-        content, usage, model_used, retried_main = _openrouter_chat_completion_with_fallback(
-            messages,
-            model=model,
-            role=role_key,
-            temperature=0.2,
-            max_tokens=3000,
-        )
-        parsed, usage_total, model_final, retried_repair = _parse_or_repair(
-            content, usage, model_used, role_key, system
-        )
-
-        # 若解析/修復仍失敗，保持 error 結構走 graceful degradation（避免吞成假成功）
-        if isinstance(parsed, dict) and "error" in parsed:
-            return {
-                "error": f"E2 reviewer {reviewer} JSON 解析失敗：{str(parsed.get('error'))[:200]}",
-                "reviewer": reviewer,
-                "reviewed_targets": targets,
-            }
-
-        # 正規化輸出，確保符合 consultant_cross_review.v1 schema
-        parsed = normalize_consultant_cross_review(parsed, reviewer, targets)
-
-        # 記錄 LLM 監控
-        try:
-            week_id = str(report_summary.get("week_id") or "").strip() or None
-            llm_monitor.log_call(
-                LLMCall(
-                    timestamp=now_iso(),
-                    model=model_final,
-                    prompt_tokens=int(usage_total.get("prompt_tokens", 0) or 0),
-                    completion_tokens=int(usage_total.get("completion_tokens", 0) or 0),
-                    total_tokens=int(usage_total.get("total_tokens", 0) or 0),
-                    cost_usd=estimate_cost(
-                        model_final,
-                        int(usage_total.get("prompt_tokens", 0) or 0),
-                        int(usage_total.get("completion_tokens", 0) or 0),
-                    ),
-                    function="generate_consultant_cross_reviews",
-                    week_id=week_id,
-                    extra={
-                        "step": "E2",
-                        "reviewer": reviewer,
-                        "reviewed_targets": targets,
-                        "version_fp": version_fp,
-                        "configured_model": model,
-                        "used_model": model_final,
-                        "fallback_retry_main": retried_main,
-                        "fallback_retry_repair": retried_repair,
-                    },
-                )
+        week_id = str(report_summary.get("week_id") or "").strip() or None
+        llm_monitor.log_call(
+            LLMCall(
+                timestamp=now_iso(),
+                model=model_final,
+                prompt_tokens=int(usage_total.get("prompt_tokens", 0) or 0),
+                completion_tokens=int(usage_total.get("completion_tokens", 0) or 0),
+                total_tokens=int(usage_total.get("total_tokens", 0) or 0),
+                cost_usd=estimate_cost(
+                    model_final,
+                    int(usage_total.get("prompt_tokens", 0) or 0),
+                    int(usage_total.get("completion_tokens", 0) or 0),
+                ),
+                function="generate_consultant_cross_reviews",
+                week_id=week_id,
+                extra={
+                    "step": "E2",
+                    "reviewer": reviewer,
+                    "reviewed_targets": targets,
+                    "version_fp": version_fp,
+                    "configured_model": model,
+                    "used_model": model_final,
+                    "fallback_retry_main": retried_main,
+                    "fallback_retry_repair": retried_repair,
+                },
             )
-        except Exception:
-            pass
+        )
+    except Exception:
+        pass
 
-        return parsed
-
-    except Exception as e:
-        return {
-            "error": f"E2 reviewer {reviewer} 失敗：{str(e)[:300]}",
-            "reviewer": reviewer,
-            "reviewed_targets": targets,
-        }
+    return parsed
 
 
 def generate_consultant_cross_reviews(
@@ -1025,9 +1025,8 @@ def generate_consultant_cross_reviews(
     - reviewer B → reviewed_targets: [A, C]
     - reviewer C → reviewed_targets: [A, B]
 
-    失敗策略（graceful degradation）：
-    - 若某位 reviewer 失敗，以含 error 的 dict 記錄，不阻擋整體流程。
-    - 若三位均失敗，仍回傳結構（每位各有 error），讓 Step F 可繼續。
+    失敗策略（嚴格停止）：
+    - 只要任一 reviewer 失敗（包含 JSON 解析/修復失敗），就拋出例外並中止流程。
 
     參數:
         status_callback: 開始審核某 reviewer 時的回呼 (reviewer_key, model)
@@ -1052,6 +1051,8 @@ def generate_consultant_cross_reviews(
             consultant_notes=consultant_notes,
             version_fp=version_fp,
         )
+        if isinstance(review, dict) and "error" in review:
+            raise RuntimeError(f"E2 reviewer {reviewer} 失敗：{str(review.get('error'))[:200]}")
         reviews[f"reviewer_{reviewer}"] = review
 
     # 統計成功/失敗

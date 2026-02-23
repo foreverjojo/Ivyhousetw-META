@@ -97,7 +97,7 @@ if "chat_histories" not in st.session_state:
 
 def call_openrouter(messages: List[Dict], model: str) -> str:
     """呼叫 OpenRouter API"""
-    import requests
+    from utils.openrouter_http import OpenRouterRetryConfig, OpenRouterTransientError, post_chat_completions_json
 
     api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -116,14 +116,22 @@ def call_openrouter(messages: List[Dict], model: str) -> str:
     }
 
     try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=60)
-        if resp.status_code >= 400:
-            return f"⚠️ API 錯誤 {resp.status_code}: {resp.text[:200]}"
-
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        data = post_chat_completions_json(
+            url=url,
+            headers=headers,
+            payload=payload,
+            retry=OpenRouterRetryConfig(timeout_s=60.0, max_retries=1),
+        )
+        if not data.get("choices"):
+            return "⚠️ API 回傳空結果（choices 為空）"
+        return str(data["choices"][0]["message"].get("content") or "")
+    except OpenRouterTransientError as e:
+        return f"⚠️ OpenRouter 暫時性錯誤，請稍後再試：{str(e)[:200]}"
     except Exception as e:
-        return f"⚠️ 請求失敗：{e}"
+        msg = str(e)
+        if len(msg) > 300:
+            msg = msg[:300] + "..."
+        return f"⚠️ 請求失敗：{msg}"
 
 
 def save_chat_history(name: str):

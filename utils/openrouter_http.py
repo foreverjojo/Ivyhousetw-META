@@ -114,9 +114,7 @@ def post_chat_completions_json(
         try:
             data = resp.json()
         except Exception as err:
-            raise RuntimeError(
-                f"OpenRouter 回傳非 JSON（前 200 字）：{resp.text[:200]}"
-            ) from err
+            raise RuntimeError(f"OpenRouter 回傳非 JSON（前 200 字）：{resp.text[:200]}") from err
 
         if "error" in data:
             # 若 error payload 沒有明確可重試訊號，就當作一般錯誤交給上層處理
