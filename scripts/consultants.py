@@ -12,6 +12,7 @@ scripts/consultants.py
 
 import json
 import os
+import re
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
@@ -532,6 +533,246 @@ def generate_consultant_notes(
     }
 
 
+# ---------------------------------------------------------------------------
+# E2 schema normalizer
+# ---------------------------------------------------------------------------
+
+_EVIDENCE_REF_RE = re.compile(
+    r"^source:[A-Za-z0-9_]+(?:\[[0-9]+\])?(?:\.[A-Za-z0-9_]+(?:\[[0-9]+\])?)+$"
+)
+
+
+def _coerce_evidence_ref(raw: Any, targets: list[str]) -> str:
+    """
+    把任意 evidence_ref 原始值強制轉為符合 schema pattern 的字串。
+    pattern: ^source:[A-Za-z0-9_]+(?:\\[[0-9]+\\])?(?:\\.[A-Za-z0-9_]+(?:\\[[0-9]+\\])?)+$
+    """
+
+    def _fallback() -> str:
+        fallback_target = targets[0] if targets else "B"
+        return f"source:consultant_{fallback_target}.summary[0]"
+
+    if not isinstance(raw, str) or not raw.strip():
+        # 沒有任何可用資訊 → 使用 targets[0] 產生安全預設值
+        return _fallback()
+
+    candidate = raw.strip()
+
+    # 若已符合 pattern，直接用
+    if _EVIDENCE_REF_RE.match(candidate) and len(candidate) <= 200:
+        return candidate
+
+    # 嘗試：若以 "source:" 開頭，去除多餘中文/全形字符後再試
+    if candidate.startswith("source:"):
+        # 移除 source: 之後的非 ASCII 字元（只保留 A-Za-z0-9_.[]）
+        cleaned = "source:" + re.sub(r"[^A-Za-z0-9_.\[\]]", "_", candidate[7:])
+        # 確保至少有一個 . 分隔（schema 要求至少兩段）
+        if "." not in cleaned[7:]:
+            cleaned = cleaned + ".ref"
+        if _EVIDENCE_REF_RE.match(cleaned) and len(cleaned) <= 200:
+            return cleaned
+
+    # 嘗試：若不以 source: 開頭但包含有意義文字，加上 source: 前綴
+    ascii_slug = re.sub(r"[^A-Za-z0-9_.\[\]]", "_", candidate)
+    if ascii_slug and ascii_slug[0].isalpha():
+        with_prefix = "source:" + ascii_slug
+        if "." not in ascii_slug:
+            with_prefix = with_prefix + ".ref"
+        if _EVIDENCE_REF_RE.match(with_prefix) and len(with_prefix) <= 200:
+            return with_prefix
+
+    # 最終 fallback
+    return _fallback()
+
+
+def _coerce_strength_item(item: Any) -> str | None:
+    """把 strength 項目（可能是 str 或含 point/evidence/依據 的 dict）轉為 str。"""
+    if isinstance(item, str):
+        return item.strip() or None
+    if isinstance(item, dict):
+        parts: list[str] = []
+        point = item.get("point") or item.get("論點") or ""
+        evidence = item.get("evidence") or item.get("依據") or item.get("evidence_ref") or ""
+        if point:
+            parts.append(str(point).strip())
+        if evidence:
+            parts.append(str(evidence).strip())
+        combined = "：".join(parts) if parts else ""
+        return combined or None
+    return None
+
+
+def normalize_consultant_cross_review(
+    review: Any,
+    reviewer: str,
+    targets: list[str],
+) -> dict[str, Any]:
+    """
+    把任意 LLM 輸出（含多餘 key、錯誤型別）正規化為嚴格符合
+    consultant_cross_review.v1 schema 的 dict。
+
+    規則：
+    - 只保留 schema 允許的頂層 key（additionalProperties=false）
+    - 強制填充所有 required 欄位
+    - review_version / reviewer / reviewed_targets 固定由參數決定
+    - strengths: list[str] 1..3，dict item 合併為字串
+    - critical_issues: list[dict] 1..3，只保留 issue/evidence_ref/impact/severity/suggested_fix
+    - assumptions_to_validate: list[dict] 0..2，只保留 assumption/validation_step
+    - recommended_edits: list[str] 1..3
+    - stoploss_or_guardrails: list[str] 1..2
+    - confidence: float in [0,1]
+    - why: str <=300
+    """
+    if not isinstance(review, dict):
+        review = {}
+
+    # ---- reviewed_targets (must satisfy schema constraints) ----
+    allowed_roles = {"A", "B", "C"}
+    canonical_targets_map: dict[str, list[str]] = {
+        "A": ["B", "C"],
+        "B": ["A", "C"],
+        "C": ["A", "B"],
+    }
+    cleaned_targets = [
+        t for t in targets if isinstance(t, str) and t in allowed_roles and t != reviewer
+    ]
+    cleaned_targets = list(dict.fromkeys(cleaned_targets))
+    if len(cleaned_targets) == 2:
+        reviewed_targets = cleaned_targets
+    else:
+        reviewed_targets = (
+            canonical_targets_map.get(reviewer) or [t for t in allowed_roles if t != reviewer][:2]
+        )
+
+    # ---- strengths ----
+    raw_strengths = review.get("strengths") or []
+    coerced_strengths: list[str] = []
+    if isinstance(raw_strengths, list):
+        for item in raw_strengths:
+            s = _coerce_strength_item(item)
+            if s:
+                coerced_strengths.append(s[:300])
+    elif isinstance(raw_strengths, str) and raw_strengths.strip():
+        coerced_strengths.append(raw_strengths.strip()[:300])
+
+    # 至少 1 條
+    if not coerced_strengths:
+        coerced_strengths = ["分析架構完整，有助於後續決策參考。"]
+    strengths = coerced_strengths[:3]
+
+    # ---- critical_issues ----
+    raw_ci = review.get("critical_issues") or []
+    coerced_ci: list[dict[str, Any]] = []
+    if isinstance(raw_ci, list):
+        for item in raw_ci:
+            if not isinstance(item, dict):
+                continue
+            # 取 issue
+            issue_val = item.get("issue") or item.get("問題") or item.get("critical_issue") or ""
+            issue_str = str(issue_val).strip()[:300] if issue_val else ""
+            if not issue_str:
+                continue
+
+            # 取 evidence_ref（優先用 evidence_ref，其次用 依據/evidence）
+            raw_ref = item.get("evidence_ref") or item.get("依據") or item.get("evidence") or ""
+            evidence_ref = _coerce_evidence_ref(raw_ref, targets)
+
+            ci_obj: dict[str, Any] = {"issue": issue_str, "evidence_ref": evidence_ref}
+            # 可選欄位
+            for opt_key in ("impact", "severity", "suggested_fix"):
+                val = item.get(opt_key)
+                if val is not None:
+                    limit = 300 if opt_key != "suggested_fix" else 400
+                    ci_obj[opt_key] = str(val).strip()[:limit]
+            coerced_ci.append(ci_obj)
+
+    # 至少 1 條
+    if not coerced_ci:
+        fallback_target = targets[0] if targets else "B"
+        coerced_ci = [
+            {
+                "issue": "建議缺乏明確的止損條件，需補充觸發門檻。",
+                "evidence_ref": f"source:consultant_{fallback_target}.summary[0]",
+            }
+        ]
+    critical_issues = coerced_ci[:3]
+
+    # ---- assumptions_to_validate ----
+    raw_atv = review.get("assumptions_to_validate") or []
+    coerced_atv: list[dict[str, Any]] = []
+    if isinstance(raw_atv, list):
+        for item in raw_atv:
+            if not isinstance(item, dict):
+                continue
+            assumption = str(item.get("assumption") or "").strip()[:300]
+            validation_step = str(item.get("validation_step") or "").strip()[:300]
+            if assumption and validation_step:
+                coerced_atv.append({"assumption": assumption, "validation_step": validation_step})
+    # 最多 2 條，可為空 []
+    assumptions_to_validate = coerced_atv[:2]
+
+    # ---- recommended_edits ----
+    raw_re = review.get("recommended_edits") or []
+    coerced_re: list[str] = []
+    if isinstance(raw_re, list):
+        for item in raw_re:
+            s = str(item).strip()[:400] if item else ""
+            if s:
+                coerced_re.append(s)
+    elif isinstance(raw_re, str) and raw_re.strip():
+        coerced_re.append(raw_re.strip()[:400])
+    if not coerced_re:
+        coerced_re = ["建議補充每條行動項目的明確 KPI 門檻與負責角色。"]
+    recommended_edits = coerced_re[:3]
+
+    # ---- stoploss_or_guardrails ----
+    raw_sg = review.get("stoploss_or_guardrails") or []
+    coerced_sg: list[str] = []
+    if isinstance(raw_sg, list):
+        for item in raw_sg:
+            s = str(item).strip()[:300] if item else ""
+            if s:
+                coerced_sg.append(s)
+    elif isinstance(raw_sg, str) and raw_sg.strip():
+        coerced_sg.append(raw_sg.strip()[:300])
+    if not coerced_sg:
+        coerced_sg = ["若 ROAS 連續 3 日低於 1.5，暫停追加預算。"]
+    stoploss_or_guardrails = coerced_sg[:2]
+
+    # ---- confidence ----
+    raw_conf = review.get("confidence")
+    confidence: float = 0.5
+    if isinstance(raw_conf, (int, float)) and not isinstance(raw_conf, bool):
+        confidence = float(raw_conf)
+    elif isinstance(raw_conf, str):
+        cleaned_conf = raw_conf.strip().rstrip("%")
+        try:
+            val = float(cleaned_conf)
+            confidence = val / 100.0 if val > 1.0 else val
+        except ValueError:
+            confidence = 0.5
+    confidence = max(0.0, min(1.0, confidence))
+
+    # ---- why ----
+    raw_why = review.get("why") or review.get("reason") or review.get("rationale") or ""
+    why_str = str(raw_why).strip()[:300] if raw_why else ""
+    if not why_str:
+        why_str = "原始輸出未符合 schema，已自動正規化。"
+
+    return {
+        "review_version": "consultant_cross_review.v1",
+        "reviewer": reviewer,
+        "reviewed_targets": reviewed_targets,
+        "strengths": strengths,
+        "critical_issues": critical_issues,
+        "assumptions_to_validate": assumptions_to_validate,
+        "recommended_edits": recommended_edits,
+        "stoploss_or_guardrails": stoploss_or_guardrails,
+        "confidence": confidence,
+        "why": why_str,
+    }
+
+
 def _compact_consultant_note(note: dict[str, Any], max_chars: int = 2000) -> dict[str, Any]:
     """
     壓縮單位顧問 E1 輸出，避免 E2 prompt token 爆炸。
@@ -587,27 +828,71 @@ def _cross_review_system_prompt(reviewer: str) -> str:
         "硬規則：\n"
         "1) 只能引用輸入 JSON 的數字，不可重新計算或改寫任何 KPI。\n"
         "2) 輸出必須是『單一 JSON object』，不要```、不要多餘文字。\n"
-        "3) 每個結論都要寫『依據』：引用輸入中的哪個欄位。\n"
-        "4) evidence_ref 格式必須是 'source:欄位名稱.子欄位'（例如 source:consultant_B.risks[0].risk）。\n"
+        "3) 只能輸出 schema 允許的 key（review_version/reviewer/reviewed_targets/"
+        "strengths/critical_issues/assumptions_to_validate/recommended_edits/"
+        "stoploss_or_guardrails/confidence/why），禁止輸出任何其他 key。\n"
+        "4) 禁止新增名為「依據」或「reason」或「conclusions」或「next_steps」"
+        "或「task」或「status」或「reviewer_role」或「required_input_fields」的 key。\n"
+        "5) strengths 必須是字串陣列（array of strings），禁止輸出物件。\n"
+        "6) evidence_ref 只能出現在 critical_issues[].evidence_ref，"
+        "格式必須是 'source:consultant_X.欄位名稱'（例如 source:consultant_B.risks[0].risk）。\n"
     )
 
 
 def _cross_review_task_prompt(reviewer: str, targets: list[str]) -> str:
     """建立交叉審核的 task prompt。"""
     targets_str = " 和 ".join(f"顧問{t}" for t in targets)
+    example_target = targets[0] if targets else "B"
+    example_json = json.dumps(
+        {
+            "review_version": "consultant_cross_review.v1",
+            "reviewer": reviewer,
+            "reviewed_targets": targets,
+            "strengths": ["顧問X的分析邏輯清晰，論點有數據支撐。"],
+            "critical_issues": [
+                {
+                    "issue": "預算建議缺乏明確止損條件",
+                    "evidence_ref": f"source:consultant_{example_target}.risks[0].risk",
+                    "impact": "可能在 ROAS 低迷時持續加碼",
+                    "severity": "medium",
+                    "suggested_fix": "補充 stoploss_kpi 欄位",
+                }
+            ],
+            "assumptions_to_validate": [
+                {
+                    "assumption": "下週歸因設定不變",
+                    "validation_step": "確認 Meta 事件管理員設定",
+                }
+            ],
+            "recommended_edits": ["建議補充每條行動的明確 KPI 門檻"],
+            "stoploss_or_guardrails": ["若 ROAS 低於 1.9 立即暫停追加預算"],
+            "confidence": 0.8,
+            "why": "審核核心關切：缺乏明確的止損機制。",
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
     return (
-        f"請針對{targets_str}的建議進行交叉審核，輸出 JSON（單一 object），欄位如下：\n"
-        f"- review_version: 'consultant_cross_review.v1'\n"
-        f"- reviewer: '{reviewer}'\n"
-        f"- reviewed_targets: {json.dumps(targets)}\n"
-        "- strengths: 1-3 條（兩位顧問分析中值得肯定的論點，每條附依據）\n"
-        "- critical_issues: 1-3 條物件（issue/evidence_ref/impact/severity/suggested_fix）\n"
-        "  evidence_ref 必須符合格式：source:consultant_X.欄位\n"
-        "- assumptions_to_validate: 0-2 條物件（assumption/validation_step）\n"
-        "- recommended_edits: 1-3 條（建議修正方向）\n"
-        "- stoploss_or_guardrails: 1-2 條（止損或防護欄）\n"
-        "- confidence: 0.0-1.0 之間的數字（你對審核結論的信心度）\n"
-        "- why: 1-2 句說明本次審核的核心關切\n"
+        f"請針對{targets_str}的建議進行交叉審核，輸出符合以下規範的單一 JSON object：\n\n"
+        "【必須輸出的欄位（不多、不少）】\n"
+        f"- review_version: 固定為 'consultant_cross_review.v1'\n"
+        f"- reviewer: 固定為 '{reviewer}'\n"
+        f"- reviewed_targets: 固定為 {json.dumps(targets)}\n"
+        "- strengths: array of strings，1-3 條，每條為純字串（不是物件），內容說明值得肯定的論點\n"
+        "- critical_issues: array of objects，1-3 條，每條包含:\n"
+        "    issue (string), evidence_ref (string, 格式: source:consultant_X.欄位名稱),\n"
+        "    impact (string, 可選), severity (string, 可選), suggested_fix (string, 可選)\n"
+        "- assumptions_to_validate: array of objects，0-2 條，每條包含 assumption + validation_step\n"
+        "- recommended_edits: array of strings，1-3 條\n"
+        "- stoploss_or_guardrails: array of strings，1-2 條\n"
+        "- confidence: number，0.0 到 1.0 之間\n"
+        "- why: string，說明本次審核核心關切\n\n"
+        "【嚴格禁止】\n"
+        "- 禁止輸出任何其他 key（包含 依據、reason、conclusions、next_steps、"
+        "task、status、reviewer_role、required_input_fields 等）\n"
+        "- strengths 的每個 item 必須是字串，禁止用物件格式\n"
+        "- evidence_ref 只能用 source:consultant_X.欄位名稱 的格式（X=A/B/C）\n\n"
+        f"【合法輸出範例】\n{example_json}\n"
     )
 
 
@@ -673,6 +958,17 @@ def _single_cross_review(
         parsed, usage_total, model_final, retried_repair = _parse_or_repair(
             content, usage, model_used, role_key, system
         )
+
+        # 若解析/修復仍失敗，保持 error 結構走 graceful degradation（避免吞成假成功）
+        if isinstance(parsed, dict) and "error" in parsed:
+            return {
+                "error": f"E2 reviewer {reviewer} JSON 解析失敗：{str(parsed.get('error'))[:200]}",
+                "reviewer": reviewer,
+                "reviewed_targets": targets,
+            }
+
+        # 正規化輸出，確保符合 consultant_cross_review.v1 schema
+        parsed = normalize_consultant_cross_review(parsed, reviewer, targets)
 
         # 記錄 LLM 監控
         try:

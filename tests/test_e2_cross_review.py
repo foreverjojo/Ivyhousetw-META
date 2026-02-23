@@ -294,3 +294,224 @@ def test_e2_disabled_no_cross_reviews_file(tmp_path: Path) -> None:
         cross_reviews = json.loads(cross_review_file.read_text(encoding="utf-8"))
 
     assert cross_reviews is None, "enable_cross_review=OFF 時 cross_reviews 應為 None"
+
+
+# -------------------
+# normalize_consultant_cross_review 單元測試
+# -------------------
+
+
+def test_normalize_reviewer_a_old_keys_become_valid() -> None:
+    """
+    Reviewer A 情境：舊格式含 conclusions/next_steps/reason/task/status 且缺少 required keys。
+    正規化後應通過 validate_consultant_cross_review。
+    """
+    pytest.importorskip("jsonschema")
+    from core.validation import validate_consultant_cross_review
+    from scripts.consultants import normalize_consultant_cross_review
+
+    bad_input: dict = {
+        # 舊格式多餘 key
+        "conclusions": ["結論一", "結論二"],
+        "next_steps": ["下一步A"],
+        "reason": "因為 ROAS 不佳",
+        "task": "審查預算",
+        "status": "draft",
+        "required_input_fields": ["kpi", "spend"],
+        # 缺少大部分 required key，只有零散資訊
+        "reviewer": "A",
+        "confidence": 0.75,
+        "critical_issues": [
+            {
+                "issue": "預算分配缺乏停損機制",
+                "evidence_ref": "source:consultant_B.risks[0].risk",
+            }
+        ],
+    }
+
+    reviewer = "A"
+    targets = ["B", "C"]
+    result = normalize_consultant_cross_review(bad_input, reviewer, targets)
+
+    # 不應含多餘 key
+    allowed_keys = {
+        "review_version",
+        "reviewer",
+        "reviewed_targets",
+        "strengths",
+        "critical_issues",
+        "assumptions_to_validate",
+        "recommended_edits",
+        "stoploss_or_guardrails",
+        "confidence",
+        "why",
+    }
+    assert set(result.keys()) == allowed_keys, (
+        f"結果包含不允許的 key：{set(result.keys()) - allowed_keys}"
+    )
+
+    # 固定欄位應正確
+    assert result["review_version"] == "consultant_cross_review.v1"
+    assert result["reviewer"] == "A"
+    assert result["reviewed_targets"] == ["B", "C"]
+
+    # 應通過 schema 驗證
+    validate_consultant_cross_review(result, SCHEMAS_DIR)
+
+
+def test_normalize_reviewer_b_strengths_dicts_become_strings() -> None:
+    """
+    Reviewer B 情境：strengths 是 {point, evidence} 物件陣列，且含多餘的 reviewer_role key。
+    正規化後 strengths 應全為字串，且通過 schema 驗證。
+    """
+    pytest.importorskip("jsonschema")
+    from core.validation import validate_consultant_cross_review
+    from scripts.consultants import normalize_consultant_cross_review
+
+    bad_input: dict = {
+        "review_version": "consultant_cross_review.v1",
+        "reviewer": "B",
+        "reviewed_targets": ["A", "C"],
+        # strengths 為物件陣列（不符合 schema 要求的字串陣列）
+        "strengths": [
+            {"point": "顧問A的 ROAS 分析完整", "evidence": "source:consultant_A.summary[0]"},
+            {"point": "顧問C的策略視角宏觀", "evidence": "顧問C的機會建議有市場脈絡"},
+        ],
+        # 多餘的頂層 key
+        "reviewer_role": "效率專家",
+        "critical_issues": [
+            {
+                "issue": "缺乏競品對標分析",
+                "evidence_ref": "source:consultant_A.opportunities[0]",
+            }
+        ],
+        "assumptions_to_validate": [],
+        "recommended_edits": ["補充競品對標數據"],
+        "stoploss_or_guardrails": ["若 CPC 超過 15 元立即暫停"],
+        "confidence": 0.7,
+        "why": "兩位顧問均未提及競品壓力。",
+    }
+
+    reviewer = "B"
+    targets = ["A", "C"]
+    result = normalize_consultant_cross_review(bad_input, reviewer, targets)
+
+    # strengths 必須全為字串
+    assert isinstance(result["strengths"], list)
+    assert len(result["strengths"]) >= 1
+    for s in result["strengths"]:
+        assert isinstance(s, str), f"strength item 應為 str，實際為 {type(s)}: {s}"
+
+    # reviewer_role 不應出現在結果中
+    assert "reviewer_role" not in result
+
+    # 應通過 schema 驗證
+    validate_consultant_cross_review(result, SCHEMAS_DIR)
+
+
+def test_normalize_reviewer_c_extra_yiju_key_removed() -> None:
+    """
+    Reviewer C 情境：strengths/critical_issues/assumptions_to_validate 的 items 含多餘的 '依據' key。
+    正規化後多餘 key 應被移除或映射到 evidence_ref，且通過 schema 驗證。
+    """
+    pytest.importorskip("jsonschema")
+    from core.validation import validate_consultant_cross_review
+    from scripts.consultants import normalize_consultant_cross_review
+
+    bad_input: dict = {
+        "review_version": "consultant_cross_review.v1",
+        "reviewer": "C",
+        "reviewed_targets": ["A", "B"],
+        # strengths 的 item 含 '依據' key（不符合 schema 要求的純字串）
+        "strengths": [
+            {"point": "顧問A的數據分析有充分依據", "依據": "consultant_A.meta_kpi.roas"},
+            "顧問B的素材建議具體可執行。",
+        ],
+        "critical_issues": [
+            {
+                "issue": "建議未考量季節性因素",
+                # 使用 '依據' 而非 'evidence_ref'
+                "依據": "source:consultant_A.summary[0]",
+                "impact": "可能低估旺季廣告效益",
+            }
+        ],
+        "assumptions_to_validate": [
+            {
+                "assumption": "下週 Meta 演算法不變",
+                "validation_step": "觀察 CPM 趨勢",
+                # 多餘的 '依據' key
+                "依據": "過去三週 CPM 穩定",
+            }
+        ],
+        "recommended_edits": ["補充季節性調整說明"],
+        "stoploss_or_guardrails": ["ROAS 低於 1.8 暫停追加"],
+        "confidence": 0.65,
+        "why": "兩位顧問均未考量到季節性因素對廣告表現的影響。",
+    }
+
+    reviewer = "C"
+    targets = ["A", "B"]
+    result = normalize_consultant_cross_review(bad_input, reviewer, targets)
+
+    # strengths 必須全為字串
+    for s in result["strengths"]:
+        assert isinstance(s, str), f"strength item 應為 str：{s}"
+
+    # critical_issues 每個 item 只能有 schema 允許的 key
+    allowed_ci_keys = {"issue", "evidence_ref", "impact", "severity", "suggested_fix"}
+    for ci in result["critical_issues"]:
+        extra = set(ci.keys()) - allowed_ci_keys
+        assert not extra, f"critical_issues item 包含不允許的 key：{extra}"
+        # '依據' 應已被映射到 evidence_ref
+        assert "依據" not in ci
+        assert "evidence_ref" in ci
+
+    # assumptions_to_validate 每個 item 只能有 assumption/validation_step
+    allowed_atv_keys = {"assumption", "validation_step"}
+    for atv in result["assumptions_to_validate"]:
+        extra = set(atv.keys()) - allowed_atv_keys
+        assert not extra, f"assumptions_to_validate item 包含不允許的 key：{extra}"
+        assert "依據" not in atv
+
+    # 應通過 schema 驗證
+    validate_consultant_cross_review(result, SCHEMAS_DIR)
+
+
+def test_normalize_confidence_string_percent() -> None:
+    """confidence 為字串百分比時，應正確轉換並夾在 [0,1]。"""
+    from scripts.consultants import normalize_consultant_cross_review
+
+    result = normalize_consultant_cross_review(
+        {"confidence": "85%", "why": "測試"},
+        reviewer="A",
+        targets=["B", "C"],
+    )
+    assert abs(result["confidence"] - 0.85) < 1e-9, (
+        f"confidence 應為 0.85，實際={result['confidence']}"
+    )
+
+
+def test_normalize_evidence_ref_invalid_fixed() -> None:
+    """evidence_ref 包含中文或無效字元時，應被修正為符合 schema pattern 的值。"""
+    import re
+
+    from scripts.consultants import normalize_consultant_cross_review
+
+    pattern = re.compile(
+        r"^source:[A-Za-z0-9_]+(?:\[[0-9]+\])?(?:\.[A-Za-z0-9_]+(?:\[[0-9]+\])?)+$"
+    )
+
+    result = normalize_consultant_cross_review(
+        {
+            "critical_issues": [
+                {"issue": "問題一", "evidence_ref": "顧問B的風險分析第一條"},
+            ],
+            "why": "測試",
+        },
+        reviewer="A",
+        targets=["B", "C"],
+    )
+    for ci in result["critical_issues"]:
+        assert pattern.match(ci["evidence_ref"]), (
+            f"evidence_ref 應符合 schema pattern，實際={ci['evidence_ref']}"
+        )

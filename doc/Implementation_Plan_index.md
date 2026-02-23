@@ -2,7 +2,7 @@
 
 ## 🎯 當前狀態：Phase 4 Stage 2 完成，Meta V2 核心整合達成 (100%)
 
-**最後更新**：2026-02-21
+**最後更新**：2026-02-23
 
 ---
 
@@ -27,6 +27,7 @@
 | Idx-017 | Implementation Plan 移除 MCP Roadmap | P2 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `.agent/logs/Idx-017_log.md` | Plan 不再以 MCP 作為 roadmap 概念（logs 已遷移至 .agent/） |
 | Idx-036 | 三顧問交叉審核（E2）schema 規格落地 | P0 | ✅ 已完成 | Manual | PASS | 2026-02-20-v1 | `doc/logs/Idx-036_log.md` | 交付物：`schemas/consultant_cross_review.v1.json`；commit `2310b05` |
 | Idx-037 | 三顧問交叉審核（E2）工程整合（pipeline + graceful degradation） | P0 | ✅ 已完成 | OpenCode | PASS | 2026-02-20-v1 | `doc/logs/Idx-037_log.md` | Plan：`doc/plans/Idx-037_plan.md`；workflow `wf_20260221181253_dce27f` |
+| Idx-038 | 修正 E2 交叉審核輸出對齊 schema（移除 schema 驗證警告） | P0 | ⏳ 待處理 | TBD | TBD | 2026-02-23-v1 | pending | Plan：`doc/plans/Idx-038_plan.md` |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
