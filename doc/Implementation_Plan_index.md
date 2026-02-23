@@ -28,7 +28,7 @@
 | Idx-036 | 三顧問交叉審核（E2）schema 規格落地 | P0 | ✅ 已完成 | Manual | PASS | 2026-02-20-v1 | `doc/logs/Idx-036_log.md` | 交付物：`schemas/consultant_cross_review.v1.json`；commit `2310b05` |
 | Idx-037 | 三顧問交叉審核（E2）工程整合（pipeline + graceful degradation） | P0 | ✅ 已完成 | OpenCode | PASS | 2026-02-20-v1 | `doc/logs/Idx-037_log.md` | Plan：`doc/plans/Idx-037_plan.md`；workflow `wf_20260221181253_dce27f` |
 | Idx-038 | 修正 E2 交叉審核輸出對齊 schema（移除 schema 驗證警告） | P0 | ⏳ 待處理 | TBD | TBD | 2026-02-23-v1 | pending | Plan：`doc/plans/Idx-038_plan.md` |
-| Idx-039 | OpenRouter timeout 重試 + 顧問失敗即中止（先 backup model、仍 timeout 才停止） | P0 | ⏳ 待處理 | TBD | TBD | 2026-02-23-v1 | pending | Plan：`doc/plans/Idx-039_plan.md` |
+| Idx-039 | OpenRouter timeout 重試 + 顧問失敗即中止（先 backup model、仍 timeout 才停止） | P0 | ✅ 已完成 | OpenCode | PASS | 2026-02-23-v1 | `doc/logs/Idx-039_log.md` | Plan：`doc/plans/Idx-039_plan.md`；commit `10e05c2` |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
