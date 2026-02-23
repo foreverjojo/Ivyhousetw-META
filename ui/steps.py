@@ -846,11 +846,100 @@ def run_step_e2(
 
     logger.info("Step E2 (交叉審核) 開始", week_id=week_id, mode=mode_label)
 
+    # 若使用者未啟用 E2，直接略過（但仍落 pipeline_state，讓流程可追溯）
+    if not bool(st.session_state.get("enable_cross_review")):
+        write_pipeline_state(
+            vdir,
+            "E2(skip)",
+            mode_label,
+            details=["disabled by user (enable_cross_review=OFF)"],
+        )
+        render_sidebar_status_fn(week_id, vdir)
+        logger.info("Step E2 略過（使用者未啟用）", week_id=week_id)
+        return
+
     # 若 E2 落盤已存在，且不強制重跑，直接略過
     cross_review_file = vdir / "consultant_cross_reviews.json"
     if (not force_rerun) and cross_review_file.exists():
         cr = read_json_if_exists(cross_review_file)
         if cr:
+            # 若已有舊版落盤（可能含不合 schema 的欄位），在 skip 時也做 deterministic normalize
+            # 目的：避免「看起來沒跑 E2」其實是用到舊檔案，且不增加任何 LLM 呼叫。
+            try:
+                from scripts.consultants import normalize_consultant_cross_review
+
+                reviewer_targets: dict[str, list[str]] = {
+                    "A": ["B", "C"],
+                    "B": ["A", "C"],
+                    "C": ["A", "B"],
+                }
+
+                reviews = cr.get("reviews") if isinstance(cr, dict) else None
+                if isinstance(reviews, dict):
+                    changed = False
+                    for reviewer, targets in reviewer_targets.items():
+                        reviewer_key = f"reviewer_{reviewer}"
+                        raw_review = reviews.get(reviewer_key)
+
+                        if not isinstance(raw_review, dict):
+                            reviews[reviewer_key] = {
+                                "error": "legacy_cross_review_missing_or_invalid",
+                                "reviewer": reviewer,
+                                "reviewed_targets": targets,
+                            }
+                            changed = True
+                            continue
+
+                        if "error" in raw_review:
+                            continue
+
+                        # 舊格式常見：status=failed / task / reason / required_input_fields
+                        if str(raw_review.get("status") or "").lower() == "failed":
+                            reason = str(raw_review.get("reason") or "legacy_failed")[:200]
+                            reviews[reviewer_key] = {
+                                "error": f"legacy_cross_review_failed: {reason}",
+                                "reviewer": reviewer,
+                                "reviewed_targets": targets,
+                            }
+                            changed = True
+                            continue
+
+                        normalized = normalize_consultant_cross_review(raw_review, reviewer, targets)
+                        if normalized != raw_review:
+                            reviews[reviewer_key] = normalized
+                            changed = True
+
+                    # 更新 success/error count（讓 Step F 與 artifact 更一致）
+                    success_count = sum(
+                        1
+                        for r in reviews.values()
+                        if isinstance(r, dict) and "error" not in r
+                    )
+                    error_count = len(reviews) - success_count
+                    cr["success_count"] = success_count
+                    cr["error_count"] = error_count
+
+                    if changed:
+                        write_json(cross_review_file, cr)
+
+                    # 即使 skip，也做一次 schema 驗證，避免靜默使用壞檔
+                    validation_errors: list[str] = []
+                    for reviewer_key, review in reviews.items():
+                        if isinstance(review, dict) and "error" in review:
+                            continue
+                        try:
+                            validate_consultant_cross_review(review, SCHEMAS_DIR)
+                        except SchemaValidationError as ve:
+                            validation_errors.append(f"{reviewer_key} schema 驗證失敗：{ve}")
+
+                    if validation_errors:
+                        st.warning(
+                            "⚠️ E2 已有落盤，但內容仍有 schema 問題（建議開啟 Force re-run 重新產生）：\n"
+                            + "\n".join(f"- {e}" for e in validation_errors)
+                        )
+            except Exception as e:
+                logger.warning("Step E2 skip normalize 失敗", week_id=week_id, error=str(e)[:200])
+
             st.session_state["consultant_cross_reviews"] = cr
             write_pipeline_state(vdir, "E2(skip)", mode_label)
             render_sidebar_status_fn(week_id, vdir)
@@ -862,6 +951,13 @@ def run_step_e2(
     if not cn:
         st.warning("⚠️ Step E2：找不到 E1 consultant_notes，跳過交叉審核。")
         logger.warning("Step E2 跳過：缺少 consultant_notes", week_id=week_id)
+        write_pipeline_state(
+            vdir,
+            "E2(skip)",
+            mode_label,
+            details=["missing consultant_notes (Step E not completed or artifact missing)"]
+        )
+        render_sidebar_status_fn(week_id, vdir)
         return
 
     rs = load_or_session("report_summary", vdir / "report_summary.json")
@@ -869,6 +965,13 @@ def run_step_e2(
     if not rs or not ri:
         st.warning("⚠️ Step E2：缺少 report_summary/report_insights，跳過交叉審核。")
         logger.warning("Step E2 跳過：缺少 report_summary 或 report_insights", week_id=week_id)
+        write_pipeline_state(
+            vdir,
+            "E2(skip)",
+            mode_label,
+            details=["missing report_summary/report_insights (Step B/C not completed or artifact missing)"]
+        )
+        render_sidebar_status_fn(week_id, vdir)
         return
 
     with st.spinner(f"{mode_label}｜Step E2：三顧問交叉審核（共 3 次 API 呼叫）..."):
@@ -966,8 +1069,11 @@ def run_step_f_final(
             )
 
         # 嘗試讀取 E2 交叉審核產物（若有則傳給 Moderator；若無則正常執行）
-        cross_reviews = load_or_session(
-            "consultant_cross_reviews", vdir / "consultant_cross_reviews.json"
+        enable_cross_review = bool(st.session_state.get("enable_cross_review"))
+        cross_reviews = (
+            load_or_session("consultant_cross_reviews", vdir / "consultant_cross_reviews.json")
+            if enable_cross_review
+            else None
         )
 
         rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]

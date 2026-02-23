@@ -21,6 +21,7 @@ import streamlit as st
 
 # 載入環境變數
 from core import load_environment_variables
+
 load_environment_variables()
 
 # 從新模組 import
@@ -32,6 +33,7 @@ from core import (
     write_pipeline_state,
     restore_from_version_dir,
 )
+
 # Import validate_report_summary separately to create wrapper
 from core.validation import validate_report_summary as _validate_report_summary_raw
 from core.session import (
@@ -63,6 +65,7 @@ from utils import (
     staging_version_dir,
     WEEK_RE,
 )
+
 # 從 utils 導入需要 history_root 的函式，稍後建立包裝
 from utils.week_utils import get_prev_week_id as _get_prev_week_id_raw
 from utils.week_utils import list_week_ids_on_disk as _list_week_ids_on_disk_raw
@@ -72,6 +75,7 @@ from ui.steps import (
     run_step_c,
     run_step_d_draft,
     run_step_e,
+    run_step_e2,
     run_step_f_final,
 )
 
@@ -84,6 +88,7 @@ from scripts.media_uploader import upload_media_assets
 
 # Logging (新增)
 from core.logging import get_logger
+
 logger = get_logger(__name__)
 
 # =========================
@@ -100,6 +105,7 @@ st.caption(
 
 #  ===以上函式已模組化至 utils/, core/, ui/===
 
+
 # =========================
 # App 層級的包裝函式（自動傳入 HISTORY_ROOT）
 # =========================
@@ -107,41 +113,51 @@ def list_week_ids_on_disk() -> List[str]:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     return _list_week_ids_on_disk_raw(HISTORY_ROOT)
 
+
 def get_prev_week_id(current_week_id: str) -> Optional[str]:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     return _get_prev_week_id_raw(current_week_id, HISTORY_ROOT)
+
 
 def week_meta_dir(week_id: str) -> Path:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     return utils_week_meta_dir(week_id, HISTORY_ROOT)
 
+
 def versions_root(week_id: str) -> Path:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     return utils_versions_root(week_id, HISTORY_ROOT)
+
 
 def version_dir(week_id: str, fp_code: str) -> Path:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     return utils_version_dir(week_id, fp_code, HISTORY_ROOT)
 
+
 def read_latest_ptr(week_id: str) -> Optional[dict]:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     return utils_read_latest_ptr(week_id, HISTORY_ROOT)
+
 
 def write_latest_ptr(week_id: str, fp_code: str) -> None:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     utils_write_latest_ptr(week_id, fp_code, HISTORY_ROOT)
 
+
 def write_week_info(week_id: str, date_range: str) -> None:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     utils_write_week_info(week_id, date_range, HISTORY_ROOT)
+
 
 def ensure_week_meta_dirs(week_id: str) -> None:
     """包裝函式：自動傳入 HISTORY_ROOT"""
     utils_ensure_week_meta_dirs(week_id, HISTORY_ROOT)
 
+
 def validate_report_summary(rs: dict) -> None:
     """包裝函式：自動傳入 SCHEMAS_DIR"""
     _validate_report_summary_raw(rs, SCHEMAS_DIR)
+
 
 # =========================
 # 指紋碼計算（App 專用的包裝函式）
@@ -150,12 +166,14 @@ def compute_file_fp(uploaded_file) -> dict:
     """計算上傳檔案的指紋（包含檔名）"""
     b = uploaded_file.getvalue()
     from utils.hash_utils import sha256_bytes
+
     return {"name": getattr(uploaded_file, "name", ""), "size": len(b), "sha256": sha256_bytes(b)}
 
 
 def fp_short(current_fp: dict) -> str:
     """取得指紋碼的短版本（用於顯示）"""
     import json
+
     dumped = json.dumps(fingerprint_key_for_version(current_fp), ensure_ascii=False, sort_keys=True)
     return sha256_str(dumped)[:8]
 
@@ -170,13 +188,16 @@ def fp_short(current_fp: dict) -> str:
 # Sidebar (互斥模式：用 radio，避免死鎖)
 # =========================
 st.sidebar.header("設定（MVP）")
-detail_level = st.sidebar.selectbox("Detail Level", ["default", "adset+ads"], index=1, key="detail_level")
+detail_level = st.sidebar.selectbox(
+    "Detail Level", ["default", "adset+ads"], index=1, key="detail_level"
+)
 validate_schema = st.sidebar.checkbox(
     "Step B 後 Schema Validate（強制）",
     value=True,
     key="validate_schema",
     help="用 schemas/report_summary.v1.json 強制驗證 Step B 產物，避免口徑漂移。",
 )
+
 
 def safe_stamp() -> str:
     """filesystem-safe stamp for staging folders."""
@@ -218,6 +239,7 @@ def _cleanup_staging_on_success(stage_vdir: Path) -> None:
     except Exception:
         pass
 
+
 st.sidebar.divider()
 st.sidebar.caption("版本模式（互斥）")
 
@@ -255,14 +277,18 @@ def render_sidebar_status(week_id: Optional[str], vdir: Optional[Path]) -> None:
         st.write(("✅ " if ok("report_summary.json") else "❌ ") + "B report_summary.json")
         st.write(("✅ " if ok("report_insights.json") else "❌ ") + "C report_insights.json")
         st.write(("✅ " if ok("meeting_draft.md") else "❌ ") + "D meeting_draft.md")
-        st.write(("✅ " if ok("workflow_state_draft.json") else "❌ ") + "D workflow_state_draft.json")
+        st.write(
+            ("✅ " if ok("workflow_state_draft.json") else "❌ ") + "D workflow_state_draft.json"
+        )
         st.write(("✅ " if ok("consultant_notes.json") else "❌ ") + "E consultant_notes.json")
         st.write(("✅ " if ok("meeting.md") else "❌ ") + "F meeting.md")
         st.write(("✅ " if ok("workflow_state.json") else "❌ ") + "F workflow_state.json")
 
         ps = read_json_if_exists(vdir / "pipeline_state.json")
         if ps:
-            st.caption(f"last_completed_step: {ps.get('last_completed_step')}｜mode: {ps.get('last_mode')}")
+            st.caption(
+                f"last_completed_step: {ps.get('last_completed_step')}｜mode: {ps.get('last_mode')}"
+            )
 
 
 # =========================
@@ -305,11 +331,17 @@ st.divider()
 with st.expander("Step A｜上傳檔案 + 預覽（必做）", expanded=True):
     c1, c2, c3 = st.columns(3)
     with c1:
-        meta_adset_file = st.file_uploader("Meta Adset CSV（廣告組合層）", type=["csv"], key="uploader_meta_adset")
+        meta_adset_file = st.file_uploader(
+            "Meta Adset CSV（廣告組合層）", type=["csv"], key="uploader_meta_adset"
+        )
     with c2:
-        meta_ads_file = st.file_uploader("Meta Ads CSV（廣告層）", type=["csv"], key="uploader_meta_ads")
+        meta_ads_file = st.file_uploader(
+            "Meta Ads CSV（廣告層）", type=["csv"], key="uploader_meta_ads"
+        )
     with c3:
-        web_excel_file = st.file_uploader("官網 Excel（BVshop/後台匯出）", type=["xlsx", "xls"], key="uploader_web_excel")
+        web_excel_file = st.file_uploader(
+            "官網 Excel（BVshop/後台匯出）", type=["xlsx", "xls"], key="uploader_web_excel"
+        )
 
     can_run = True
     missing: List[str] = []
@@ -331,17 +363,18 @@ with st.expander("Step A｜上傳檔案 + 預覽（必做）", expanded=True):
             "上傳圖片或影片素材（將自動存入 attached_assets/）",
             type=["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "avi"],
             accept_multiple_files=True,
-            key="uploader_media_assets"
+            key="uploader_media_assets",
         )
         if media_files:
             from core.config import MEDIA_ASSETS_DIR
             import re as _re
+
             MEDIA_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
             saved_count = 0
             for mf in media_files:
                 # 檔名正規化：移除路徑分隔符與危險字元
-                safe_name = _re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', mf.name)
-                safe_name = safe_name.strip('. ')  # 避免以點或空白開頭/結尾
+                safe_name = _re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", mf.name)
+                safe_name = safe_name.strip(". ")  # 避免以點或空白開頭/結尾
                 if not safe_name:
                     safe_name = "unnamed_asset"
                 target_path = MEDIA_ASSETS_DIR / safe_name
@@ -391,19 +424,40 @@ with st.expander("Inputs 快照（每週人工填一次｜補 Meta 匯出缺欄�
             "Buying type",
             options=["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"],
             index=(
-                ["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"].index(default_manual.get("buying_type", ""))
-                if default_manual.get("buying_type", "") in ["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"]
+                ["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"].index(
+                    default_manual.get("buying_type", "")
+                )
+                if default_manual.get("buying_type", "")
+                in ["", "AUCTION", "RESERVATION", "MIXED", "UNKNOWN"]
                 else 0
             ),
             key="mi_buying_type",
         )
     with colm2:
-        optimization_goal = st.text_input("Optimization goal", value=str(default_manual.get("optimization_goal", "")), key="mi_optimization_goal")
+        optimization_goal = st.text_input(
+            "Optimization goal",
+            value=str(default_manual.get("optimization_goal", "")),
+            key="mi_optimization_goal",
+        )
     with colm3:
-        billing_event = st.text_input("Billing event", value=str(default_manual.get("billing_event", "")), key="mi_billing_event")
+        billing_event = st.text_input(
+            "Billing event",
+            value=str(default_manual.get("billing_event", "")),
+            key="mi_billing_event",
+        )
 
-    weekly_changes = st.text_area("本週重大調整", value=str(default_manual.get("weekly_changes", "")), height=110, key="mi_weekly_changes")
-    note_for_consultants = st.text_area("給顧問/主持人的備註", value=str(default_manual.get("note_for_consultants", "")), height=110, key="mi_note_for_consultants")
+    weekly_changes = st.text_area(
+        "本週重大調整",
+        value=str(default_manual.get("weekly_changes", "")),
+        height=110,
+        key="mi_weekly_changes",
+    )
+    note_for_consultants = st.text_area(
+        "給顧問/主持人的備註",
+        value=str(default_manual.get("note_for_consultants", "")),
+        height=110,
+        key="mi_note_for_consultants",
+    )
 
     st.session_state["manual_inputs"] = {
         "schema_version": "manual_inputs.v1",
@@ -423,7 +477,9 @@ with st.expander("Inputs 快照（每週人工填一次｜補 Meta 匯出缺欄�
 current_fp: Optional[dict] = None
 fp_code: Optional[str] = None
 if can_run:
-    current_fp = compute_inputs_fingerprint(meta_adset_file, meta_ads_file, web_excel_file, detail_level)
+    current_fp = compute_inputs_fingerprint(
+        meta_adset_file, meta_ads_file, web_excel_file, detail_level
+    )
     fp_code = fp_short(current_fp)
 
 with st.expander("防呆｜Fingerprint（deterministic version code）", expanded=False):
@@ -445,8 +501,14 @@ with st.expander("防呆｜Fingerprint（deterministic version code）", expande
 from utils.legacy_migration import render_legacy_migration_ui
 
 render_legacy_migration_ui(
-    st, week_meta_dir, version_dir, read_latest_ptr,
-    write_latest_ptr, write_week_info, ensure_week_meta_dirs, fp_short
+    st,
+    week_meta_dir,
+    version_dir,
+    read_latest_ptr,
+    write_latest_ptr,
+    write_week_info,
+    ensure_week_meta_dirs,
+    fp_short,
 )
 
 
@@ -474,15 +536,41 @@ if btn_quick:
     mode = "oneclick_quick_BCD"
     try:
         week_id, resolved_fp, vdir, prev_ctx = run_step_b(
-            mode, can_run, current_fp, fp_code, meta_adset_file, meta_ads_file, web_excel_file,
-            force_rerun, auto_new_version, render_sidebar_status
+            mode,
+            can_run,
+            current_fp,
+            fp_code,
+            meta_adset_file,
+            meta_ads_file,
+            web_excel_file,
+            force_rerun,
+            auto_new_version,
+            render_sidebar_status,
         )
         restore_from_version_dir(vdir)
 
-        run_step_c(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_sidebar_status)
+        run_step_c(
+            mode,
+            week_id,
+            vdir,
+            prev_ctx,
+            resolved_fp,
+            current_fp,
+            force_rerun,
+            render_sidebar_status,
+        )
         restore_from_version_dir(vdir)
 
-        run_step_d_draft(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_sidebar_status)
+        run_step_d_draft(
+            mode,
+            week_id,
+            vdir,
+            prev_ctx,
+            resolved_fp,
+            current_fp,
+            force_rerun,
+            render_sidebar_status,
+        )
         restore_from_version_dir(vdir)
 
         st.success("✅ 一鍵快篩完成（B→C→D draft）")
@@ -495,18 +583,65 @@ if btn_final:
     mode = "oneclick_final_BCEF"
     try:
         week_id, resolved_fp, vdir, prev_ctx = run_step_b(
-            mode, can_run, current_fp, fp_code, meta_adset_file, meta_ads_file, web_excel_file,
-            force_rerun, auto_new_version, render_sidebar_status
+            mode,
+            can_run,
+            current_fp,
+            fp_code,
+            meta_adset_file,
+            meta_ads_file,
+            web_excel_file,
+            force_rerun,
+            auto_new_version,
+            render_sidebar_status,
         )
         restore_from_version_dir(vdir)
 
-        run_step_c(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_sidebar_status)
+        run_step_c(
+            mode,
+            week_id,
+            vdir,
+            prev_ctx,
+            resolved_fp,
+            current_fp,
+            force_rerun,
+            render_sidebar_status,
+        )
         restore_from_version_dir(vdir)
 
-        run_step_e(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_sidebar_status)
+        run_step_e(
+            mode,
+            week_id,
+            vdir,
+            prev_ctx,
+            resolved_fp,
+            current_fp,
+            force_rerun,
+            render_sidebar_status,
+        )
         restore_from_version_dir(vdir)
 
-        run_step_f_final(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_sidebar_status)
+        # Step E2（可選）：三顧問交叉審核
+        # 一律呼叫，讓 pipeline_state 可追溯；是否啟用由 ui.steps.run_step_e2 內部判斷。
+        run_step_e2(
+            mode,
+            week_id,
+            vdir,
+            render_sidebar_status,
+            status_callback=None,
+            force_rerun=force_rerun,
+        )
+        restore_from_version_dir(vdir)
+
+        run_step_f_final(
+            mode,
+            week_id,
+            vdir,
+            prev_ctx,
+            resolved_fp,
+            current_fp,
+            force_rerun,
+            render_sidebar_status,
+        )
         restore_from_version_dir(vdir)
 
         st.success("✅ 一鍵最終完成（B→C→E→F final）")
@@ -561,6 +696,7 @@ with st.expander("Step G｜雲端同步 (Google Drive)", expanded=True):
                 try:
                     # 1. 執行掃描與上傳
                     from scripts.media_uploader import upload_media_assets
+
                     sync_results = upload_media_assets(dry_run=False)
 
                     st.success("✅ 雲端同步完成！")

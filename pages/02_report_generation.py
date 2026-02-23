@@ -41,6 +41,7 @@ settings = render_sidebar_settings()
 detail_level = settings["detail_level"]
 force_rerun = settings["force_rerun"]
 auto_new_version = settings["auto_new_version"]
+enable_cross_review = settings["enable_cross_review"]
 
 # 匯入核心模組
 from core import (
@@ -61,6 +62,7 @@ from ui.steps import (
     run_step_c,
     run_step_d_draft,
     run_step_e,
+    run_step_e2,
     run_step_f_final,
     run_step_g,
 )
@@ -528,6 +530,19 @@ if btn_final:
                 status.write(f"{icon} {role} 正在思考... (Model: **{model}**)")
 
             run_step_e(mode, week_id, vdir, prev_ctx, resolved_fp, current_fp, force_rerun, render_status, status_callback=consultant_callback, realtime_container=step_e_display)
+            restore_from_version_dir(vdir)
+
+            # Step E2（可選）：三顧問交叉審核
+            # 一律呼叫，讓 pipeline_state 可追溯；是否啟用由 ui.steps.run_step_e2 內部判斷。
+            status.write("執行 Step E2: 三顧問交叉審核（可選）...")
+            run_step_e2(
+                mode,
+                week_id,
+                vdir,
+                render_status,
+                status_callback=None,
+                force_rerun=force_rerun,
+            )
             restore_from_version_dir(vdir)
 
             # Step F

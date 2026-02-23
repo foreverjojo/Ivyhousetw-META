@@ -276,6 +276,34 @@ def build_meeting_markdown(
                     lines.append(f"- {idx}. 待釐清：{q.strip()}")
                     idx += 1
                     added = True
+
+        # 兼容另一種常見輸出形狀：week_focus / key_observations
+        # 目的：避免 workflow_state.consultant_summary 存在但 renderer 不認，導致顯示（待補）。
+        week_focus = cs.get("week_focus") or cs.get("weekFocus") or []
+        if isinstance(week_focus, str) and week_focus.strip():
+            lines.append(f"- {idx}. 共識：{week_focus.strip()}")
+            idx += 1
+            added = True
+        elif isinstance(week_focus, list) and week_focus:
+            for it in week_focus[:10]:
+                if isinstance(it, str) and it.strip():
+                    lines.append(f"- {idx}. 共識：{it.strip()}")
+                    idx += 1
+                    added = True
+
+        key_observations = cs.get("key_observations") or cs.get("keyObservations") or cs.get(
+            "observations"
+        )
+        if isinstance(key_observations, str) and key_observations.strip():
+            lines.append(f"- {idx}. 觀察：{key_observations.strip()}")
+            idx += 1
+            added = True
+        elif isinstance(key_observations, list) and key_observations:
+            for it in key_observations[:10]:
+                if isinstance(it, str) and it.strip():
+                    lines.append(f"- {idx}. 觀察：{it.strip()}")
+                    idx += 1
+                    added = True
     elif isinstance(cs, str) and cs.strip():
         lines.append(f"- {idx}. {cs.strip()}")
         added = True
