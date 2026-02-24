@@ -1,38 +1,36 @@
-"""
-檔案用途：History Viewer 頁面 - 瀏覽歷史週報
+"""History Viewer 頁面 - 瀏覽歷史週報
+
 職責：
-  - 列出所有歷史週報（按 week_id 排序）
-  - 顯示每週的所有版本（按 fingerprint）
-  - 查看報告詳細內容（meeting.md, workflow_state.json）
+- 列出所有歷史週報（按 week_id 排序）
+- 顯示每週的所有版本（按 fingerprint）
+- 查看報告詳細內容（meeting.md, workflow_state.json）
 """
+
+import json
+import os
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import streamlit as st
-from pathlib import Path
-import json
-from datetime import datetime
-from typing import List, Dict, Any, Optional
 
-# 設定頁面配置
+from core import load_environment_variables
+from ui.layout import render_page_header
+from ui.navigation import render_sidebar_navigation
+from ui.theme import apply_ivy_house_theme
+from utils import read_json_if_exists, read_text_if_exists
+
+load_environment_variables()
+
 st.set_page_config(
     page_title="歷史檢視 | Ivy House Meta",
     page_icon="📂",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# 載入主題與導航
-from ui.theme import apply_ivy_house_theme
-from ui.navigation import render_sidebar_navigation
-from ui.layout import render_page_header
-
-# 套用品牌主題
 apply_ivy_house_theme()
-
-# 渲染側邊欄導航
 render_sidebar_navigation()
-
-# 匯入工具
-from utils import read_json_if_exists, read_text_if_exists
 
 # ============================================================================
 # 配置
@@ -41,12 +39,43 @@ from utils import read_json_if_exists, read_text_if_exists
 HISTORY_ROOT = Path(__file__).parent.parent / "history"
 LLM_LOG_FILE = Path(__file__).parent.parent / "logs" / "llm_calls.jsonl"
 
+MEETING_CONTEXT_MAX_CHARS = 20_000
+JSON_CONTEXT_MAX_CHARS = 12_000
+
+CONSULTANTS = {
+    "data": {
+        "name": "數據顧問 (GPT-5)",
+        "icon": "📈",
+        "model": "openai/gpt-5",
+        "system_prompt": "你是 Ivy House 的數據分析顧問。你的職責是分析 Meta 廣告數據，提供 KPI 洞察、ROAS 優化建議。請用繁體中文回答，風格專業但友善。",
+    },
+    "visual": {
+        "name": "視覺顧問 (Gemini 3)",
+        "icon": "🎨",
+        "model": "google/gemini-3-pro",
+        "system_prompt": "你是 Ivy House 的視覺設計顧問。你的職責是分析廣告素材（圖片、影片），提供視覺優化建議。請用繁體中文回答，注重美學與品牌一致性。",
+    },
+    "strategy": {
+        "name": "策略顧問 (Claude 4.5)",
+        "icon": "🎯",
+        "model": "anthropic/claude-4.5-opus",
+        "system_prompt": "你是 Ivy House 的行銷策略顧問。你的職責是提供市場洞察、受眾分析、文案建議。請用繁體中文回答，風格有創意且具執行性。",
+    },
+    "moderator": {
+        "name": "主持人 (GPT-5)",
+        "icon": "🎙️",
+        "model": "openai/gpt-5",
+        "system_prompt": "你是 Ivy House 週會的主持人。你的職責是彙整各顧問的意見，產出週會摘要。請用繁體中文回答，風格簡潔明瞭。",
+    },
+}
+
 
 # ============================================================================
 # 工具函式
 # ============================================================================
 
-def get_all_weeks() -> List[str]:
+
+def get_all_weeks() -> list[str]:
     """取得所有週報 ID（降序）"""
     weeks = []
     if HISTORY_ROOT.exists():
@@ -56,7 +85,7 @@ def get_all_weeks() -> List[str]:
     return sorted(weeks, reverse=True)
 
 
-def get_versions_for_week(week_id: str) -> List[Dict[str, Any]]:
+def get_versions_for_week(week_id: str) -> list[dict[str, Any]]:
     """取得指定週的所有版本"""
     versions = []
     week_dir = HISTORY_ROOT / week_id / "meta" / "versions"
@@ -71,7 +100,9 @@ def get_versions_for_week(week_id: str) -> List[Dict[str, Any]]:
                 # 判斷是否為 latest
                 latest_file = HISTORY_ROOT / week_id / "meta" / "latest.json"
                 latest_data = read_json_if_exists(latest_file)
-                is_latest = latest_data and latest_data.get("rel_path", "").endswith(version_dir.name)
+                is_latest = latest_data and latest_data.get("rel_path", "").endswith(
+                    version_dir.name
+                )
 
                 # 取得時間戳記
                 if ps and ps.get("updated_at"):
@@ -80,30 +111,36 @@ def get_versions_for_week(week_id: str) -> List[Dict[str, Any]]:
                     timestamp = ws["created_at"]
                 else:
                     try:
-                        timestamp = datetime.fromtimestamp(version_dir.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                        timestamp = datetime.fromtimestamp(version_dir.stat().st_mtime).strftime(
+                            "%Y-%m-%d %H:%M"
+                        )
                     except Exception:
                         timestamp = "N/A"
 
                 # 判斷狀態
-                has_meeting = (version_dir / "meeting.md").exists() or (version_dir / "meeting_final.md").exists()
+                has_meeting = (version_dir / "meeting.md").exists() or (
+                    version_dir / "meeting_final.md"
+                ).exists()
                 status = "completed" if has_meeting else "pending"
 
-                versions.append({
-                    "fingerprint": version_dir.name,
-                    "path": version_dir,
-                    "is_latest": is_latest,
-                    "timestamp": timestamp,
-                    "status": status,
-                    "last_step": ps.get("last_completed_step") if ps else "N/A",
-                    "mode": ps.get("last_mode") if ps else "N/A",
-                })
+                versions.append(
+                    {
+                        "fingerprint": version_dir.name,
+                        "path": version_dir,
+                        "is_latest": is_latest,
+                        "timestamp": timestamp,
+                        "status": status,
+                        "last_step": ps.get("last_completed_step") if ps else "N/A",
+                        "mode": ps.get("last_mode") if ps else "N/A",
+                    }
+                )
 
     # 按時間戳記降序排列
     versions.sort(key=lambda x: x["timestamp"], reverse=True)
     return versions
 
 
-def get_version_details(version_path: Path) -> Dict[str, Any]:
+def get_version_details(version_path: Path) -> dict[str, Any]:
     """取得版本詳細資訊"""
     details = {
         "pipeline_state": read_json_if_exists(version_path / "pipeline_state.json"),
@@ -115,7 +152,7 @@ def get_version_details(version_path: Path) -> Dict[str, Any]:
     return details
 
 
-def load_token_usage(version_fp: str) -> List[Dict[str, Any]]:
+def load_token_usage(version_fp: str) -> list[dict[str, Any]]:
     """
     讀取 logs/llm_calls.jsonl，過濾出指定版本（version_fp，例如 fp-xxxxxxxx）的 token usage。
     只依賴 LLMCall.extra.version_fp，不掃描 history 內容，避免 I/O 過重。
@@ -123,7 +160,7 @@ def load_token_usage(version_fp: str) -> List[Dict[str, Any]]:
     if not LLM_LOG_FILE.exists():
         return []
 
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     try:
         with LLM_LOG_FILE.open("r", encoding="utf-8") as f:
             for line in f:
@@ -142,13 +179,13 @@ def load_token_usage(version_fp: str) -> List[Dict[str, Any]]:
     return out
 
 
-def summarize_token_usage(calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def summarize_token_usage(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     彙總 Step C/E/F token usage；Step E 依 consultant 拆分 A/B/C。
     若同一版本同一步驟有多次記錄（重跑），以 timestamp 最新的一筆為主，並顯示 Runs。
     """
-    latest: Dict[str, Dict[str, Any]] = {}
-    runs: Dict[str, int] = {}
+    latest: dict[str, dict[str, Any]] = {}
+    runs: dict[str, int] = {}
     for c in calls:
         extra = c.get("extra") or {}
         if not isinstance(extra, dict):
@@ -167,7 +204,7 @@ def summarize_token_usage(calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if prev is None or str(prev.get("timestamp") or "") <= ts:
             latest[label] = c
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     order = ["C", "E-A", "E-B", "E-C", "F"]
     for k in order:
         if k in latest:
@@ -184,6 +221,116 @@ def summarize_token_usage(calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 }
             )
     return rows
+
+
+def _truncate_text(s: str | None, max_chars: int) -> str:
+    if not s:
+        return ""
+    if len(s) <= max_chars:
+        return s
+    return s[:max_chars] + "\n\n...(內容已截斷)"
+
+
+def _safe_read_json(p: Path) -> Any:
+    """讀取 JSON（容錯：壞檔回傳 error dict，不讓整頁炸掉）"""
+    try:
+        if not p.exists():
+            return None
+        raw = p.read_text(encoding="utf-8")
+        return json.loads(raw)
+    except Exception as e:
+        msg = str(e)
+        if len(msg) > 200:
+            msg = msg[:200] + "..."
+        return {"_error": f"json_parse_failed: {msg}"}
+
+
+def _json_for_prompt(obj: Any, max_chars: int) -> str:
+    if obj is None:
+        return "N/A"
+    try:
+        s = json.dumps(obj, ensure_ascii=False, indent=2)
+    except Exception as e:
+        msg = str(e)
+        if len(msg) > 200:
+            msg = msg[:200] + "..."
+        return f"N/A (json.dumps failed: {msg})"
+    return _truncate_text(s, max_chars)
+
+
+def build_history_assistant_context(week_id: str, version_fp: str, version_path: Path) -> str:
+    """組裝預設上下文：結構化 JSON artifacts + meeting.md（截斷 20,000 字）"""
+    meeting = (
+        read_text_if_exists(version_path / "meeting.md")
+        or read_text_if_exists(version_path / "meeting_final.md")
+        or read_text_if_exists(version_path / "meeting_draft.md")
+        or ""
+    )
+    meeting = _truncate_text(meeting, MEETING_CONTEXT_MAX_CHARS)
+
+    artifacts = {
+        "report_summary.json": _safe_read_json(version_path / "report_summary.json"),
+        "report_insights.json": _safe_read_json(version_path / "report_insights.json"),
+        "workflow_state.json": _safe_read_json(version_path / "workflow_state.json"),
+        "pipeline_state.json": _safe_read_json(version_path / "pipeline_state.json"),
+        "consultant_notes.json": _safe_read_json(version_path / "consultant_notes.json"),
+    }
+
+    parts = [
+        f"week_id={week_id}",
+        f"version_fp={version_fp}",
+        "",
+        "[meeting.md]",
+        meeting or "N/A",
+        "",
+        "[artifacts]",
+    ]
+    for name, obj in artifacts.items():
+        parts.append(f"\n<{name}>\n{_json_for_prompt(obj, JSON_CONTEXT_MAX_CHARS)}\n</{name}>")
+    return "\n".join(parts)
+
+
+def call_openrouter(messages: list[dict[str, Any]], model: str) -> str:
+    """呼叫 OpenRouter API"""
+    from utils.openrouter_http import (
+        OpenRouterRetryConfig,
+        OpenRouterTransientError,
+        post_chat_completions_json,
+    )
+
+    api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return "⚠️ 錯誤：缺少 OPENROUTER_API_KEY 環境變數"
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 2000,
+    }
+
+    try:
+        data = post_chat_completions_json(
+            url=url,
+            headers=headers,
+            payload=payload,
+            retry=OpenRouterRetryConfig(timeout_s=60.0, max_retries=1),
+        )
+        if not data.get("choices"):
+            return "⚠️ API 回傳空結果（choices 為空）"
+        return str(data["choices"][0]["message"].get("content") or "")
+    except OpenRouterTransientError as e:
+        return f"⚠️ OpenRouter 暫時性錯誤，請稍後再試：{str(e)[:200]}"
+    except Exception as e:
+        msg = str(e)
+        if len(msg) > 300:
+            msg = msg[:300] + "..."
+        return f"⚠️ 請求失敗：{msg}"
 
 
 # ============================================================================
@@ -211,14 +358,13 @@ with st.sidebar:
     search_query = st.text_input("🔍 搜尋 Week ID", placeholder="例如：2026-W01")
 
     # 篩選週報
-    filtered_weeks = [w for w in weeks if search_query.lower() in w.lower()] if search_query else weeks
+    filtered_weeks = (
+        [w for w in weeks if search_query.lower() in w.lower()] if search_query else weeks
+    )
 
     # 選擇週報
     selected_week = st.radio(
-        "選擇週報",
-        options=filtered_weeks,
-        index=0 if filtered_weeks else None,
-        key="selected_week"
+        "選擇週報", options=filtered_weeks, index=0 if filtered_weeks else None, key="selected_week"
     )
 
 # ============================================================================
@@ -261,7 +407,7 @@ if selected_week:
             "選擇版本",
             range(len(versions)),
             format_func=lambda i: version_options[i],
-            key="selected_version"
+            key="selected_version",
         )
 
         selected_version = versions[selected_version_idx]
@@ -299,7 +445,9 @@ if selected_week:
         # 版本詳細資訊
         details = get_version_details(selected_version["path"])
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 會議摘要", "📊 KPI 彙總", "🛠️ 技能分析", "⚙️ 工作流程狀態", "📋 管線狀態"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+            ["📝 會議摘要", "📊 KPI 彙總", "🛠️ 技能分析", "⚙️ 工作流程狀態", "📋 管線狀態", "AI 助手"]
+        )
 
         with tab1:
             meeting_content = details["meeting_md"] or details["meeting_draft_md"]
@@ -335,6 +483,7 @@ if selected_week:
         with tab3:
             # 技能分析 Tab（新增）
             from ui.skill_manager import render_skill_manager_from_files
+
             render_skill_manager_from_files(selected_version["path"])
 
         with tab4:
@@ -348,6 +497,61 @@ if selected_week:
                 st.json(details["pipeline_state"])
             else:
                 st.info("尚無 pipeline_state.json")
+
+        with tab6:
+            chat_key = f"{selected_week}:{selected_version['fingerprint']}"
+            state_key = f"history_assistant::{chat_key}"
+
+            if state_key not in st.session_state:
+                st.session_state[state_key] = {"messages": [], "consultant": "data"}
+
+            state = st.session_state[state_key]
+
+            consultant_options = list(CONSULTANTS.keys())
+            selected_consultant = st.radio(
+                "選擇顧問",
+                options=consultant_options,
+                format_func=lambda k: f"{CONSULTANTS[k]['icon']} {CONSULTANTS[k]['name']}",
+                index=consultant_options.index(state.get("consultant") or "data"),
+                horizontal=True,
+                key=f"assistant_consultant::{chat_key}",
+            )
+            state["consultant"] = selected_consultant
+            current = CONSULTANTS[selected_consultant]
+
+            for msg in state["messages"]:
+                with st.chat_message(msg["role"], avatar=msg.get("avatar")):
+                    st.markdown(msg["content"])
+
+            user_input = st.chat_input("輸入訊息...", key=f"assistant_input::{chat_key}")
+            if user_input:
+                state["messages"].append({"role": "user", "content": user_input, "avatar": "👤"})
+
+                ctx = build_history_assistant_context(
+                    selected_week,
+                    selected_version["fingerprint"],
+                    selected_version["path"],
+                )
+                api_messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            current["system_prompt"]
+                            + "\n\n以下是你回答時必須使用的上下文（結構化 JSON + meeting.md）：\n"
+                            + ctx
+                        ),
+                    }
+                ]
+                for m in state["messages"][-20:]:
+                    api_messages.append({"role": m["role"], "content": m["content"]})
+
+                with st.spinner("思考中..."):
+                    response = call_openrouter(api_messages, current["model"])
+
+                state["messages"].append(
+                    {"role": "assistant", "content": response, "avatar": current["icon"]}
+                )
+                st.rerun()
 
 # ============================================================================
 # 底部資訊

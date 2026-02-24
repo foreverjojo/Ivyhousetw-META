@@ -40,7 +40,6 @@ def render_sidebar_navigation():
         st.page_link("pages/01_dashboard.py", label="儀表板", icon="📊")
         st.page_link("pages/02_report_generation.py", label="報告生成", icon="📝")
         st.page_link("pages/03_history_viewer.py", label="歷史檢視", icon="📂")
-        st.page_link("pages/04_ai_assistant.py", label="AI 助手", icon="🤖")
 
 
 def render_sidebar_status(status_dict: dict = None):
@@ -74,23 +73,16 @@ def render_sidebar_settings():
         st.markdown("### ⚙️ 設定")
 
         detail_level = st.radio(
-            "詳細程度",
-            options=["default", "adset+ads"],
-            index=1,
-            help="選擇報告詳細程度"
+            "詳細程度", options=["default", "adset+ads"], index=1, help="選擇報告詳細程度"
         )
 
-        schema_validate = st.checkbox(
-            "Schema 驗證",
-            value=True,
-            help="是否驗證上傳檔案的 Schema"
-        )
+        schema_validate = st.checkbox("Schema 驗證", value=True, help="是否驗證上傳檔案的 Schema")
 
         version_mode = st.radio(
             "版本模式",
             options=["auto_new_version", "force_rerun"],
             format_func=lambda x: "自動新版本" if x == "auto_new_version" else "強制重跑",
-            help="版本管理模式"
+            help="版本管理模式",
         )
 
         st.divider()
@@ -111,12 +103,19 @@ def render_sidebar_settings():
             if current_id != st.session_state.get(f"model_id_{key}"):
                 st.session_state[f"model_id_{key}"] = current_id
 
-            display_name = next((k for k, v in AVAILABLE_MODELS.items() if v == current_id), "自定義...")
-            idx = options.index(display_name) if display_name in options else len(options)-1
+            display_name = next(
+                (k for k, v in AVAILABLE_MODELS.items() if v == current_id), "自定義..."
+            )
+            idx = options.index(display_name) if display_name in options else len(options) - 1
             selected_label = st.selectbox(label, options, index=idx, key=f"sel_{key}")
 
             if selected_label == "自定義...":
-                final_id = st.text_input(f"輸入 {label} ID", value=current_id if display_name == "自定義..." else "", key=f"custom_{key}", placeholder="openai/gpt-5")
+                final_id = st.text_input(
+                    f"輸入 {label} ID",
+                    value=current_id if display_name == "自定義..." else "",
+                    key=f"custom_{key}",
+                    placeholder="openai/gpt-5",
+                )
             else:
                 final_id = AVAILABLE_MODELS[selected_label]
 
@@ -174,6 +173,6 @@ def render_sidebar_settings():
                 "consultant_a": consultant_a,
                 "consultant_b": consultant_b,
                 "consultant_c": consultant_c,
-                "moderator": moderator
-            }
+                "moderator": moderator,
+            },
         }
