@@ -137,11 +137,21 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
 **決策選項**:
 1. **Codex CLI（VS Code Terminal）**: 執行 / QA
 2. **OpenCode CLI（VS Code Terminal）**: 執行 / QA
+3. **Copilot Chat（小修正模式）**: 僅限明確滿足小修正條件時才可選擇
 
 **決策因素**:
 - 工具可用性（目前哪個 terminal 可用、是否已啟動）
 - 任務型態（批次修改 / 需要實際跑指令 / 需要互動式調整）
 - Cross-QA（QA 工具必須 ≠ 最後修改程式碼的工具）
+
+**Copilot Chat 小修正條件（全部滿足才可選擇選項 3）**：
+1. `copilot_chat_small_fix_allowed: true` 須明確填入 Plan 的 `EXECUTION_BLOCK`
+2. staged 變更檔案必須全部符合 `copilot_chat_allowed_path_globs`（例如 `["doc/**", "README.md", "*.md"]`）
+3. staged 變更總行數（add+del）≤ `copilot_chat_max_changed_lines`（預設 20）
+4. `qa_result` 仍需 `PASS` 或 `PASS_WITH_RISK`
+
+> ⚠️ **注意**：選擇 Copilot Chat 作為 executor_tool 時，`last_change_tool` 欄位應填 `copilot-chat`。
+> State Gate 會對此模式執行路徑/行數機械化驗證；不滿足條件時 commit 將被阻擋。
 
 **輸出格式**（寫入 Plan 檔；新 Plan 一律使用 `EXECUTION_BLOCK`）：
 
@@ -157,7 +167,7 @@ execution_backend_policy: [extension-sendtext-required]
 scope_exceptions: []
 
 # Engineer 執行
-executor_tool: [codex-cli|opencode]
+executor_tool: [codex-cli|opencode|copilot-chat]
 executor_backend: [ivyhouse_sendtext_extension]
 monitor_backend: [proposed_api_monitor|ivyhouse_monitor_extension_fallback|manual_confirmation]
 executor_tool_version: [version]
@@ -165,7 +175,13 @@ executor_user: [github-account or email]
 executor_start: [YYYY-MM-DD HH:mm:ss]
 executor_end: [YYYY-MM-DD HH:mm:ss]
 session_id: [terminal session ID if available]
-last_change_tool: [codex-cli|opencode]
+last_change_tool: [codex-cli|opencode|copilot-chat]
+
+# Copilot Chat 小修正政策（僅當 executor_tool=copilot-chat 才允許填；其餘 executor 必須保持預設 placeholder）
+copilot_chat_small_fix_allowed: [true|false]
+copilot_chat_small_fix_reason: [說明小修正理由]
+copilot_chat_max_changed_lines: 20
+copilot_chat_allowed_path_globs: ["doc/**", "README.md", "CHANGELOG.md", "CHECKLIST.md", "*.md"]
 
 # QA 執行
 qa_tool: [codex-cli|opencode]
@@ -185,7 +201,8 @@ rollback_files: [N/A|檔案清單]
 <!-- EXECUTION_BLOCK_END -->
 ```
 
-> ⚠️ **注意**：`last_change_tool` 只允許 `codex-cli` 或 `opencode`，不含 `copilot`（Copilot 固定為 Coordinator，不做實作）。
+> ⚠️ **注意**：`executor_tool=opencode|codex-cli` 時，`last_change_tool` 必須等於 executor_tool，不可填 `copilot-chat`。
+> `executor_tool=copilot-chat` 時，必須明確填寫 `copilot_chat_small_fix_allowed: true` 及相關欄位，且 State Gate 會自動驗證路徑與行數。
 
 **指令注入策略（固定）**:
 - Codex/OpenCode 一律在 VS Code 原生終端中執行（會話自然延續）
@@ -359,6 +376,9 @@ rollback_files: [N/A|檔案清單]
 |------|---------|---------|------|---------|
 | Codex CLI（VS Code Terminal） | 批次處理、檔案操作、快速執行 | Coordinator 以 extension sendText 注入 | Proposed API（主）→ extension 監測 fallback | marker 偵測後 |
 | OpenCode CLI（VS Code Terminal） | 需要互動式終端操作/實跑指令 | Coordinator 以 extension sendText 注入 | Proposed API（主）→ extension 監測 fallback | marker 偵測後 |
+| Copilot Chat（小修正模式） | 點單小修正（僅文件/設定，≤20 行，符合路徑 glob） | Copilot Chat 直接在 workspace 修改檔案 | manual_confirmation（人工確認） | 仍需 QA PASS/PASS_WITH_RISK |
+
+> ⚠️ **Copilot Chat 小修正模式** 須滿足 Role Selection Gate 的全部小修正條件，且 State Gate 在 commit 時會機械化驗證（路徑/行數/qa_result）；不符合條件的 commit 將被阻擋。
 
 ### 後端策略（主從）
 
