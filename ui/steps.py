@@ -5,9 +5,12 @@
   - 處理 pipeline state 管理
   - 提供 session 同步與版本控制
   - 與 app.py 解耦，降低主程式複雜度
+  - Step B：落盤上傳檔案 bytes 快照至 inputs/raw/
+  - Step F：成功寫出 meeting.md 後，條件式觸發 Google Drive 備份
 """
 
 import json
+import os
 import shutil
 import traceback
 from datetime import datetime
@@ -161,6 +164,141 @@ def _cleanup_staging_on_success(stage_vdir: Path) -> None:
 
 def step_exists(vdir: Path, filename: str) -> bool:
     return (vdir / filename).exists()
+
+
+def _snapshot_raw_inputs(
+    vdir: Path,
+    platform: str,
+    meta_adset_file=None,
+    meta_ads_file=None,
+    web_excel_file=None,
+    shopee_file=None,
+    momo_file=None,
+) -> None:
+    """
+    Step B 輔助：將使用者上傳的原始檔案 bytes 快照落盤至 vdir/inputs/raw/。
+
+    命名策略：使用固定名稱（不含使用者原始檔名，避免個資外洩）：
+      - Meta: meta_adset.csv, meta_ads.csv, web.xlsx
+      - Shopee: shopee_raw.csv
+      - Momo: momo_raw.xlsx
+
+    此函式失敗不阻斷主流程（只記錄 warning）。
+    """
+    raw_dir = vdir / "inputs" / "raw"
+    try:
+        raw_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        logger.warning("建立 inputs/raw 目錄失敗，略過 raw 快照", error=str(exc))
+        return
+
+    # Meta 平台檔案
+    if platform.startswith("Meta") or not platform.startswith(("Shopee", "Momo")):
+        _write_raw_file(raw_dir / "meta_adset.csv", meta_adset_file)
+        _write_raw_file(raw_dir / "meta_ads.csv", meta_ads_file)
+        _write_raw_file(raw_dir / "web.xlsx", web_excel_file)
+
+    # Shopee 平台
+    if platform.startswith("Shopee") and shopee_file:
+        _write_raw_file(raw_dir / "shopee_raw.csv", shopee_file)
+
+    # Momo 平台
+    if platform.startswith("Momo") and momo_file:
+        _write_raw_file(raw_dir / "momo_raw.xlsx", momo_file)
+
+
+def _write_raw_file(target: Path, uploaded_file) -> None:
+    """
+    將 uploaded_file（Streamlit UploadedFile）的 bytes 寫入 target。
+    安靜失敗：若 uploaded_file 為 None 或讀取失敗，僅記錄 warning。
+    """
+    if uploaded_file is None:
+        return
+    try:
+        # 支援 seek + read（Streamlit UploadedFile）或 getvalue()
+        if hasattr(uploaded_file, "seek"):
+            uploaded_file.seek(0)
+        if hasattr(uploaded_file, "read"):
+            data = uploaded_file.read()
+        elif hasattr(uploaded_file, "getvalue"):
+            data = uploaded_file.getvalue()
+        else:
+            logger.warning(f"無法讀取上傳檔案，略過：{target.name}")
+            return
+        target.write_bytes(data)
+    except Exception as exc:
+        logger.warning(f"寫入 raw 快照失敗：{target.name}", error=str(exc))
+
+
+def _trigger_gdrive_backup(
+    week_id: str,
+    vdir: Path,
+    fp_code: str,
+) -> None:
+    """
+    Step F 輔助：條件式觸發 Google Drive 備份。
+
+    觸發條件：
+      - 環境變數 ENABLE_GDRIVE_WEEKLY_BACKUP=1
+      - CLOUD_MEDIA_PROVIDER=gdrive
+      - GOOGLE_DRIVE_FOLDER_ID 已設定
+
+    失敗不阻斷主流程（只 warning）。
+    """
+    enable_backup = os.getenv("ENABLE_GDRIVE_WEEKLY_BACKUP", "").strip() == "1"
+    if not enable_backup:
+        return
+
+    from core.cloud_config import load_cloud_config
+
+    cfg = load_cloud_config()
+
+    if cfg.provider != "gdrive":
+        logger.info(
+            "略過 Drive 備份：CLOUD_MEDIA_PROVIDER 不是 gdrive",
+            week_id=week_id,
+            provider=cfg.provider,
+        )
+        return
+
+    if not cfg.google_drive_folder_id:
+        logger.warning(
+            "略過 Drive 備份：缺少 GOOGLE_DRIVE_FOLDER_ID",
+            week_id=week_id,
+        )
+        return
+
+    try:
+        from scripts.gdrive_weekly_backup import upload_version_to_drive
+
+        manifest = upload_version_to_drive(
+            week_id=week_id,
+            vdir=vdir,
+            fp_code=fp_code,
+            cfg=cfg,
+            dry_run=False,
+        )
+        uploaded = manifest.get("uploaded", 0)
+        errors = manifest.get("errors", 0)
+        logger.info(
+            f"Drive 備份完成：{uploaded} 個檔案已上傳，{errors} 個失敗",
+            week_id=week_id,
+            fp_code=fp_code,
+            vdir=str(vdir),
+        )
+        if errors > 0:
+            logger.warning(
+                f"Drive 備份有 {errors} 個檔案失敗，詳見 backup_manifest.gdrive.json",
+                week_id=week_id,
+            )
+    except Exception as exc:
+        # 備份失敗不阻斷主流程（meeting.md 已成功寫出）
+        logger.warning(
+            "Drive 備份失敗（不阻斷主流程）",
+            week_id=week_id,
+            fp_code=fp_code,
+            error=str(exc)[:300],
+        )
 
 
 def load_or_session(key: str, path: Path):
@@ -515,6 +653,18 @@ def run_step_b(
     }
     (vdir / "inputs.json").write_text(
         json.dumps(snapshot_inputs, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    # Step B：落盤上傳檔案 bytes 快照（供 Drive 備份使用）
+    # 固定命名（不含原始檔名），放在 vdir/inputs/raw/
+    _snapshot_raw_inputs(
+        vdir=vdir,
+        platform=platform,
+        meta_adset_file=meta_adset_file,
+        meta_ads_file=meta_ads_file,
+        web_excel_file=web_excel_file,
+        shopee_file=shopee_file,
+        momo_file=momo_file,
     )
 
     # 更新 Sidebar
@@ -1219,6 +1369,11 @@ def run_step_f_final(
         st.session_state["meeting_md"] = md
 
     write_pipeline_state(vdir, "F(final)", mode_label)
+
+    # Step F：meeting.md 成功寫出後，條件式觸發 Google Drive 備份
+    # 失敗不阻斷主流程（_trigger_gdrive_backup 內部已 try/except）
+    _trigger_gdrive_backup(week_id=week_id, vdir=vdir, fp_code=resolved_fp)
+
     render_sidebar_status_fn(week_id, vdir)
 
 
