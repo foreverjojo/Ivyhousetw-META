@@ -26,9 +26,9 @@ Planner -> Meta Expert -> (Execution Gate) -> Engineer -> QA -> 完成
 - Step 3 Engineer
   - 由用戶指定的終端工具（Codex CLI / OpenCode CLI）執行 Plan。
   - Coordinator 透過 extension sendText 注入指令/Plan 文字（禁止以 bash/TTY 代送，避免 overlay 或工具退出）。
-  - 注入命令：`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`。
+  - 注入命令（Command IDs）：`ivyhouseTerminalInjector.sendLiteralToCodex` / `ivyhouseTerminalInjector.sendLiteralToOpenCode`。
   - 監控主路徑使用 Proposed API；若不可用，切換 extension 監測模式備援。
-  - 監測命令：`IvyHouse Monitor: Capture Codex Output` / `IvyHouse Monitor: Auto-Capture Codex /status`。
+  - 監測命令（Command IDs）：`ivyhouseTerminalMonitor.autoCaptureCodexStatus` / `ivyhouseTerminalMonitor.verifyCodexStatusInjection`。
   - 通用規範：中文註解、單檔 ≤500 行、無硬編 API Key、遵守 `ivy_house_rules.md`。
 
 - Step 4 QA（Cross‑QA）
@@ -47,6 +47,7 @@ Planner -> Meta Expert -> (Execution Gate) -> Engineer -> QA -> 完成
 - 監控：Coordinator 使用 VS Code Proposed API 監測終端輸出（completion marker + timeout）。
 - 備援：若 Proposed API 不可用，先走 `ivyhouse_monitor_extension_fallback`；仍不可用才改人工回報。
 - 架構：允許拆分成兩個 extension（Injector 負責 sendText；Monitor 負責監測 fallback）。
+- Deprecated：Orchestrator（`ivyhouseTerminalOrchestrator.*`）為 legacy，相容用途以外不得依賴。
 - 回滾：任何破壞性 git 操作（reset/clean）必須先取得用戶明確確認。
 
 快速 checklist（分享用）

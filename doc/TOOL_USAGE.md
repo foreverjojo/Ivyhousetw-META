@@ -8,9 +8,12 @@
 
 ### 基本原則
 1. **工具選擇分離（Cross-QA）**：`qa_tool` 必須與 `last_change_tool` 不同
-2. **終端注入**：由 GitHub Copilot Chat（Coordinator）使用 VS Code 內建 `terminal.sendText` 對指定終端送出指令/Plan 文字
-3. **即時監控**：由 Coordinator 使用 VS Code Proposed API 監測終端輸出（例如 `terminalDataWriteEvent`），以 completion marker 作為完成條件
+2. **終端注入（固定）**：一律使用 IvyHouse Terminal Injector extension 的 command IDs 注入到固定終端（Codex/OpenCode）
+   - `ivyhouseTerminalInjector.sendLiteralToCodex` / `ivyhouseTerminalInjector.sendLiteralToOpenCode`
+3. **即時監控（主從）**：主路徑用 Proposed API；不可用時使用 IvyHouse Terminal Monitor extension 備援擷取
 4. **記錄可追蹤**：工具選擇與結果寫入 plan 的 `EXECUTION_BLOCK`（含 `last_change_tool`）
+
+> **Deprecated**：`ivyhouseTerminalOrchestrator.*` 為 legacy 相容套件；新流程只認 Injector + Monitor。
 
 ### 協作流程範例：Copilot 協調 Codex CLI（注入 + 監控）
 
@@ -20,7 +23,9 @@
    - 用戶先在 VS Code 建立/選取固定終端（例如 terminal 名稱：`Codex CLI`），確保 Codex CLI 可接收指令。
 
 2. **Copilot 注入 Plan/指令**
-   - 只能使用 VS Code 內建 `terminal.sendText` 注入（禁止用 bash 腳本代送，避免程序/TUI 退出）。
+   - 固定使用 Injector extension 的 command IDs 注入（禁止用 bash 腳本代送，避免程序/TUI 退出）。
+   - Codex：`ivyhouseTerminalInjector.sendLiteralToCodex`
+   - OpenCode：`ivyhouseTerminalInjector.sendLiteralToOpenCode`
 
 3. **監控完成**
    - 以 completion marker 作為完成條件（例如：`[ENGINEER_DONE]` / `[QA_DONE]` / `[FIX_DONE]`）
