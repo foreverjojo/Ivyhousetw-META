@@ -121,10 +121,13 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
     - 補上 name，避免表格失去可讀性
     """
 
-    def add_roas(df: pd.DataFrame, name_col: str) -> pd.DataFrame:
+    def add_roas(df: pd.DataFrame, name_col: str, *, group_col: str | None = None) -> pd.DataFrame:
         d = df.copy()
 
         d["__name"] = d[name_col].astype(str).fillna("").str.strip()
+
+        if group_col and group_col in d.columns:
+            d["__adset_name"] = d[group_col].astype(str).fillna("").str.strip()
 
         # 使用 alias-aware 欄位解析
         spend_col = _resolve_col_name(d, _get_alias("spend"))
@@ -206,6 +209,7 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
 
         keep = [
             "__name",
+            "__adset_name",
             "__impressions",
             "__link_clicks",
             "__ctr_link_pct_calc",
@@ -229,14 +233,23 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
     adset_name_col = _resolve_col_name(adset_df, _get_alias("adset_name"))
     ads_name_col = _resolve_col_name(ads_df, _get_alias("ad_name"))
 
-    adset = add_roas(adset_df, adset_name_col)
-    ads = add_roas(ads_df, ads_name_col)
+    ads_adset_name_col = _resolve_col_name(ads_df, _get_alias("adset_name"))
 
-    # 排序用 truth ROAS
-    top_adset = adset.sort_values("__roas_truth", ascending=False).head(top_n)
-    worst_adset = adset.sort_values("__roas_truth", ascending=True).head(top_n)
-    top_ads = ads.sort_values("__roas_truth", ascending=False).head(top_n)
-    worst_ads = ads.sort_values("__roas_truth", ascending=True).head(top_n)
+    adset = add_roas(adset_df, adset_name_col)
+    ads = add_roas(ads_df, ads_name_col, group_col=ads_adset_name_col)
+
+    # 若官網真值為 0 但平台有值（常見：追蹤/回傳異常），改用平台 ROAS 排序，避免 top/worst 失真。
+    truth_total = float(adset["__value_truth"].sum()) if "__value_truth" in adset.columns else 0.0
+    platform_total = (
+        float(adset["__value_platform"].sum()) if "__value_platform" in adset.columns else 0.0
+    )
+    use_platform_sort = (truth_total <= 0.0) and (platform_total > 0.0)
+    sort_col = "__roas_platform" if use_platform_sort else "__roas_truth"
+
+    top_adset = adset.sort_values(sort_col, ascending=False).head(top_n)
+    worst_adset = adset.sort_values(sort_col, ascending=True).head(top_n)
+    top_ads = ads.sort_values(sort_col, ascending=False).head(top_n)
+    worst_ads = ads.sort_values(sort_col, ascending=True).head(top_n)
 
     def to_records(df: pd.DataFrame):
         import math
@@ -259,9 +272,13 @@ def calc_top_tables(adset_df: pd.DataFrame, ads_df: pd.DataFrame, top_n: int = 5
 
         out = []
         for _, r in df.iterrows():
+            adset_name = None
+            if "__adset_name" in df.columns:
+                adset_name = str(r.get("__adset_name", "")).strip() or None
             out.append(
                 {
                     "name": str(r.get("__name", "")).strip(),
+                    "adset_name": adset_name,
                     "impressions": _si(r.get("__impressions", 0)),
                     "link_clicks": _si(r.get("__link_clicks", 0)),
                     "ctr_link_pct_calc": round(_sf(r.get("__ctr_link_pct_calc", 0)), 4),

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -66,17 +67,102 @@ def build_deterministic_workflow_state(
                     if _safe_str(a.get("task") or a.get("title")):
                         consultant_actions.append(a)
 
-    # decisions：以 executive_summary 為主，若不足則補 data_issues
-    decisions: list[str] = []
-    for s in exec_sum[:6]:
-        if _safe_str(s):
-            decisions.append(f"做：{_safe_str(s)}")
+    # decisions：優先使用「可執行」來源（actions / 顧問 next_7d_actions），避免複製 executive_summary
+    # 目標：讓 meeting.md 的決策段不會與 Key Insights 幾乎一樣。
+
+    def _norm_text(s: str) -> str:
+        # 以輕量規則做去重（保留中文），避免 exec_summary/decisions 逐條重複。
+        s = s.strip().lower()
+        s = re.sub(r"\s+", "", s)
+        for ch in ["-", "–", "—", "、", "，", ",", "。", ".", "：", ":", "；", ";", "|", "｜"]:
+            s = s.replace(ch, "")
+        return s
+
+    exec_norms = {_norm_text(_safe_str(s)) for s in exec_sum if _safe_str(s)}
+    decisions: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_decision(
+        *,
+        decision: Any,
+        reason: Any = None,
+        impact: Any = None,
+        stoploss: Any = None,
+        kind: str | None = None,
+    ) -> None:
+        d = _safe_str(decision)
+        if not d:
+            return
+        k = _norm_text(d)
+        if not k or k in seen or k in exec_norms:
+            return
+        seen.add(k)
+
+        item: dict[str, Any] = {"decision": d}
+        r = _safe_str(reason)
+        if r:
+            item["reason"] = r
+        im = _safe_str(impact)
+        if im:
+            item["impact"] = im
+        sl = _safe_str(stoploss)
+        if sl:
+            item["stoploss"] = sl
+        if kind:
+            item["kind"] = kind
+
+        decisions.append(item)
+
+    # 1) report_insights.actions
+    for a in actions_list:
+        if not isinstance(a, dict):
+            continue
+        task = a.get("task") or a.get("title")
+        why = a.get("why") or a.get("reason")
+        kpi = a.get("kpi")
+        sl = a.get("stoploss")
+        add_decision(decision=task, reason=why, impact=kpi, stoploss=sl, kind="action")
+        if len(decisions) >= 6:
+            break
+
+    # 2) consultant next_7d_actions
     if len(decisions) < 3:
-        for s in data_issues[: (6 - len(decisions))]:
-            if _safe_str(s):
-                decisions.append(f"延後/風險：{_safe_str(s)}")
+        for a in consultant_actions:
+            if not isinstance(a, dict):
+                continue
+            task = a.get("task") or a.get("title")
+            deliverable = a.get("deliverable")
+            kpi = a.get("kpi")
+            sl = a.get("stoploss")
+            reason = deliverable or a.get("reason") or a.get("why")
+            add_decision(decision=task, reason=reason, impact=kpi, stoploss=sl, kind="consultant")
+            if len(decisions) >= 6:
+                break
+
+    # 3) data_issues：只用於延後/風險決策
+    if len(decisions) < 3:
+        for s in data_issues:
+            add_decision(
+                decision=f"延後/風險：{_safe_str(s)}",
+                reason="資料/口徑異常會影響 ROAS 與預算分配判讀",
+                impact="先對帳/排查追蹤，再做擴量或結構調整",
+                stoploss="若下週仍異常，週會固定以平台口徑決策並註記限制",
+                kind="data_issue",
+            )
+            if len(decisions) >= 6:
+                break
+
+    # 4) 最後保底（避免空陣列）
     if not decisions:
-        decisions = ["做：優先處理追蹤/口徑一致性，避免 ROAS 判讀失真。"]
+        decisions = [
+            {
+                "decision": "先處理追蹤/口徑一致性，再做預算與結構決策",
+                "reason": "避免 ROAS 判讀失真",
+                "impact": "短期以平台口徑 + 官網營收交叉驗證",
+                "stoploss": "若 7 天仍無法對齊，固定單一口徑並建立對帳欄位",
+                "kind": "fallback",
+            }
+        ]
 
     # risks：優先用顧問風險，其次 data_issues
     risks: list[dict[str, Any]] = []

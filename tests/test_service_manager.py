@@ -13,7 +13,27 @@ def has_cmd(name):
     return shutil.which(name) is not None
 
 
-@pytest.mark.skipif(not has_cmd("script"), reason="`script` not available")
+def has_working_script():
+    script_path = shutil.which("script")
+    if script_path is None:
+        return False
+
+    try:
+        p = subprocess.run(
+            [script_path, "-q", "-c", "true", "/dev/null"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+    return p.returncode == 0
+
+
+@pytest.mark.skipif(
+    not has_working_script(), reason="`script` not available/usable (PTY not permitted)"
+)
 @pytest.mark.skipif(has_cmd("tmux"), reason="tmux available; PTY wrapper not used")
 def test_start_with_pty(tmp_path):
     # Start a short-lived sleep process wrapped with PTY
@@ -36,6 +56,10 @@ def test_start_with_pty(tmp_path):
     assert stop.returncode == 0, f"stop failed: {stop.stderr}"
 
 
+@pytest.mark.skipif(
+    not has_working_script(), reason="`script` not available/usable (PTY not permitted)"
+)
+@pytest.mark.skipif(has_cmd("tmux"), reason="tmux available; PTY wrapper not used")
 def test_auto_fallback_to_pty(tmp_path):
     # Simulate a service that needs a TTY: it exits without TTY, sleeps with TTY
     tt_cmd = "bash -lc 'if [[ -t 0 ]]; then echo OK; exec sleep 60; else echo stdin is not a terminal; exit 1; fi'"
