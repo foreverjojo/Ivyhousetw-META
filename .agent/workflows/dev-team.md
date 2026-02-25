@@ -104,6 +104,13 @@ description: 艾薇虛擬開發團隊工作流程 - 自動化 Plan → Consult �
 - Injector：`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`
 - Monitor：`IvyHouse Monitor: Capture Codex Output` / `IvyHouse Monitor: Auto-Capture Codex /status` / `IvyHouse Monitor: Verify Codex /status Injection`
 
+**Command IDs（固定引用；新流程只認 Injector + Monitor）**：
+- Injector（注入/啟動）：`ivyhouseTerminalInjector.startAll`、`ivyhouseTerminalInjector.sendLiteralToCodex`、`ivyhouseTerminalInjector.sendLiteralToOpenCode`、`ivyhouseTerminalInjector.resetSessionState`
+- Monitor（監測/擷取/自檢）：`ivyhouseTerminalMonitor.ping`、`ivyhouseTerminalMonitor.verifyCodexStatusInjection`、`ivyhouseTerminalMonitor.autoCaptureCodexStatus`、`ivyhouseTerminalMonitor.openLastCodexCapture`
+
+**Deprecated（新流程禁止依賴）**：
+- Orchestrator（`ivyhouseTerminalOrchestrator.*`）為 legacy 相容套件；不得作為新流程的預設注入/監測路徑。
+
 **Research Gate（條件式，必先完成）**：
 - 若 Plan 的 `research_required: true` 或依賴檔案變更（`requirements.txt`、`pyproject.toml`、`*requirements*.txt`）
   - 必須先補齊 Plan 的 `RESEARCH & ASSUMPTIONS`（Link-required；無來源則標 `RISK: unverified`）

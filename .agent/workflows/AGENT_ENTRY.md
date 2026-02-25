@@ -83,6 +83,11 @@
   - 監測命令範例：`IvyHouse Monitor: Capture Codex Output`、`IvyHouse Monitor: Auto-Capture Codex /status`
   - 允許拆分為兩個 extension：Injector（sendText）與 Monitor（監測 fallback）
 
+> **Command IDs（固定引用；避免只寫命令名稱導致用錯工具）**：
+> - Injector：`ivyhouseTerminalInjector.startAll`、`ivyhouseTerminalInjector.sendLiteralToCodex`、`ivyhouseTerminalInjector.sendLiteralToOpenCode`
+> - Monitor：`ivyhouseTerminalMonitor.ping`、`ivyhouseTerminalMonitor.verifyCodexStatusInjection`、`ivyhouseTerminalMonitor.autoCaptureCodexStatus`
+> - Deprecated：Orchestrator（`ivyhouseTerminalOrchestrator.*`）為 legacy，相容用途以外不得依賴
+
 > Gate 完成後，必須在 Plan 的 `EXECUTION_BLOCK` 回填：
 > `execution_backend_policy`、`executor_backend`、`monitor_backend`。
 
@@ -92,6 +97,7 @@
 > - 未達 `status=pass`：不得進入 Engineer 注入。
 
 > 注意：GitHub Copilot Chat 固定為 Coordinator（只做討論/分派/監控/回填 Plan），不作為 Engineer/QA 工具，也不得直接改 code。
+> 另外：新流程禁止直接依賴 VS Code 內建 `terminal.sendText`；請固定改用 Injector/Monitor extensions 的 command IDs。
 
 4) **Execute（只允許被選定的 Executor 動手）**
 - 僅能依照已核准 Plan 執行

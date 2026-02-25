@@ -88,6 +88,24 @@ description: 艾薇協調者 (Coordinator) - 負責統籌 /dev 工作流程（�
 - Injector：`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`
 - Monitor：`IvyHouse Monitor: Capture Codex Output` / `IvyHouse Monitor: Auto-Capture Codex /status` / `IvyHouse Monitor: Verify Codex /status Injection`
 
+**Command IDs（固定引用；避免只寫命令名稱導致用錯工具）**：
+- Injector（注入/啟動）：
+   - `ivyhouseTerminalInjector.startAll`（啟動 Codex+OpenCode terminals；若已存在則不重啟）
+   - `ivyhouseTerminalInjector.sendLiteralToCodex`（參數：`{ text, submit }`）
+   - `ivyhouseTerminalInjector.sendLiteralToOpenCode`（參數：`{ text, submit }`）
+   - `ivyhouseTerminalInjector.resetSessionState`
+   - ⚠️ `ivyhouseTerminalInjector.sendToCodex` / `sendToOpenCode` 會跳出輸入框（互動式），不適合作為 workflow 自動化注入
+- Monitor（監測/擷取/自檢）：
+   - `ivyhouseTerminalMonitor.ping`
+   - `ivyhouseTerminalMonitor.verifyCodexStatusInjection`（重啟 Codex 後自動送 `/status` 並驗證）
+   - `ivyhouseTerminalMonitor.autoCaptureCodexStatus`（自動送 `/status` 並擷取）
+   - `ivyhouseTerminalMonitor.openLastCodexCapture`
+   - `ivyhouseTerminalMonitor.clearCodexCapture`
+   - `ivyhouseTerminalMonitor.codexCaptureDiagnostics`
+
+**Deprecated（新流程禁止依賴）**：
+- Orchestrator（`ivyhouseTerminalOrchestrator.*`）為 legacy 相容套件；新流程只認 Injector + Monitor。
+
 **Extension 拆分模型（允許）**：
 - `Injector Extension`：只負責 sendText 注入（固定路徑）
 - `Monitor Extension`：只負責監測 fallback（僅在 Proposed API 不可用時啟用）
@@ -402,10 +420,15 @@ copilot_chat_allowed_path_globs: ["doc/**", "README.md", "CHANGELOG.md", "CHECKL
        ```bash
        python scripts/vscode/workflow_preflight_check.py --require-bridge --json
        ```
-    - 僅在 `status=pass` 時才能繼續注入 Engineer；否則先修復（argv.json / extension / bridge）
+      - 僅在 `status=pass` 時才能繼續注入 Engineer；否則先修復（argv.json / extension / bridge）
+      - 建議額外執行（VS Code command）：
+         - `ivyhouseTerminalInjector.startAll`
+         - `ivyhouseTerminalMonitor.verifyCodexStatusInjection`
 
 1. **注入指令**：
-   - 使用 IvyHouse Terminal Injector extension 的 sendText 指令（`IvyHouse Injector: Send Text to Codex Terminal` / `IvyHouse Injector: Send Text to OpenCode Terminal`），對選定 terminal 注入「執行指令 + Plan 內容」
+   - 使用 IvyHouse Terminal Injector extension 的 command ID 對選定 terminal 注入「執行指令 + Plan 內容」：
+     - Codex：`ivyhouseTerminalInjector.sendLiteralToCodex`
+     - OpenCode：`ivyhouseTerminalInjector.sendLiteralToOpenCode`
    - **禁止**：用 bash 腳本、TTY 寫入或其他代送方式（可能導致 overlay / TUI 異常）
 
 2. **監控輸出**：
