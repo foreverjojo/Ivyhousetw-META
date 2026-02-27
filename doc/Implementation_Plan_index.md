@@ -15,6 +15,7 @@
 
 | Index | 任務標題 | 優先級 | Status | Executor Tool | QA Result | Plan Version | Log 檔 | 備註 |
 |-------|----------|--------|--------|---------------|-----------|-------------|--------|------|
+| Idx-046 | 清理剩餘 stash：以 recovery 分支保存並清空 | P1 | ✅ 已完成 | OpenCode | PASS WITH RISK | 2026-02-27-v1 | `doc/logs/Idx-046_log.md` | Plan：`doc/plans/Idx-046_plan.md`；分支：`recovery/stash0-20260227`、`recovery/stash1-20260227` |
 | Idx-001 | 建立 `doc/logs/` 資料夾 + Log 範本 | P0 | ✅ 已完成 | Manual | PASS | — | — | 已建立範本 `Idx-000_log.template.md` |
 | Idx-002 | 更新 Index 表欄位與治理資訊 | P0 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v1 | `doc/logs/Idx-002_log.md` | Index 清理與統一完成 |
 | Idx-003 | Workflow 治理框架落地 | P0 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v1 | `doc/logs/Idx-003_log.md` | 26 檔案 + smoke tests 全數通過 |
