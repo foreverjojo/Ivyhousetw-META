@@ -27,6 +27,7 @@
 
 - **Integration branch**: `idx-047-integrate-stash1`
 - **Preserve commit source**: `61b86cc`
+- **Integration commit**: `e1ba28e`
 
 ---
 

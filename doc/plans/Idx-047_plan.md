@@ -179,7 +179,7 @@ qa_compliance: ✅ 符合
 
 # 收尾
 log_file_path: doc/logs/Idx-047_log.md
-commit_hash: pending
+commit_hash: e1ba28e
 rollback_at: N/A
 rollback_reason: N/A
 rollback_files: N/A
