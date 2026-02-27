@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+// 用途：VS Code Terminal Orchestrator extension（本機 SendText Bridge API + workflow 編排）。
 const vscode = require("vscode");
 const http = require("http");
 const fs = require("fs");
@@ -18,14 +19,134 @@ const WORKFLOW_STATE_KEYS = {
   engineerRawLogAbs: "ivyhouseTerminalOrchestrator.workflowEngineerRawLogAbs",
   qaRawLogAbs: "ivyhouseTerminalOrchestrator.workflowQaRawLogAbs",
   startedAtIso: "ivyhouseTerminalOrchestrator.workflowStartedAtIso",
+  pendingDecision: "ivyhouseTerminalOrchestrator.workflowPendingDecision",
+  lastDecisionIdApplied: "ivyhouseTerminalOrchestrator.workflowLastDecisionIdApplied",
 };
 
 let sendtextBridgeServer;
 let sendtextBridgeServerStartedAtIso;
 let extensionContext;
 
+function pickWorkspaceFolderForRepo() {
+  const folders = vscode.workspace.workspaceFolders || [];
+  if (folders.length === 0) return undefined;
+  if (folders.length === 1) return folders[0];
+
+  // Prefer the workspace folder that looks like the repo root.
+  // Heuristic: contains `.agent/` and `tools/vscode_terminal_orchestrator/`.
+  for (const f of folders) {
+    try {
+      const root = f.uri.fsPath;
+      const hasAgent = fs.existsSync(path.join(root, ".agent"));
+      const hasTools = fs.existsSync(path.join(root, "tools", "vscode_terminal_orchestrator"));
+      if (hasAgent && hasTools) return f;
+    } catch {
+      // ignore
+    }
+  }
+
+  return folders[0];
+}
+
+let settingsJsonOverrideCache = {
+  absPath: "",
+  mtimeMs: 0,
+  checkedAtMs: 0,
+  overrides: null,
+};
+
+function escapeRegExp(s) {
+  return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function readWorkflowOverridesFromSettingsJson(rootFsPath) {
+  const root = String(rootFsPath || "").trim();
+  if (!root) return null;
+
+  const absPath = path.join(root, ".vscode", "settings.json");
+  const now = Date.now();
+
+  // Avoid stat+read on every tick.
+  if (settingsJsonOverrideCache.absPath === absPath && now - settingsJsonOverrideCache.checkedAtMs < 1500) {
+    return settingsJsonOverrideCache.overrides;
+  }
+
+  settingsJsonOverrideCache.checkedAtMs = now;
+  settingsJsonOverrideCache.absPath = absPath;
+
+  let st;
+  try {
+    st = fs.statSync(absPath);
+  } catch {
+    settingsJsonOverrideCache.mtimeMs = 0;
+    settingsJsonOverrideCache.overrides = null;
+    return null;
+  }
+
+  const mtimeMs = Number(st.mtimeMs) || 0;
+  if (settingsJsonOverrideCache.mtimeMs === mtimeMs && settingsJsonOverrideCache.overrides) {
+    return settingsJsonOverrideCache.overrides;
+  }
+
+  let raw;
+  try {
+    raw = fs.readFileSync(absPath, "utf8");
+  } catch {
+    settingsJsonOverrideCache.mtimeMs = mtimeMs;
+    settingsJsonOverrideCache.overrides = null;
+    return null;
+  }
+
+  const findNumber = (fullKey) => {
+    const re = new RegExp(`"${escapeRegExp(fullKey)}"\\s*:\\s*(\\d+)`, "m");
+    const m = raw.match(re);
+    if (!m) return undefined;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const findString = (fullKey) => {
+    const re = new RegExp(`"${escapeRegExp(fullKey)}"\\s*:\\s*"([^"]+)"`, "m");
+    const m = raw.match(re);
+    return m ? String(m[1] || "").trim() : undefined;
+  };
+
+  const overrides = {
+    workflowAskMode: findString("ivyhouseTerminalOrchestrator.workflowAskMode"),
+    workflowMaxRounds: findNumber("ivyhouseTerminalOrchestrator.workflowMaxRounds"),
+    workflowPollIntervalMs: findNumber("ivyhouseTerminalOrchestrator.workflowPollIntervalMs"),
+  };
+
+  settingsJsonOverrideCache.mtimeMs = mtimeMs;
+  settingsJsonOverrideCache.overrides = overrides;
+  return overrides;
+}
+
 function getConfig() {
-  const cfg = vscode.workspace.getConfiguration("ivyhouseTerminalOrchestrator");
+  // Use workspace-folder scoped configuration so `.vscode/settings.json` is honored reliably
+  // (especially in multi-root or folder-scoped settings scenarios).
+  const scope = pickWorkspaceFolderForRepo();
+  const cfg = scope
+    ? vscode.workspace.getConfiguration("ivyhouseTerminalOrchestrator", scope)
+    : vscode.workspace.getConfiguration("ivyhouseTerminalOrchestrator");
+
+  const rootFsPath = scope?.uri?.fsPath || "";
+  const jsonOverrides = readWorkflowOverridesFromSettingsJson(rootFsPath);
+
+  const hasOverride = (inspectObj) => {
+    if (!inspectObj) return false;
+    return (
+      inspectObj.workspaceFolderValue !== undefined ||
+      inspectObj.workspaceValue !== undefined ||
+      inspectObj.globalValue !== undefined
+    );
+  };
+
+  const getWithFallback = (key, defaultValue, overrideValue) => {
+    const inspected = cfg.inspect(key);
+    if (hasOverride(inspected)) return cfg.get(key, defaultValue);
+    return overrideValue !== undefined ? overrideValue : cfg.get(key, defaultValue);
+  };
+
   return {
     autoStart: cfg.get("autoStart", true),
     codexCommand: cfg.get("codexCommand", "codex"),
@@ -36,8 +157,12 @@ function getConfig() {
     captureSilenceMs: cfg.get("captureSilenceMs", 800),
     captureMaxBytes: cfg.get("captureMaxBytes", 65536),
     captureDir: cfg.get("captureDir", ".service/terminal_capture"),
-    workflowPollIntervalMs: cfg.get("workflowPollIntervalMs", 10000),
-    workflowMaxRounds: cfg.get("workflowMaxRounds", 10),
+    workflowPollIntervalMs: getWithFallback(
+      "workflowPollIntervalMs",
+      10000,
+      jsonOverrides?.workflowPollIntervalMs,
+    ),
+    workflowMaxRounds: getWithFallback("workflowMaxRounds", 10, jsonOverrides?.workflowMaxRounds),
     workflowTimeoutMs: cfg.get("workflowTimeoutMs", 1800000),
     workflowTailLines: cfg.get("workflowTailLines", 200),
     workflowReadyTimeoutMs: cfg.get("workflowReadyTimeoutMs", 60000),
@@ -50,6 +175,11 @@ function getConfig() {
     workflowPostSendEnterDelayMs: cfg.get("workflowPostSendEnterDelayMs", 250),
     workflowPostSendEnterCount: cfg.get("workflowPostSendEnterCount", 1),
     workflowQaEngineerSummaryMaxChars: cfg.get("workflowQaEngineerSummaryMaxChars", 1800),
+
+    // Idx-039: Fail→Ask mode when max rounds reached.
+    // - batch: print structured prompt + persist needs_user_input (default)
+    // - interactive: show a QuickPick to decide whether to continue
+    workflowAskMode: getWithFallback("workflowAskMode", "batch", jsonOverrides?.workflowAskMode),
 
     // Workflow safety defaults (avoid breaking interactive TUIs by injecting shell commands).
     workflowRestartTerminals: cfg.get("workflowRestartTerminals", false),
@@ -262,14 +392,27 @@ async function sendInstructionWithIdx024Pipeline(cfg, terminalKind, text, submit
     }
   }
 
+  let enterMethod = "none";
   try {
-    for (const part of parts) {
-      // Do not auto-submit each chunk; only submit at the end.
+    for (let i = 0; i < parts.length; i += 1) {
+      const part = parts[i];
       terminal.sendText(part, false);
+
+      // Do not auto-submit each chunk; only submit at the end.
       await sleepMs(kind === "codex" ? 35 : 15);
     }
+
     if (submit) {
-      await workflowSendEnter(terminalName, kind, 1);
+      if (kind === "opencode") {
+        // OpenCode TUI: reliably submit without focus dependencies.
+        // `sendText(..., true)` may append only LF; some TUIs treat Enter as CR.
+        await sleepMs(10);
+        terminal.sendText("\r", false);
+        enterMethod = "sendText_carriageReturn";
+      } else {
+        await workflowSendEnter(terminalName, kind, 1);
+        enterMethod = "workflowSendEnter";
+      }
     }
   } catch (err) {
     return { ok: false, error: "send_failed", details: String(err || "") };
@@ -280,6 +423,7 @@ async function sendInstructionWithIdx024Pipeline(cfg, terminalKind, text, submit
     terminalKind: kind,
     terminalName,
     submit: Boolean(submit),
+    enterMethod,
     mode: chunked ? "chunked" : "single",
     textBytes: payloadBytes.length,
     payloadSha256: sha256Hex(normalized),
@@ -522,9 +666,12 @@ async function startWorkflowLoopCore(context, params) {
   // Allow assume-ready only when we did NOT start the terminal in this run.
   // This avoids deadlock when existing TUIs emit only ANSI/control sequences (cleaned tail becomes empty),
   // while still requiring real readiness signals for freshly started terminals.
+  // OpenCode TUI sometimes does not emit a stable "ready" token even on fresh start; allow assume-ready.
+  const engineerKind = detectWorkflowTerminalKind(cfg, engineerTerminalName);
+  const qaKind = detectWorkflowTerminalKind(cfg, qaTerminalName);
   workflowLoopState.readyAssumeAllowedByTerminalName = {
-    [engineerTerminalName]: !engineerDidStart,
-    [qaTerminalName]: !qaDidStart,
+    [engineerTerminalName]: engineerKind === "opencode" ? true : !engineerDidStart,
+    [qaTerminalName]: qaKind === "opencode" ? true : !qaDidStart,
   };
 
   // Avoid false-positive marker detection from transcript echo of our own prompt.
@@ -583,6 +730,8 @@ async function startWorkflowLoopNonInteractive(context, planId, scope) {
     await context.workspaceState.update(WORKFLOW_STATE_KEYS.planId, normalizedIdx);
     await context.workspaceState.update(WORKFLOW_STATE_KEYS.state, "starting");
     await context.workspaceState.update(WORKFLOW_STATE_KEYS.startedAtIso, new Date().toISOString());
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.pendingDecision, null);
+    await context.workspaceState.update(WORKFLOW_STATE_KEYS.lastDecisionIdApplied, "");
   } catch {
     // ignore
   }
@@ -605,9 +754,11 @@ async function startWorkflowLoopNonInteractive(context, planId, scope) {
 }
 
 function getWorkflowStatusForApi(context) {
-  const state =
+  const pendingDecision = getCurrentPendingDecision(context);
+  const baseState =
     (workflowLoopState && workflowLoopState.active && "running") ||
     context.workspaceState.get(WORKFLOW_STATE_KEYS.state, "idle");
+  const state = pendingDecision ? "needs_user_input" : baseState;
   const workflowRunId = context.workspaceState.get(WORKFLOW_STATE_KEYS.workflowRunId, "");
   const planId = context.workspaceState.get(WORKFLOW_STATE_KEYS.planId, "");
   const startedAtIso = context.workspaceState.get(WORKFLOW_STATE_KEYS.startedAtIso, "");
@@ -659,12 +810,13 @@ function getWorkflowStatusForApi(context) {
     lastOutputTs,
     lastRawLogSizeBytes,
     lastOutputSource,
+    pendingDecision,
   };
 }
 
 function startSendtextBridgeServer(context) {
-  const cfg = getConfig();
-  if (!cfg.sendtextBridgeEnabled) {
+  const cfgInitial = getConfig();
+  if (!cfgInitial.sendtextBridgeEnabled) {
     logLine("[bridge] disabled by setting: sendtextBridgeEnabled=false");
     return;
   }
@@ -673,12 +825,15 @@ function startSendtextBridgeServer(context) {
     return;
   }
 
-  const limiter = rateLimiterCreate(cfg);
+  const limiter = rateLimiterCreate(cfgInitial);
   const host = "127.0.0.1";
-  const port = Math.max(1, Math.min(65535, Number(cfg.sendtextBridgePort) || 8765));
+  const port = Math.max(1, Math.min(65535, Number(cfgInitial.sendtextBridgePort) || 8765));
   sendtextBridgeServerStartedAtIso = new Date().toISOString();
 
   const server = http.createServer(async (req, res) => {
+    // Refresh config per request so changes in settings.json take effect without
+    // requiring bridge server restart (subject to VS Code config reload behavior).
+    const cfg = getConfig();
     const method = String(req.method || "GET").toUpperCase();
     const url = String(req.url || "/");
     const endpoint = url.split("?")[0];
@@ -707,15 +862,45 @@ function startSendtextBridgeServer(context) {
     }
 
     if (method === "GET" && endpoint === "/healthz") {
+      const scope = pickWorkspaceFolderForRepo();
+      const cfgInspect = scope
+        ? vscode.workspace.getConfiguration("ivyhouseTerminalOrchestrator", scope)
+        : vscode.workspace.getConfiguration("ivyhouseTerminalOrchestrator");
+
       jsonResponse(res, 200, {
         status: "ok",
         ts: new Date().toISOString(),
         serverStartedAt: sendtextBridgeServerStartedAtIso,
+        workspace: {
+          workspaceFolderCount: (vscode.workspace.workspaceFolders || []).length,
+          workspaceFolders: (vscode.workspace.workspaceFolders || []).map((f) => ({
+            name: f.name,
+            fsPath: f.uri.fsPath,
+          })),
+          chosenRootFsPath: getWorkspaceRootFsPath() || "",
+        },
+        settingsJsonOverrides: readWorkflowOverridesFromSettingsJson(getWorkspaceRootFsPath()) || null,
+        workflowConfig: {
+          askMode: String(cfg.workflowAskMode || "batch"),
+          maxRounds: Number(cfg.workflowMaxRounds) || 10,
+          pollIntervalMs: Number(cfg.workflowPollIntervalMs) || 10000,
+        },
+        workflowConfigInspect: {
+          workflowAskMode: cfgInspect.inspect("workflowAskMode"),
+          workflowMaxRounds: cfgInspect.inspect("workflowMaxRounds"),
+          workflowPollIntervalMs: cfgInspect.inspect("workflowPollIntervalMs"),
+        },
       });
       return;
     }
 
-    const protectedEndpoints = new Set(["/send", "/workflow/start", "/workflow/status"]);
+    const protectedEndpoints = new Set([
+      "/send",
+      "/workflow/start",
+      "/workflow/status",
+      "/workflow/decision",
+      "/stop-workflow",
+    ]);
     if (protectedEndpoints.has(endpoint)) {
       if (!tokenConfigured) {
         const evt = {
@@ -776,6 +961,7 @@ function startSendtextBridgeServer(context) {
         requestId,
         terminalKind: sendRes.terminalKind || String(terminalKind || ""),
         submit,
+        enterMethod: sendRes.enterMethod || "none",
         mode: sendRes.mode || String(mode || ""),
         textBytes: sendRes.textBytes || 0,
         payloadSha256: sendRes.payloadSha256 || "",
@@ -794,6 +980,7 @@ function startSendtextBridgeServer(context) {
         status: "sent",
         terminalKind: sendRes.terminalKind,
         textBytes: sendRes.textBytes,
+        enterMethod: sendRes.enterMethod || "none",
         requestId,
       });
       return;
@@ -866,6 +1053,101 @@ function startSendtextBridgeServer(context) {
       return;
     }
 
+    if (method === "POST" && endpoint === "/workflow/decision") {
+      let body;
+      try {
+        body = await readJsonBody(req, cfg.sendtextBridgeMaxRequestBytes);
+      } catch (err) {
+        const code = String(err?.message || "");
+        jsonResponse(res, code === "request_too_large" ? 413 : 400, {
+          error: code || "bad_request",
+          requestId,
+        });
+        return;
+      }
+
+      const submission = {
+        decisionId: body?.decisionId,
+        decision: body?.decision,
+        freeText: body?.freeText,
+        phase: body?.phase,
+      };
+
+      const result = await submitWorkflowDecisionFromApi(context, submission);
+      appendSendtextBridgeAuditEvent(cfg, {
+        ts: new Date().toISOString(),
+        endpoint: "/workflow/decision",
+        result: result.ok ? "success" : "error",
+        requestId,
+        tokenHash,
+        ip,
+        decisionId: String(submission.decisionId || ""),
+        decision: String(submission.decision || ""),
+        phase: String(submission.phase || ""),
+        error: result.ok ? undefined : result.error,
+      });
+
+      if (!result.ok) {
+        jsonResponse(res, result.status, {
+          error: result.error,
+          ...(result.expectedDecisionId ? { expectedDecisionId: result.expectedDecisionId } : {}),
+          ...(result.gotDecisionId ? { gotDecisionId: result.gotDecisionId } : {}),
+          ...(result.details ? { details: result.details } : {}),
+          state: result.state,
+          requestId,
+        });
+        return;
+      }
+
+      jsonResponse(res, 200, { status: result.result, state: result.state, requestId });
+      return;
+    }
+
+    if (method === "POST" && endpoint === "/stop-workflow") {
+      let body;
+      try {
+        body = await readJsonBody(req, cfg.sendtextBridgeMaxRequestBytes);
+      } catch (err) {
+        const code = String(err?.message || "");
+        jsonResponse(res, code === "request_too_large" ? 413 : 400, {
+          error: code || "bad_request",
+          requestId,
+        });
+        return;
+      }
+
+      const reason = String(body?.reason || "api_stop_workflow");
+      const wasRunning = Boolean(workflowLoopState?.active);
+
+      if (wasRunning) {
+        stopWorkflowLoop(reason, "idle");
+      } else {
+        // Ensure persisted state is not left in "running" after a reload.
+        try {
+          await context.workspaceState.update(WORKFLOW_STATE_KEYS.state, "idle");
+        } catch {
+          // ignore
+        }
+      }
+
+      const status = getWorkflowStatusForApi(context);
+      appendSendtextBridgeAuditEvent(cfg, {
+        ts: new Date().toISOString(),
+        endpoint: "/stop-workflow",
+        result: "success",
+        requestId,
+        tokenHash,
+        ip,
+        wasRunning,
+        workflowRunId: status.workflowRunId,
+        planId: status.planId,
+        state: status.state,
+        reason,
+      });
+      jsonResponse(res, 200, { status: "stopped", wasRunning, ...status });
+      return;
+    }
+
     jsonResponse(res, 404, { error: "not_found", requestId });
   });
 
@@ -886,9 +1168,9 @@ function startSendtextBridgeServer(context) {
 }
 
 function getWorkspaceRootFsPath() {
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders || folders.length === 0) return undefined;
-  return folders[0].uri.fsPath;
+  const folder = pickWorkspaceFolderForRepo();
+  if (!folder) return undefined;
+  return folder.uri.fsPath;
 }
 
 function resolveCapturePaths(cfg) {
@@ -936,7 +1218,7 @@ async function workflowSendEnter(terminalName, kind, count = 1) {
   try {
     // Important: sendSequence targets the active terminal.
     // Do NOT preserve focus here; we want this terminal to become active.
-    t.show(false);
+    t.show(true);
   } catch {
     // ignore
   }
@@ -953,7 +1235,9 @@ async function workflowSendEnter(terminalName, kind, count = 1) {
     const ok = isActive ? await sendTerminalSequenceToActive("\r") : false;
     if (!ok) {
       try {
-        t.sendText("\r", false);
+        // Reliable fallback: send an actual newline via this terminal instance.
+        // Using "\r" with addNewLine=false may not submit in some TUIs.
+        t.sendText("", true);
       } catch {
         // ignore
       }
@@ -1127,7 +1411,142 @@ let workflowLoopState = {
   fixNudgeCount: 0, // near-miss nudge counter for Fix phase
   fixNudgeMaxPerRound: 3,
   envVerified: false, // delayed env verification flag
+
+  // Idx-041: Ask Questions decision gate
+  pendingDecision: null, // {decisionId, question, options, context, createdAtIso, phase}
+  pendingDecisionWaiter: null, // {decisionId, resolve, timeoutId}
 };
+
+function normalizeWorkflowDecision(decision, freeText) {
+  const d = String(decision || "").trim().toUpperCase();
+  if (d === "CONTINUE" || d === "STOP" || d === "MORE_INFO" || d === "FREEFORM") return d;
+
+  const t = String(freeText || "").trim().toLowerCase();
+  if (!t) return "FREEFORM";
+  if (/(^|\b)(continue|cont|c)\b/.test(t) || /繼續/.test(t)) return "CONTINUE";
+  if (/(^|\b)(stop|quit|q)\b/.test(t) || /(停止|中止|結束)/.test(t)) return "STOP";
+  if (/(^|\b)(more|more_info|info)\b/.test(t) || /(更多|補充|資訊|診斷)/.test(t)) return "MORE_INFO";
+  return "FREEFORM";
+}
+
+async function persistWorkflowState(context, state) {
+  try {
+    await context?.workspaceState?.update(WORKFLOW_STATE_KEYS.state, String(state || "idle"));
+  } catch {
+    // ignore
+  }
+}
+
+async function persistPendingDecision(context, pendingDecision) {
+  try {
+    await context?.workspaceState?.update(WORKFLOW_STATE_KEYS.pendingDecision, pendingDecision || null);
+  } catch {
+    // ignore
+  }
+}
+
+async function persistLastDecisionIdApplied(context, decisionId) {
+  try {
+    await context?.workspaceState?.update(
+      WORKFLOW_STATE_KEYS.lastDecisionIdApplied,
+      String(decisionId || ""),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function getCurrentPendingDecision(context) {
+  return (
+    workflowLoopState?.pendingDecision ||
+    context?.workspaceState?.get(WORKFLOW_STATE_KEYS.pendingDecision, null) ||
+    null
+  );
+}
+
+function waitForWorkflowDecision(decisionId, timeoutMs) {
+  // Only one waiter at a time; if a prior waiter exists, replace it.
+  const existing = workflowLoopState.pendingDecisionWaiter;
+  if (existing?.timeoutId) {
+    try {
+      clearTimeout(existing.timeoutId);
+    } catch {
+      // ignore
+    }
+  }
+
+  return new Promise((resolve) => {
+    const ms = Math.max(1, Number(timeoutMs) || 1);
+    const timeoutId = setTimeout(() => {
+      workflowLoopState.pendingDecisionWaiter = null;
+      resolve(null);
+    }, ms);
+
+    workflowLoopState.pendingDecisionWaiter = {
+      decisionId: String(decisionId || ""),
+      resolve,
+      timeoutId,
+    };
+  });
+}
+
+async function submitWorkflowDecisionFromApi(context, submission) {
+  const pending = getCurrentPendingDecision(context);
+  const decisionId = String(submission?.decisionId || "").trim();
+  const decisionRaw = submission?.decision;
+  const freeText = submission?.freeText;
+  const phase = String(submission?.phase || pending?.phase || "initial");
+
+  if (!pending) {
+    return { ok: false, status: 409, error: "no_pending_decision", state: getWorkflowStatusForApi(context) };
+  }
+  if (!decisionId || decisionId !== String(pending.decisionId || "")) {
+    return {
+      ok: false,
+      status: 409,
+      error: "decision_id_mismatch",
+      expectedDecisionId: String(pending.decisionId || ""),
+      gotDecisionId: decisionId,
+      state: getWorkflowStatusForApi(context),
+    };
+  }
+
+  const lastApplied = String(
+    context?.workspaceState?.get(WORKFLOW_STATE_KEYS.lastDecisionIdApplied, "") || "",
+  );
+  if (lastApplied && lastApplied === decisionId) {
+    return { ok: true, status: 200, result: "duplicate_ignored", state: getWorkflowStatusForApi(context) };
+  }
+
+  const waiter = workflowLoopState.pendingDecisionWaiter;
+  if (!waiter || waiter.decisionId !== decisionId || typeof waiter.resolve !== "function") {
+    return {
+      ok: false,
+      status: 409,
+      error: "not_accepting_decision",
+      details: "workflow is not currently waiting in-process (loop may have stopped)",
+      state: getWorkflowStatusForApi(context),
+    };
+  }
+
+  try {
+    clearTimeout(waiter.timeoutId);
+  } catch {
+    // ignore
+  }
+  workflowLoopState.pendingDecisionWaiter = null;
+  waiter.resolve({
+    decisionId,
+    decision: normalizeWorkflowDecision(decisionRaw, freeText),
+    freeText: freeText === undefined ? undefined : String(freeText),
+    phase,
+    receivedAtIso: new Date().toISOString(),
+  });
+
+  await persistLastDecisionIdApplied(context, decisionId);
+
+  return { ok: true, status: 200, result: "accepted", state: getWorkflowStatusForApi(context) };
+}
 
 function normalizeInstruction(text, kind = "opencode") {
   // Normalize instruction differently depending on terminal kind.
@@ -1253,14 +1672,16 @@ function getQaResult(buf) {
  * @param {string} phase - one of: "ENGINEER", "QA", "FIX"
  * @param {string} expectedNonce - session nonce from workflowLoopState
  * @param {string} expectedTaskId - e.g. "Idx-030"
- * @returns {{ ok: true, result: string } | { ok: false, nearMiss?: {...} }}
+ * @returns {{ ok: true, result: string, failReason?: (string|null) } | { ok: false, nearMiss?: {...} }}
  */
 function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTaskId) {
   const s = sanitizeForMarkerDetection(buf);
   const lines = s
     .split(/\r?\n/)
     .map((l) => String(l || "").trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    // Many tools wrap the 5-line block in Markdown fences. Ignore fence lines for parsing.
+    .filter((l) => !/^```/.test(l));
 
   const expectedMarker =
     phase === "ENGINEER" ? "[ENGINEER_DONE]" : phase === "QA" ? "[QA_DONE]" : "[FIX_DONE]";
@@ -1288,24 +1709,28 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
     return false;
   }
 
+  function parseFailReasonLine(line) {
+    const v = String(line || "").trim();
+    const m = v.match(/^FAIL_REASON\s*=\s*(.*)$/i);
+    if (!m) return undefined;
+    return String(m[1] || "").trim();
+  }
+
   function parseIdx030FiveLineBlock(blockLines) {
     if (!Array.isArray(blockLines) || blockLines.length < 5) return { ok: false };
 
-    const tail = blockLines
-      .slice(0, 5)
-      .map((l) => String(l || "").trim())
-      .filter(Boolean);
-    if (tail.length < 5) return { ok: false };
+    const firstFive = blockLines.slice(0, 5).map((l) => String(l || "").trim());
+    if (firstFive.some((l) => !l)) return { ok: false };
 
     const nearMiss = {};
 
     // Line 1: marker
-    const line1 = tail[0];
+    const line1 = firstFive[0];
     const hasMarker = isMarkerLine(line1, expectedMarker);
     if (!hasMarker) return { ok: false };
 
     // Line 2: TIMESTAMP
-    const line2 = tail[1];
+    const line2 = firstFive[1];
     const timestampMatch = line2.match(/^TIMESTAMP\s*=\s*(.+)$/i);
     if (!timestampMatch) {
       nearMiss.missingTimestamp = true;
@@ -1321,7 +1746,7 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
     }
 
     // Line 3: NONCE
-    const line3 = tail[2];
+    const line3 = firstFive[2];
     const nonceMatch = line3.match(/^NONCE\s*=\s*(.+)$/i);
     if (!nonceMatch) {
       nearMiss.missingNonce = true;
@@ -1349,7 +1774,7 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
     }
 
     // Line 4: TASK_ID
-    const line4 = tail[3];
+    const line4 = firstFive[3];
     const taskIdMatch = line4.match(/^TASK_ID\s*=\s*(.+)$/i);
     if (!taskIdMatch) {
       nearMiss.missingTaskId = true;
@@ -1367,8 +1792,9 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
     }
 
     // Line 5: phase-specific result
-    const line5 = tail[4];
+    const line5 = firstFive[4];
     let result;
+    let failReason;
     if (phase === "ENGINEER") {
       const m = line5.match(/^ENGINEER_RESULT\s*=\s*(.+)$/i);
       if (!m) {
@@ -1397,6 +1823,21 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
         nearMiss.line5 = line5;
         return { ok: false, nearMiss };
       }
+
+      // Optional 6th line (QA FAIL only): FAIL_REASON=<短摘要>
+      const line6 = String(blockLines?.[5] || "").trim();
+      const parsedFailReason = line6 ? parseFailReasonLine(line6) : undefined;
+      if (parsedFailReason !== undefined) {
+        if (result === "FAIL") {
+          failReason = parsedFailReason;
+        } else {
+          nearMiss.failReasonNotAllowed = true;
+          nearMiss.line6 = line6;
+          return { ok: false, nearMiss };
+        }
+      } else if (result === "FAIL") {
+        failReason = null;
+      }
     } else if (phase === "FIX") {
       const m = line5.match(/^FIX_ROUND\s*=\s*(\d+)$/i);
       if (!m) {
@@ -1407,7 +1848,7 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
       result = m[1].trim();
     }
 
-    return { ok: true, result, timestamp, nonce, taskId };
+    return { ok: true, result, timestamp, nonce, taskId, failReason };
   }
 
   function tryParseInlineFallback() {
@@ -1468,6 +1909,7 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
     }
 
     let result;
+    let failReason;
     if (phase === "ENGINEER") {
       const m = block.match(/ENGINEER_RESULT\s*=\s*([A-Za-z_]+)/i);
       if (!m) {
@@ -1492,6 +1934,11 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
         nearMiss.qaResult = result;
         return { ok: false, nearMiss };
       }
+
+      if (result === "FAIL") {
+        const fr = block.match(/FAIL_REASON\s*=\s*([^\n\r]{0,500})/i);
+        failReason = fr ? String(fr[1] || "").trim() : null;
+      }
     } else if (phase === "FIX") {
       const m = block.match(/FIX_ROUND\s*=\s*(\d+)/i);
       if (!m) {
@@ -1501,12 +1948,20 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
       result = String(m[1] || "").trim();
     }
 
-    return { ok: true, result, timestamp, nonce, taskId, inline: true };
+    return { ok: true, result, timestamp, nonce, taskId, failReason, inline: true };
   }
 
-  // Tail-only: last 5 non-empty lines
-  const tail = lines.slice(-5);
-  if (tail.length < 5) {
+  // Tail-only: last N non-empty lines
+  // - Engineer/Fix: always 5 lines
+  // - QA: PASS = 5 lines, FAIL may optionally add a 6th line: FAIL_REASON=...
+  let tailLineCount = 5;
+  if (phase === "QA" && lines.length >= 6) {
+    const last = String(lines[lines.length - 1] || "").trim();
+    if (/^FAIL_REASON\s*=/i.test(last)) tailLineCount = 6;
+  }
+
+  const tail = lines.slice(-tailLineCount);
+  if (tail.length < tailLineCount) {
     // Not enough lines: attempt inline parsing to handle TUI redraw capture.
     const inline = tryParseInlineFallback();
     if (inline.ok || inline.nearMiss) return inline;
@@ -1539,7 +1994,10 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
       if (!isMarkerLine(widerTail[i], expectedMarker)) continue;
       if (anyMarkerFoundAt === -1) anyMarkerFoundAt = i;
 
-      const parsed = parseIdx030FiveLineBlock(widerTail.slice(i, i + 5));
+      const parsed =
+        phase === "QA"
+          ? parseIdx030FiveLineBlock(widerTail.slice(i, i + 6))
+          : parseIdx030FiveLineBlock(widerTail.slice(i, i + 5));
       if (parsed.ok) {
         return { ...parsed, scanned: true };
       }
@@ -1672,7 +2130,20 @@ function detectCompletionWithIdx030Format(buf, phase, expectedNonce, expectedTas
   }
 
   // All checks passed
-  return { ok: true, result, timestamp, nonce, taskId };
+  let failReason;
+  if (phase === "QA" && result === "FAIL" && tailLineCount === 6) {
+    const maybe = parseFailReasonLine(tail[5]);
+    failReason = maybe !== undefined ? maybe : null;
+  } else if (phase === "QA" && result === "FAIL") {
+    failReason = null;
+  }
+  if (phase === "QA" && result === "PASS" && tailLineCount === 6) {
+    nearMiss.failReasonNotAllowed = true;
+    nearMiss.line6 = tail[5];
+    return { ok: false, nearMiss };
+  }
+
+  return { ok: true, result, timestamp, nonce, taskId, failReason };
 }
 
 function generatePromptSentinel(kind, round, nudgeCount) {
@@ -1787,6 +2258,32 @@ function looksLikeTuiPaint(cleanedTail) {
   const s = String(cleanedTail || "");
   const trimmed = s.trim();
   if (!trimmed) return false;
+
+  // OpenCode / Codex TUI often prints progress/UI glyphs and role headers.
+  // Treat these as TUI paint signals to avoid readiness deadlocks.
+  if (
+    /\bCompaction\b/i.test(trimmed) ||
+    /\bEngineer\s*·/i.test(trimmed) ||
+    /\bQA\s*·/i.test(trimmed) ||
+    /[▣⬝]/u.test(trimmed) ||
+    /•→/u.test(trimmed)
+  ) {
+    return true;
+  }
+
+  // Some TUIs (Codex/OpenCode) paint mostly normal ASCII text (not box-drawing),
+  // but still redraw frequently (spinners, progress). Treat these as TUI paint
+  // so readiness logic can avoid deadlocking on tail instability.
+  if (
+    /\? for shortcuts/i.test(trimmed) ||
+    /context left/i.test(trimmed) ||
+    /esc to interrupt/i.test(trimmed) ||
+    /background terminal running/i.test(trimmed) ||
+    /\bWorking\s*\(/i.test(trimmed) ||
+    /Find and fix a bug in @filename/i.test(trimmed)
+  ) {
+    return true;
+  }
 
   const nonWs = trimmed.replace(/\s+/g, "");
   if (nonWs.length < 20) return false;
@@ -1921,11 +2418,15 @@ async function workflowSendInstructionWithRetry(cfg, terminalName, text) {
   const postSendEnterDelayMs = Math.max(0, Number(cfg.workflowPostSendEnterDelayMs) || 0);
   const postSendEnterCount = Math.max(0, Number(cfg.workflowPostSendEnterCount) || 0);
   const effectivePrimeEnterCount = kind === "opencode" ? primeEnterCount : 0;
+  const implicitSubmit = kind === "opencode";
 
   // Codex CLI is particularly sensitive to bracketed-paste timing; treat submit as best-effort
   // and ensure we send enough post-send Enters with sufficient delay.
-  const effectivePostSendEnterCount =
-    kind === "codex" ? Math.max(2, postSendEnterCount) : postSendEnterCount;
+  const effectivePostSendEnterCount = implicitSubmit
+    ? 0
+    : kind === "codex"
+      ? Math.max(2, postSendEnterCount)
+      : postSendEnterCount;
 
   // Normalize per-terminal-kind. For opencode keep single-line behaviour; for codex keep newlines.
   const payload = normalizeInstruction(text, kind);
@@ -2476,13 +2977,23 @@ async function offerClearCaptureOnQaPass(cfg, idxOverride = undefined) {
   }
 }
 
-function stopWorkflowLoop(reason) {
+function stopWorkflowLoop(reason, persistedState) {
   if (!workflowLoopState.active) {
     vscode.window.showInformationMessage("Workflow loop is not running.");
     return;
   }
 
-  appendWorkflowEvent({ action: "workflow_stop", reason: reason || "stopped" });
+  const waiter = workflowLoopState.pendingDecisionWaiter;
+  if (waiter?.timeoutId) {
+    try {
+      clearTimeout(waiter.timeoutId);
+    } catch {
+      // ignore
+    }
+  }
+  workflowLoopState.pendingDecisionWaiter = null;
+
+  appendWorkflowEvent({ action: "workflow_stop", reason: reason || "stopped", persistedState: persistedState || "idle" });
 
   workflowLoopState.active = false;
   workflowLoopState.phase = WORKFLOW_PHASE.idle;
@@ -2493,16 +3004,187 @@ function stopWorkflowLoop(reason) {
   workflowLoopState.timer = undefined;
 
   // 將狀態寫回 workspaceState，讓 /workflow/status 在 window reload 後仍能正確反映已結束。
+  // 若傳入 persistedState（例如 "needs_user_input"），則保留該狀態供外部查詢用。
   // 否則可能出現 workflow 已停但 API 仍顯示 "running" 的誤判。
   try {
     if (extensionContext?.workspaceState) {
-      extensionContext.workspaceState.update(WORKFLOW_STATE_KEYS.state, "idle");
+      const state = persistedState || "idle";
+      extensionContext.workspaceState.update(WORKFLOW_STATE_KEYS.state, state);
     }
   } catch {
     // ignore
   }
   logLine(`[workflow] stopped: ${reason || "stopped"}`);
   vscode.window.showInformationMessage(`Workflow loop stopped${reason ? `: ${reason}` : ""}.`);
+}
+
+/**
+ * checkFailAndAskUser — QA FAIL 達 maxRounds 時的結構化詢問 helper。
+ *
+ * 行為：
+ *   - 將詢問內容以 logLine() 輸出（不開 showQuickPick / showInputBox）。
+ *   - 以 appendWorkflowEvent() 寫入事件紀錄（action: "needs_user_input"）。
+ *   - 建立 pendingDecision（持久化至 workspaceState），並等待 `POST /workflow/decision` 回寫。
+ *   - CONTINUE：同一個 workflow loop 原地續跑下一輪。
+ *   - STOP 或逾時：安全停止並持久化 state=needs_user_input。
+ *
+ * Coordinator 看到 needs_user_input 狀態後，依 Ask Questions SOP（coordinator.md T8）
+ * 決定是否繼續（CONTINUE）、中止（STOP）或取得更多資訊（MORE_INFO）。
+ *
+ * @param {object} cfg         - getConfig() 回傳值
+ * @param {object} params
+ * @param {number} params.round       - 當前 round
+ * @param {number} params.maxRounds   - 最大 round
+ * @param {string} params.idxName     - 任務 ID（例如 "Idx-039"）
+ * @param {string} params.qaSummary   - QA log 前 500 字
+ * @param {string} params.qaLogPath   - QA log 檔案路徑（顯示用）
+ */
+async function checkFailAndAskUser(cfg, { round, maxRounds, idxName, qaSummary, qaLogPath }) {
+  const snippet = (qaSummary || "(no QA output captured)").slice(0, 500);
+  const qaLogDisplay = qaLogPath || workflowLoopState.qaLogDisplay || "<unknown>";
+  const askMode = String(cfg?.workflowAskMode || "batch").toLowerCase();
+  const effectiveAskMode = askMode === "interactive" ? "ask_questions" : askMode;
+  const context = extensionContext;
+
+  const workflowRunId = String(
+    context?.workspaceState?.get(WORKFLOW_STATE_KEYS.workflowRunId, "") || "",
+  );
+  const mkDecisionId = () => {
+    const salt = crypto.randomBytes(3).toString("hex");
+    const base = workflowRunId || idxName || workflowLoopState.idxName || "wf";
+    return `${base}:${Date.now()}:${salt}`;
+  };
+
+  const remainingMs = Math.max(
+    0,
+    (workflowLoopState.timeoutMs || 0) - (Date.now() - (workflowLoopState.startedAtMs || 0)),
+  );
+  const decisionTimeoutMs = remainingMs > 0 ? Math.min(remainingMs, 10 * 60 * 1000) : 30 * 1000;
+
+  // 記錄結構化事件，供外部 API /workflow/status 或 Coordinator 查詢
+  appendWorkflowEvent({
+    action: "needs_user_input",
+    reason: "max_rounds_reached",
+    round,
+    maxRounds,
+    idxName: idxName || workflowLoopState.idxName || "<unknown>",
+    qaLogPath: qaLogDisplay,
+    qaSummarySnippet: snippet,
+  });
+
+  // 結構化詢問輸出（僅用 logLine，不開 modal UI）
+  const divider = "=".repeat(60);
+  logLine(`\n${divider}`);
+  logLine("  WORKFLOW REACHED MAX ROUNDS — COORDINATOR ACTION REQUIRED");
+  logLine(divider);
+  logLine(`  Round    : ${round} / ${maxRounds}`);
+  logLine(`  Task     : ${idxName || workflowLoopState.idxName || "<unknown>"}`);
+  logLine(`  Status   : QA FAILED`);
+  logLine(`  QA Log   : ${qaLogDisplay}`);
+  logLine(`  QA Snippet (first 500 chars):`);
+  logLine(`  ${snippet.replace(/\n/g, "\n  ")}`);
+  logLine(divider);
+  logLine("  ⚠️  已達最大修正次數。Coordinator 需依 Ask Questions SOP T8 決策：");
+  logLine("  選項：");
+  logLine("    1) CONTINUE  - 原地繼續第 " + (round + 1) + " 輪（同一個 workflow loop 立刻續跑）");
+  logLine("    2) STOP      - 中止 workflow，輸出當前失敗狀態與日誌（預設）");
+  logLine("    3) MORE_INFO - 輸出完整診斷日誌，確認後再選 1 或 2");
+  logLine("  → 請在 Copilot Chat 用 Ask Questions 收集決策後，呼叫 /workflow/decision 回寫。 ");
+  logLine(`${divider}\n`);
+
+  if (effectiveAskMode !== "batch" && effectiveAskMode !== "ask_questions") {
+    logLine(`[workflow] unknown workflowAskMode=${String(cfg?.workflowAskMode || "")} → fallback to batch`);
+  }
+
+  const baseCtx = {
+    round,
+    maxRounds,
+    idxName: idxName || workflowLoopState.idxName || "<unknown>",
+    qaLogPath: qaLogDisplay,
+    qaSummarySnippet: snippet,
+  };
+
+  // Wait loop: FREEFORM notes cause re-prompt; MORE_INFO triggers diagnostics + final decision.
+  let phase = "initial";
+  for (;;) {
+    const decisionId = mkDecisionId();
+    const pending = {
+      decisionId,
+      question:
+        phase === "final"
+          ? "已輸出診斷資訊，請選擇 CONTINUE 或 STOP（可自由輸入備註）"
+          : "QA FAIL 達 maxRounds，需要決策",
+      options:
+        phase === "final" ? ["CONTINUE", "STOP", "FREEFORM"] : ["CONTINUE", "STOP", "MORE_INFO", "FREEFORM"],
+      phase,
+      createdAtIso: new Date().toISOString(),
+      context: baseCtx,
+    };
+
+    workflowLoopState.pendingDecision = pending;
+    await persistPendingDecision(context, pending);
+    await persistWorkflowState(context, "needs_user_input");
+
+    logLine(`[workflow] waiting for decision: decisionId=${decisionId} phase=${phase} timeoutMs=${decisionTimeoutMs}`);
+
+    const resp = await waitForWorkflowDecision(decisionId, decisionTimeoutMs);
+    if (!resp) {
+      appendWorkflowEvent({ action: "needs_user_input_timeout", decisionId, phase, round, maxRounds });
+      // Safe stop and persist needs_user_input; keep pendingDecision for status visibility.
+      stopWorkflowLoop("FINAL_FAIL (needs_user_input: timeout)", "needs_user_input");
+      return "STOP";
+    }
+
+    await persistLastDecisionIdApplied(context, decisionId);
+
+    if (resp.freeText) {
+      appendWorkflowEvent({
+        action: "needs_user_input_free_text",
+        decisionId,
+        phase: resp.phase,
+        freeText: String(resp.freeText || "").slice(0, 4000),
+      });
+    }
+
+    if (resp.decision === "FREEFORM") {
+      appendWorkflowEvent({
+        action: "needs_user_input_freeform_note",
+        decisionId,
+        phase,
+        note: String(resp.freeText || "").slice(0, 4000),
+      });
+      // Re-prompt to force an explicit CONTINUE/STOP/MORE_INFO.
+      continue;
+    }
+
+    if (resp.decision === "MORE_INFO") {
+      appendWorkflowEvent({ action: "needs_user_input_decision", decisionId, phase, decision: "MORE_INFO" });
+
+      const divider2 = "-".repeat(60);
+      logLine(`\n${divider2}`);
+      logLine("  MORE_INFO: QA log tail (up to 4000 chars)");
+      logLine(divider2);
+      logLine(String(qaSummary || "(no QA output captured)").slice(-4000));
+      logLine(`${divider2}\n`);
+
+      phase = "final";
+      continue;
+    }
+
+    if (resp.decision === "CONTINUE") {
+      appendWorkflowEvent({ action: "needs_user_input_decision", decisionId, phase, decision: "CONTINUE" });
+      workflowLoopState.pendingDecision = null;
+      await persistPendingDecision(context, null);
+      await persistWorkflowState(context, "running");
+      return "CONTINUE";
+    }
+
+    appendWorkflowEvent({ action: "needs_user_input_decision", decisionId, phase, decision: "STOP" });
+    workflowLoopState.pendingDecision = null;
+    await persistPendingDecision(context, null);
+    stopWorkflowLoop("FINAL_FAIL (user decided STOP)", "needs_user_input");
+    return "STOP";
+  }
 }
 
 function formatWorkflowStatus() {
@@ -2561,10 +3243,14 @@ function workflowSendInstruction(terminalName, text) {
   }
 
   try {
-    // Paste without implicit newline; submission is handled by workflowSendInstructionWithRetry
-    // via its post-send Enter (with adaptive delay for large pastes).
-    // For codex we may be sending already-chunked content; still call sendText for final single-shot.
-    t.sendText(payload, false);
+    // For OpenCode, submit via explicit CR (Enter) to avoid focus-dependent sendSequence.
+    // For Codex, avoid implicit newline and let workflowSendInstructionWithRetry handle submission.
+    if (kind === "opencode") {
+      t.sendText(payload, false);
+      t.sendText("\r", false);
+    } else {
+      t.sendText(payload, false);
+    }
     return true;
   } catch (err) {
     const msg = String(err || "");
@@ -2578,8 +3264,25 @@ function buildEngineerPrompt(taskDescription, promptSentinel) {
   // Idx-030: Updated prompt with 5-line completion format (no line numbers to avoid inducing numbered output)
   const nonce = workflowLoopState?.sessionNonce || "<nonce>";
   const taskId = workflowLoopState?.idxName || "Idx-XXX";
+  const tsExample = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
-  const planPath = /^Idx-\d+$/i.test(taskId) ? `doc/plans/${taskId}_plan.md` : "doc/plans/<Idx-NNN>_plan.md";
+  // Workflow plans live in `.agent/plans/` by default; some repos also keep a copy in `doc/plans/`.
+  // Prefer the one that actually exists to avoid confusing the Engineer tool.
+  let planPath = /^Idx-\d+$/i.test(taskId) ? `doc/plans/${taskId}_plan.md` : "doc/plans/<Idx-NNN>_plan.md";
+  try {
+    const root = getWorkspaceRootFsPath();
+    if (root && /^Idx-\d+$/i.test(taskId)) {
+      const agentAbs = path.join(root, ".agent", "plans", `${taskId}_plan.md`);
+      const docAbs = path.join(root, "doc", "plans", `${taskId}_plan.md`);
+      if (fs.existsSync(agentAbs)) {
+        planPath = `.agent/plans/${taskId}_plan.md`;
+      } else if (fs.existsSync(docAbs)) {
+        planPath = `doc/plans/${taskId}_plan.md`;
+      }
+    }
+  } catch {
+    // ignore
+  }
   // OpenCode TUI can be sensitive to very large pasted instructions.
   // Provide a brief excerpt and point to the on-disk plan.
   const td = String(taskDescription || "").trim();
@@ -2590,15 +3293,14 @@ function buildEngineerPrompt(taskDescription, promptSentinel) {
     "你是 Engineer（負責實作）。請遵守 repo 規範：不要在此終端執行 git 指令（git/pytest/ruff 請用 Project terminal）。" +
     ` 任務：請依 ${planPath} 的 SPEC/whitelist 實作；以下為摘要：${excerpt}。` +
     " 請勿自行做 QA；只要完成實作即可。" +
-    " 完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出：\n\n" +
-    "```\n" +
+    " 完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出（不要用 Markdown code block 包住）：\n\n" +
     "[ENGINEER_DONE]\n" +
-    "TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>\n" +
+    `TIMESTAMP=${tsExample}\n` +
     `NONCE=${nonce}\n` +
     `TASK_ID=${taskId}\n` +
     "ENGINEER_RESULT=COMPLETE\n" +
-    "```\n\n" +
-    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。" +
+    "\n" +
+    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。請不要在前後加上其他提示文字或 Markdown code fence。" +
     (promptSentinel ? `\n\n${promptSentinel}` : "")
   );
 }
@@ -2731,18 +3433,32 @@ function buildQaPrompt(round, taskDescription, engineerSummary, promptSentinel) 
   // Idx-030: Updated prompt with 5-line completion format (no line numbers)
   const nonce = workflowLoopState?.sessionNonce || "<nonce>";
   const taskId = workflowLoopState?.idxName || "Idx-XXX";
+  const tsExample = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
   return (
     `你是 QA（第 ${round} 輪）。請審查 Engineer 的變更是否符合 plan/whitelist 與 repo 規範。\n` +
-    "完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出：\n\n" +
-    "```\n" +
+    "請先輸出你的審查內容（可用條列），至少包含：\n" +
+    "- 判定：PASS 或 FAIL\n" +
+    "- 理由：具體指出不符合之處（必要時包含檔案路徑/規範條目）\n" +
+    "- 建議：若 FAIL，提供可行動的修正建議（越具體越好）\n\n" +
+    "最後請輸出 completion tail（不要用 Markdown code block 包住）。\n" +
+    "- PASS：最後 5 個非空白行\n" +
+    "- FAIL：最後 6 個非空白行（第 6 行固定為 FAIL_REASON=...，單行短摘要，建議≤120字）\n\n" +
+    "請精確照抄下方模板（只改值），不要把任何說明文字混進 completion tail：\n\n" +
+    "PASS 模板（最後 5 行）：\n" +
     "[QA_DONE]\n" +
-    "TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>\n" +
+    `TIMESTAMP=${tsExample}\n` +
     `NONCE=${nonce}\n` +
     `TASK_ID=${taskId}\n` +
-    "QA_RESULT=<PASS 或 FAIL>\n" +
-    "```\n\n" +
-    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。\n" +
+    "QA_RESULT=PASS\n\n" +
+    "FAIL 模板（最後 6 行）：\n" +
+    "[QA_DONE]\n" +
+    `TIMESTAMP=${tsExample}\n` +
+    `NONCE=${nonce}\n` +
+    `TASK_ID=${taskId}\n` +
+    "QA_RESULT=FAIL\n" +
+    "FAIL_REASON=<短摘要>\n\n" +
+    "標記區塊請勿輸出編號或多餘文字；完成標記必須是最後輸出。\n" +
     "注意：不要輸出 [ENGINEER_DONE] 或 [FIX_DONE]。\n\n" +
     `任務背景：${taskDescription}\n\n` +
     "Engineer 輸出摘要（供你審查判斷）：\n" +
@@ -2755,6 +3471,7 @@ function buildQaCorrectivePrompt(wrongMarkerType, promptSentinel) {
   // Idx-030 Fix: Update to 5-line format, no line numbers
   const nonce = workflowLoopState?.sessionNonce || "<nonce>";
   const taskId = workflowLoopState?.idxName || "Idx-XXX";
+  const tsExample = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
   const wrongText =
     wrongMarkerType === "ENGINEER_DONE"
@@ -2765,15 +3482,24 @@ function buildQaCorrectivePrompt(wrongMarkerType, promptSentinel) {
 
   return (
     wrongText +
-    "請現在精確輸出以下 5 行作為你的最後 5 行輸出：\n\n" +
-    "```\n" +
+    "請現在精確輸出 completion tail 作為你的最後輸出（不要用 Markdown code block 包住）：\n" +
+    "- PASS：最後 5 個非空白行\n" +
+    "- FAIL：最後 6 個非空白行（第 6 行固定為 FAIL_REASON=...）\n\n" +
+    "（不要用 Markdown code block 包住）\n\n" +
+    "PASS 模板（最後 5 行）：\n" +
     "[QA_DONE]\n" +
-    "TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>\n" +
+    `TIMESTAMP=${tsExample}\n` +
     `NONCE=${nonce}\n` +
     `TASK_ID=${taskId}\n` +
-    "QA_RESULT=<PASS 或 FAIL>\n" +
-    "```\n\n" +
-    "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。" +
+    "QA_RESULT=PASS\n\n" +
+    "FAIL 模板（最後 6 行）：\n" +
+    "[QA_DONE]\n" +
+    `TIMESTAMP=${tsExample}\n` +
+    `NONCE=${nonce}\n` +
+    `TASK_ID=${taskId}\n` +
+    "QA_RESULT=FAIL\n" +
+    "FAIL_REASON=<短摘要>\n\n" +
+    "請勿輸出編號或多餘文字。完成標記必須是最後輸出。" +
     (promptSentinel ? `\n\n${promptSentinel}` : "")
   );
 }
@@ -2782,6 +3508,7 @@ function buildQaCorrectivePrompt(wrongMarkerType, promptSentinel) {
  * Idx-030: Build nudge prompt for Engineer/QA/Fix near-miss completion.
  */
 function buildIdx030NearMissNudgePrompt(phase, nearMiss, expectedNonce, expectedTaskId, promptSentinel) {
+  const tsExample = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const markerName = phase === "ENGINEER" ? "[ENGINEER_DONE]" :
                      phase === "QA" ? "[QA_DONE]" :
                      "[FIX_DONE]";
@@ -2791,22 +3518,24 @@ function buildIdx030NearMissNudgePrompt(phase, nearMiss, expectedNonce, expected
                      `FIX_ROUND=${workflowLoopState.round}`;
 
   const parts = [
-    "你的輸出格式接近正確但不完整或有誤。請重新輸出『精確遵守』以下 5 行格式（必須是你輸出的最後 5 行）：",
+    "你的輸出格式接近正確但不完整或有誤。請重新輸出『精確遵守』以下 completion tail：",
+    "- Engineer/Fix：必須是最後 5 行",
+    "- QA：PASS=最後 5 行；FAIL=最後 6 行（多一行 FAIL_REASON）",
     "",
-    "```",
     `${markerName}`,
-    `TIMESTAMP=<ISO8601-UTC格式：YYYY-MM-DDTHH:mm:ssZ>`,
+    `TIMESTAMP=${tsExample}`,
     `NONCE=${expectedNonce}`,
     `TASK_ID=${expectedTaskId}`,
     `${resultLine}`,
-    "```",
     "",
     "格式要求：",
     "- 每一行必須獨立成行（不要合併）",
     "- TIMESTAMP 必須是 UTC 時區（以 Z 結尾）",
     "- NONCE 必須完全一致",
     "- TASK_ID 必須匹配當前任務",
+    ...(phase === "QA" ? ["- 若 QA_RESULT=FAIL：請在 block 後追加第 6 行：FAIL_REASON=<短摘要>（單行）"] : []),
     "- 請勿輸出編號或多餘文字",
+    "- 請不要在前後加上 Markdown code fence",
   ];
 
   const hints = [];
@@ -2868,18 +3597,18 @@ function buildFixPrompt(round, qaSummary, promptSentinel) {
   // Idx-030: Updated prompt with 5-line completion format (no line numbers)
   const nonce = workflowLoopState?.sessionNonce || "<nonce>";
   const taskId = workflowLoopState?.idxName || "Idx-XXX";
+  const tsExample = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
   return (
     `QA 第 ${round} 輪結果為 FAIL，請依以下 QA 摘要修正：\n\n` +
     qaSummary +
-    "\n\n修正完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出：\n\n" +
-    "```\n" +
+    "\n\n修正完成時請『精確輸出』以下 5 行作為你的最後 5 行輸出（不要用 Markdown code block 包住）：\n\n" +
     "[FIX_DONE]\n" +
-    "TIMESTAMP=<當前UTC時間，格式：YYYY-MM-DDTHH:mm:ssZ>\n" +
+    `TIMESTAMP=${tsExample}\n` +
     `NONCE=${nonce}\n` +
     `TASK_ID=${taskId}\n` +
     `FIX_ROUND=${round}\n` +
-    "```\n\n" +
+    "\n" +
     "請勿輸出編號或多餘文字。完成標記必須是最後 5 個非空白行。" +
     (promptSentinel ? `\n\n${promptSentinel}` : "")
   );
@@ -3208,7 +3937,8 @@ async function workflowTick(cfg) {
     workflowLoopState.qaOffset = nextOffset;
     if (!text) return;
 
-    const cleaned = stripAnsi(text).replace(/\r/g, "\n");
+    // QA log chunks can include ANSI + control bytes; sanitize before sentinel search.
+    const cleaned = sanitizeForMarkerDetection(text);
     const combined = (workflowLoopState.qaMarkerBuf || "") + cleaned;
 
     // Gate marker parsing until we see the end-of-prompt sentinel.
@@ -3221,9 +3951,24 @@ async function workflowTick(cfg) {
       } else {
         const idx = combined.lastIndexOf(sentinel);
         if (idx === -1) {
-          // Keep a larger window pre-sentinel so we don't trim it out under heavy output.
-          workflowLoopState.qaMarkerBuf = combined.slice(-120000);
-          return;
+          // If we already see a real QA completion hint (PASS/FAIL), do not deadlock on
+          // an exact sentinel match — continue parsing to allow workflow progression.
+          // (The prompt template contains "QA_RESULT=<PASS 或 FAIL>", which will NOT match.)
+          const hint = getQaResult(combined);
+          if (!hint) {
+            // Keep a larger window pre-sentinel so we don't trim it out under heavy output.
+            workflowLoopState.qaMarkerBuf = combined.slice(-120000);
+            return;
+          }
+
+          workflowLoopState.qaSeenPromptSentinel = true;
+          appendWorkflowEvent({
+            action: "qa_prompt_sentinel_bypassed",
+            round: workflowLoopState.round,
+            reason: "qa_result_seen_without_sentinel",
+            hint,
+          });
+          workflowLoopState.qaMarkerBuf = combined.slice(-40000);
         }
 
         workflowLoopState.qaSeenPromptSentinel = true;
@@ -3355,6 +4100,7 @@ async function workflowTick(cfg) {
       nonce: completion.nonce,
       taskId: completion.taskId,
       result: qaResult,
+      failReason: qaResult === "FAIL" ? completion.failReason ?? null : undefined,
     });
 
     if (qaResult === "PASS") {
@@ -3377,8 +4123,22 @@ async function workflowTick(cfg) {
     logLine("[workflow] detected QA FAIL (Idx-030 format)");
 
     if (workflowLoopState.round >= workflowLoopState.maxRounds) {
-      stopWorkflowLoop("FAIL (max rounds reached)");
-      return;
+      // 達到最大修正次數時，不直接中止，而是透過 checkFailAndAskUser 輸出
+      // 結構化詢問並將狀態持久化為 "needs_user_input"，供 Coordinator 依 T8 SOP 決策。
+      const qaSummaryForAsk = fs.existsSync(workflowLoopState.qaLogAbs)
+        ? fs.readFileSync(workflowLoopState.qaLogAbs, "utf8")
+        : "";
+      const decision = await checkFailAndAskUser(cfg, {
+        round: workflowLoopState.round,
+        maxRounds: workflowLoopState.maxRounds,
+        idxName: workflowLoopState.idxName,
+        qaSummary: qaSummaryForAsk,
+        qaLogPath: workflowLoopState.qaLogDisplay,
+      });
+      if (decision !== "CONTINUE" || !workflowLoopState.active) return;
+
+      // Allow one more round and proceed to FIX like normal.
+      workflowLoopState.maxRounds = Math.max(workflowLoopState.maxRounds + 1, workflowLoopState.round + 1);
     }
 
     const qaSummary = fs.existsSync(workflowLoopState.qaLogAbs)

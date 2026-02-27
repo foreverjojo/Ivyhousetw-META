@@ -51,7 +51,7 @@ description: 艾薇協調者 (Coordinator) - 負責統籌 /dev 工作流程（�
 > ⚠️ **硬性要求**：Coordinator 注入任務時，必須在指令末尾明確要求：
 > 「完成後請輸出 `[ENGINEER_DONE]` / `[QA_DONE]` / `[FIX_DONE]`」
 >
-> 並要求完成標記採用 Idx-030 五行格式（尾端唯一判定）：
+> 並要求完成標記採用 Idx-030 completion tail 格式（尾端唯一判定；一般為 5 行，QA FAIL 可為 6 行）：
 > ```
 > [ENGINEER_DONE] 或 [QA_DONE] 或 [FIX_DONE]
 > TIMESTAMP=YYYY-MM-DDTHH:mm:ssZ
@@ -59,7 +59,8 @@ description: 艾薇協調者 (Coordinator) - 負責統籌 /dev 工作流程（�
 > TASK_ID=Idx-XXX
 > <角色結果行：ENGINEER_RESULT=COMPLETE | QA_RESULT=PASS/FAIL | FIX_ROUND=N>
 > ```
-> ⚠️ 這五行必須是終端輸出的最後五個非空白行；輸出後不可再追加任何文字。
+> 補充：若 QA 判定 FAIL，建議在 `QA_RESULT=FAIL` 後再追加第 6 行 `FAIL_REASON=<短摘要>`（單行）。
+> ⚠️ completion tail 必須是終端輸出的最後非空白行（Engineer/Fix=最後 5 行；QA PASS=最後 5 行；QA FAIL=最後 6 行）；輸出後不可再追加任何文字。
 > 若工具未輸出 marker，視為未完成，進入 timeout 處理流程。
 
 ### 執行後端策略（主從）
@@ -736,6 +737,405 @@ qa_end: [YYYY-MM-DD HH:mm:ss]
 
 請選擇處理方式或提供指引：
 ```
+
+---
+
+## G) 主動提問 SOP（Ask Questions）
+
+### 概述
+
+Coordinator 在以下 13 個時機（T1~T13）應主動提問，以防止決策空白或流程卡住。
+提問格式需包含：**情境描述**、**已知狀態**、**選項清單**、**預設行為**（若用戶未回應）。
+
+---
+
+### T1 — Task Selection Gate（任務選擇確認）
+
+**觸發**：接收到新任務請求，但任務描述不完整或有歧義。
+
+**提問範本**：
+```markdown
+📌 **Task Selection Gate — 需要確認**
+
+目前任務描述：[描述]
+
+請確認以下資訊：
+1. 任務 ID（Idx-NNN）是否已存在於 Implementation_Plan_index.md？
+2. 此任務是否需要 Meta Expert 介入（涉及 ROAS/CPC/CTR/CPM 計算或 Meta API）？
+3. 預期驗收標準是什麼？
+
+預設（30s 無回應）：暫停等待，不自動啟動 Planner。
+```
+
+---
+
+### T2 — Meta Expert Gate（Meta 專家觸發確認）
+
+**觸發**：Plan 或任務描述中出現 Meta API、ROAS、CPC、CTR、CPM 等關鍵詞。
+
+**提問範本**：
+```markdown
+📊 **Meta Expert Gate — 需要確認**
+
+偵測到任務涉及指標計算或 Meta API。
+
+請確認：
+1. 是否需要 Meta Expert 審核 Plan？（建議：是）
+2. 若是，請觸發 Meta Expert Review 後再進 Tool Selection Gate。
+
+預設：等待用戶確認，不自動觸發 Meta Expert。
+```
+
+---
+
+### T3 — QA Tool Selection（QA 工具選擇）
+
+**觸發**：進入 Tool Selection Gate，需確認 Engineer 工具與 QA 工具不同。
+
+**提問範本**：
+```markdown
+🛠️ **Tool Selection Gate — 需要選擇**
+
+Engineer 已選擇：[engineer_tool]
+
+請選擇 QA 工具（不得與 Engineer 工具相同）：
+1. Codex CLI
+2. OpenCode CLI
+
+⚠️ Cross-QA 規則：qa_tool ≠ last_change_tool
+預設：等待選擇，不自動分配。
+```
+
+---
+
+### T4 — Pre-Engineer Validation（Engineer 啟動前確認）
+
+**觸發**：Plan 已通過 Gate，準備啟動 Engineer，但有未解決的風險或依賴。
+
+**提問範本**：
+```markdown
+⚙️ **Pre-Engineer Validation — 需要確認**
+
+發現以下潛在風險：
+- [風險描述]
+
+請確認：
+1. 是否接受風險並繼續？
+2. 是否需要先解決依賴後再啟動？
+
+預設（無回應）：暫停 Engineer 啟動。
+```
+
+---
+
+### T5 — QA Failure First Attempt（QA 首次失敗）
+
+**觸發**：QA 輸出 `RESULT=FAIL`，round < maxRounds，進入 Fix Loop。
+
+**提問範本**：
+```markdown
+❌ **QA 首次失敗 — Round {round}/{maxRounds}**
+
+任務：{idxName}
+失敗原因摘要：
+{qa_summary_snippet}
+
+已自動啟動 Fix Loop，Engineer 將進行修正。
+
+是否需要在修正前提供額外指引？
+1. 否，讓 Engineer 自行修正（預設）
+2. 是，請輸入補充說明：
+
+預設（10s 無回應）：繼續 Fix Loop。
+```
+
+---
+
+### T6 — QA Failure Pattern Detected（連續失敗模式偵測）
+
+**觸發**：連續 3 輪以上 QA FAIL，且失敗原因相同或高度相似。
+
+**提問範本**：
+```markdown
+⚠️ **連續失敗模式偵測 — Round {round}/{maxRounds}**
+
+任務：{idxName}
+已連續 {consecutive_fails} 輪失敗，失敗原因相似：
+{pattern_description}
+
+建議：
+1. 繼續 Fix Loop（Engineer 重新嘗試）
+2. 暫停並重新檢視 Plan（可能需要 Planner 修正 Spec）
+3. 提供額外診斷資訊
+
+預設（無回應）：繼續 Fix Loop 至 maxRounds。
+```
+
+---
+
+### T7 — Approaching Max Rounds（接近最大輪次警告）
+
+**觸發**：`round >= maxRounds - 2`（距離上限剩 2 輪）且仍為 FAIL。
+
+**提問範本**：
+```markdown
+⏰ **接近最大修正次數警告 — Round {round}/{maxRounds}**
+
+任務：{idxName}
+剩餘修正機會：{maxRounds - round} 輪
+
+目前狀態：QA 仍為 FAIL
+建議提前決策：
+1. 繼續（讓系統跑完剩餘輪次）
+2. 現在中止（避免無效消耗）
+3. 調整策略（提供新的修正方向）
+
+預設（無回應）：繼續至 maxRounds。
+```
+
+---
+
+### T8 — Max Rounds Reached with FAIL（達到最大輪次且失敗）
+
+**觸發**：Orchestrator 輸出 `needs_user_input` 狀態（`/workflow/status` 顯示 `state=needs_user_input`）。
+
+此情境對應 `checkFailAndAskUser()` 函式觸發後的 **Coordinator 決策責任**。
+
+**偵測方式**：
+- Orchestrator 的 logLine 輸出包含 `WORKFLOW REACHED MAX ROUNDS`
+- 事件日誌出現 `"action": "needs_user_input", "reason": "max_rounds_reached"`
+- `/workflow/status` API 回傳 `state=needs_user_input`
+- `/workflow/status` 的 `pendingDecision` 欄位非 null（包含 `decisionId`）
+
+**提問範本**：
+```markdown
+🚨 **Workflow 已達最大修正次數（T8 決策點）**
+
+任務：{idxName}
+Round：{round} / {maxRounds}
+狀態：QA FAIL（needs_user_input）
+DecisionId：{pendingDecision.decisionId}
+QA Log 路徑：{qaLogPath}
+QA 輸出摘要（前 500 字）：
+{qaSummarySnippet}
+
+⚠️ Workflow 已暫停，需要 Coordinator 決策：
+
+**選項：**
+1. **CONTINUE** — 原地繼續第 {round+1} 輪修正（同一個 workflow loop 立刻續跑）
+2. **STOP（預設）** — 中止任務（workflow 轉為 needs_user_input 並停止）
+   → 記錄失敗原因，生成 Idx-XXX_log.md，標記任務為 FAILED
+3. **MORE_INFO** — 先輸出更多診斷資訊（extension 會輸出 QA log tail），之後再選 CONTINUE 或 STOP
+
+**決策提交方式（Idx-041）**：
+1) 先取 decisionId：
+```bash
+python scripts/sendtext_bridge_client.py workflow-status
+```
+2) 提交決策（decisionId 必須匹配 pendingDecision.decisionId）：
+```bash
+# 繼續
+python scripts/sendtext_bridge_client.py workflow-decision --decision CONTINUE --decision-id <decisionId>
+
+# 中止
+python scripts/sendtext_bridge_client.py workflow-decision --decision STOP --decision-id <decisionId>
+
+# 更多資訊（可加自由輸入描述想看什麼）
+python scripts/sendtext_bridge_client.py workflow-decision --decision MORE_INFO --decision-id <decisionId> --free-text "想看更多診斷"
+```
+
+**後續決策流程**：
+- 若選 STOP：Coordinator 生成 Log，在 Implementation_Plan_index.md 標記 FAILED
+- 若選 CONTINUE：workflow loop 原地繼續；必要時再回到 Planner 修正 Spec
+- 若選 MORE_INFO：等待診斷輸出後，取新的 decisionId 再提交第二次決策
+
+逾時：workflow 會安全停止並持久化 `needs_user_input`。
+```
+
+---
+
+### T9 — Unexpected Log Pattern（異常日誌模式）
+
+**觸發**：工作流事件日誌中出現非預期的 action 或 state（例如 `send_no_ack` 連續出現、`phase` 異常跳轉）。
+
+**提問範本**：
+```markdown
+🔍 **異常日誌模式偵測 — 需要確認**
+
+偵測到異常事件：
+{anomaly_description}
+
+建議：
+1. 忽略並繼續（若視為已知的暫時性問題）
+2. 暫停並人工檢視事件日誌
+3. 強制重啟 Workflow
+
+預設（無回應）：暫停並等待確認。
+```
+
+---
+
+### T10 — User Interruption / Timeout（用戶中斷或逾時）
+
+**觸發**：用戶主動中斷（呼叫 `stopWorkflowLoop`）或 Workflow 因 `workflowTimeoutMs` 超時停止。
+
+**提問範本**：
+```markdown
+⏸️ **Workflow 已中斷**
+
+中斷原因：{reason}
+中斷時點：Round {round}/{maxRounds}，Phase：{phase}
+
+請確認後續處置：
+1. 從中斷點繼續（重啟 Workflow，保留當前 round）
+2. 從頭重啟（重設 round 為 1）
+3. 放棄此任務（記錄為 CANCELLED）
+
+預設（無回應）：記錄為 CANCELLED。
+```
+
+---
+
+### T11 — Post-Success Validation（成功後驗收確認）
+
+**觸發**：QA 全部 pass，Coordinator 準備 commit。
+
+**提問範本**：
+```markdown
+✅ **QA PASS — 任務完成確認**
+
+任務：{idxName}
+Round：{round}/{maxRounds}
+QA 結果：PASS
+
+所有 QA 已 pass。是否確認提交變更？
+
+審核清單：
+  ☐ 代碼符合 style guide
+  ☐ 所有測試通過
+  ☐ 沒有洩漏敏感資訊
+
+請確認：
+1. 是否準備生成 Idx-XXX_log.md？
+2. 是否執行 git commit？（Conventional Commits 格式）
+3. 是否有額外的驗收項目需要確認？
+
+預期回應：yes / reject（reject 則停止 commit、進入修正迴圈）
+預設（無回應）：生成 Log，等待用戶確認後再 commit。
+```
+
+---
+
+### T12 — Escalation Required（需要升級處理）
+
+**觸發**：發現需要超出計劃範圍的改動、或涉及安全性問題，或 Terminal 注入連續失敗 3 次。
+
+**提問範本**：
+```markdown
+🚨 **Escalation Required**
+
+檢測到範圍外修改：{files}。原計劃範圍：{whitelist}。
+
+選項：
+  A) 拒絕此修改，回滾
+  B) 擴展計劃白名單（需用戶同意）
+  C) 停止此工作流、拆成新計劃
+
+預期回應：A / B / C
+```
+
+---
+
+### T13 — Decision Tree for Complex Failures（複雜失敗決策樹）
+
+**觸發**：QA FAIL 且失敗涉及多因素（例如 Engineer 成功、但 QA 失敗於「整合測試」）。
+
+**決策樹**：
+```
+QA FAIL（複雜）
+│
+├─ 詢問 1：「是 Engineer 代碼問題或整合環境問題？」
+│   ├─ Engineer 問題 → 回給 Engineer 修正（Fix Loop）
+│   └─ 環境問題 → 要求提供環境日誌
+│
+└─ 詢問 2：「是需要 DB migration / 快取清除？」
+    ├─ 是 → 通知 Engineer 加入前置步驟
+    └─ 否 → 繼續 QA
+```
+
+**進階分類（多因素失敗）**：
+```
+QA FAIL（架構/資安/測試覆蓋）
+│
+├─ 失敗原因 = 架構問題？
+│   ├─ 是 → T13-A：回到 Planner 重新 Spec → 新 Plan → 重啟 Engineer
+│   └─ 否 ↓
+│
+├─ 失敗原因 = 資安問題（API Key 洩漏等）？
+│   ├─ 是 → T13-B：立即中止，通知用戶，審查並修正後重啟
+│   └─ 否 ↓
+│
+├─ 失敗原因 = 測試覆蓋不足？
+│   ├─ 是 → T13-C：Engineer 補充測試，QA 重新審查
+│   └─ 否 ↓
+│
+└─ 其他失敗 → T13-D：標準 Fix Loop，直至 maxRounds（觸發 T8）
+```
+
+**提問範本（T13-A 架構問題）**：
+```markdown
+🏗️ **複雜失敗 — 架構層級問題**
+
+QA 發現架構問題：{architecture_issue}
+
+建議重新規劃，選項：
+1. 回到 Planner 修正 Spec（推薦）
+2. Engineer 嘗試局部修正（風險較高）
+3. 中止任務，記錄為 REQUIRES_REDESIGN
+
+預設（無回應）：等待用戶確認。
+```
+
+---
+
+### SOP 執行指南
+
+**互動模式**（推薦 dev-team 使用）：
+- Coordinator 在詢問點暫停，輸出提示到終端。
+- User 透過終端、VS Code Command Palette、或聊天窗口回應。
+- Coordinator 解析回應、做決策、繼續 workflow。
+
+**自動模式**（推薦 CI 使用）：
+- 預設行為：fail → escalate / stop（避免無人值守時卡住）。
+- 可配置環境變數或 config 檔覆蓋預設（`workflowAskMode: "batch"`）。
+
+**日誌記錄**：
+- 每次詢問與回應應記錄到 `.agent/logs/Idx-XXX_conversation.txt`（新檔案）。
+- 格式：`[TIMESTAMP] Q: {question} | User: {response} | Decision: {outcome}`
+
+**優先級速查表**：
+
+| 時機 | 對應 Coordinator 行動 | 優先級 |
+|------|----------------------|--------|
+| T1 | 暫停，等待任務釐清 | 高 |
+| T2 | 暫停，等待 Meta Expert 確認 | 高 |
+| T3 | 暫停，等待 QA 工具選擇 | 高 |
+| T4 | 暫停，確認風險後再啟動 | 中 |
+| T5 | 告知用戶，繼續 Fix Loop | 中 |
+| T6 | 暫停，評估是否需要 Planner 介入 | 高 |
+| T7 | 警告用戶，等待提前決策 | 中 |
+| **T8** | **暫停，等待用戶決策（CONTINUE/STOP/MORE_INFO）** | **最高** |
+| T9 | 暫停，等待確認 | 高 |
+| T10 | 記錄中斷，等待後續指示 | 中 |
+| T11 | 確認驗收，準備 commit | 低 |
+| **T12** | **Escalation，等待用戶處理（A/B/C）** | **最高** |
+| T13 | 依決策樹引導用戶選擇 | 高 |
+
+> **重要**：T8（needs_user_input）是 Orchestrator 主動觸發的唯一狀態持久化點。
+> Coordinator **必須**在偵測到此狀態後立即執行 T8 提問範本，不得自動決策。
+>
+> **安全原則**：若用戶未在詢問時回應，預設行為是 **STOP**（安全遠優於自動化繼續修正導致無限迴圈）。
+> 詢問輸出中應過濾敏感資訊（API key、auth token），可使用 masked 格式。
 
 ---
 

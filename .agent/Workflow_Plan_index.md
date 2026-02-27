@@ -45,6 +45,7 @@
 | Idx-034 | 固定終端完整 /dev 流程演練（native-primary） | P1 | ✅ 已完成 | codex-cli | PASS | 2026-02-17-v1 | `.agent/logs/Idx-034_log.md` | Demo run：固定 Codex/OpenCode 終端完成 GOAL→PLAN Gate→EXECUTE→QA→LOG |
 | Idx-035 | 固定終端可視化 /dev 流程演練（terminal 可見 STEP） | P1 | ✅ 已完成 | codex-cli | PASS | 2026-02-17-v1 | `.agent/logs/Idx-035_log.md` | Visual run：terminal 顯示 STEP 1~5，固定 Codex/OpenCode 終端完成 marker |
 | Idx-038 | Workflow Loop：注入穩定性修復（submit/不重啟/script 汙染防護） | P0 | ✅ 已完成 | opencode | PASS | 2026-02-20-v1 | `.agent/logs/Idx-038_log.md` | VSIX 0.0.10：PASS 後立即 stop，狀態不再卡 running |
+| Idx-041 | Workflow Loop：QA FAIL pending decision + /workflow/decision API（移除 QuickPick） | P0 | ⚠️ 有風險 | GitHub Copilot | PASS WITH RISK | 2026-02-22-v1 | `.agent/logs/Idx-041_log.md` | Plan：`.agent/plans/Idx-041_plan.md`；CONTINUE 原地續跑，不再使用 showQuickPick |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
