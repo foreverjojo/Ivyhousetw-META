@@ -1,0 +1,1 @@
+https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=971489052398-9n8osn9b5a9d9dq15nff93tdgep5ustc.apps.googleusercontent.com&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.file&state=k11gCT79sdE8DRw9NZona2jOY4fjd9&access_type=offline&include_granted_scopes=true

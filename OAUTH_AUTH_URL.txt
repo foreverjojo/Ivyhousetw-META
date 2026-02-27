@@ -1,0 +1,22 @@
+================================================================================
+🔐 Google OAuth 授權網址
+================================================================================
+
+請在網頁瀏覽器中打開此網址：
+
+https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=971489052398-9n8osn9b5a9d9dq15nff93tdgep5ustc.apps.googleusercontent.com&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.file&state=YhyhxFvdcM8IwxEBnktSaRpE0thu5x&access_type=offline&include_granted_scopes=true
+
+================================================================================
+操作步驟：
+================================================================================
+1. 複製上面的網址
+2. 在瀏覽器中打開
+3. 用你的 Google 帳號登入
+4. 點擊「授權」按鈕
+5. 如果瀏覽器重導到 http://localhost:8088/?code=xxxxx
+   複製 code=後面的部分（就是授權碼）
+6. 貼到下一步要求的位置
+
+授權成功後，你會看到一個包含 code= 的網址
+例如：http://localhost:8088/?code=4/0AZa8xxxxx&state=xxxxx
+你需要複製的是 code= 後面的部分，直到 & 為止
