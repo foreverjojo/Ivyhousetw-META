@@ -1,24 +1,60 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "consultant_notes.meta.v1",
+  "title": "consultant_notes.v1",
   "type": "object",
   "additionalProperties": true,
-  "required": ["version", "week_id", "timezone", "generated_at", "notes"],
+  "required": ["consultants_version", "week_id", "date_range", "consultant_A", "consultant_B", "consultant_C"],
   "properties": {
-    "version": { "type": "string", "const": "consultant_notes.meta.v1" },
+    "consultants_version": { "type": "string", "const": "consultants.v1" },
     "week_id": { "type": "string", "minLength": 3 },
-    "timezone": { "type": "string", "const": "Asia/Taipei" },
-    "generated_at": { "type": "string", "minLength": 10 },
-    "notes": {
+    "date_range": { "type": "string", "minLength": 3 },
+    "avg_daily_spend_twd_calc": { "type": "number" },
+
+    "consultant_A": { "$ref": "#/$defs/consultant_note" },
+    "consultant_B": { "$ref": "#/$defs/consultant_note" },
+    "consultant_C": { "$ref": "#/$defs/consultant_note" }
+  },
+  "$defs": {
+    "consultant_note": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["performance_marketing", "ecommerce", "finance", "fulfillment", "gm_coo"],
+      "required": ["consultant_key", "summary", "overall_budget_action"],
       "properties": {
-        "performance_marketing": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
-        "ecommerce": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
-        "finance": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
-        "fulfillment": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
-        "gm_coo": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+        "consultant_key": { "type": "string", "minLength": 1 },
+        "summary": {
+          "type": ["array", "string"],
+          "items": { "type": ["string", "object"] }
+        },
+        "opportunities": {
+          "type": ["array", "string"],
+          "items": { "type": ["string", "object"] }
+        },
+        "risks": {
+          "type": ["array", "string"],
+          "items": { "type": ["string", "object"] }
+        },
+        "overall_budget_action": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["action"],
+          "properties": {
+            "action": { "type": "string", "enum": ["increase", "hold", "decrease"] },
+            "change_pct": { "type": "integer" },
+            "rationale": { "type": "string" }
+          }
+        },
+        "adset_ads_actions": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "next_7d_actions": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "questions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     }
   }

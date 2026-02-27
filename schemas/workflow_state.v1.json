@@ -1,64 +1,42 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "workflow_state.meta_weekly.v1",
+  "title": "workflow_state.v1",
   "type": "object",
   "additionalProperties": true,
-  "required": ["version", "week_id", "date_range", "timezone", "kpi", "guardrail_check", "department_actions", "risks", "validation_plan"],
+  "required": [
+    "schema_version",
+    "week_id",
+    "date_range",
+    "kpi_snapshot",
+    "decisions",
+    "guardrail_check",
+    "consultant_summary",
+    "department_actions",
+    "risks",
+    "validation_plan"
+  ],
   "properties": {
-    "version": { "type": "string", "const": "workflow_state.meta_weekly.v1" },
+    "schema_version": { "type": "string", "const": "workflow_state.v1" },
     "week_id": { "type": "string", "minLength": 3 },
-    "timezone": { "type": "string", "const": "Asia/Taipei" },
-    "date_range": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["start", "end"],
-      "properties": {
-        "start": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-        "end": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
-      }
-    },
-    "kpi": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": ["meta_spend", "meta_website_purchase_value", "meta_website_purchases", "meta_roas"],
-      "properties": {
-        "meta_spend": { "type": "number", "minimum": 0 },
-        "meta_website_purchases": { "type": "number", "minimum": 0 },
-        "meta_website_purchase_value": { "type": "number", "minimum": 0 },
-        "meta_roas": { "type": "number", "minimum": 0 }
-      }
-    },
-    "guardrail_check": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": ["tier1", "tier2"],
-      "properties": {
-        "tier1": { "type": "object", "additionalProperties": true },
-        "tier2": { "type": "object", "additionalProperties": true }
-      }
+    "date_range": { "type": "string", "minLength": 3 },
+    "kpi_snapshot": { "type": "object", "additionalProperties": true },
+    "decisions": { "type": "array", "items": { "type": ["string", "object"] }, "minItems": 1 },
+    "guardrail_check": { "type": "object", "additionalProperties": true },
+    "consultant_summary": {
+      "anyOf": [
+        { "type": "array", "items": { "type": ["string", "object"] } },
+        { "type": "object", "additionalProperties": true },
+        { "type": "string" }
+      ]
     },
     "department_actions": {
       "type": "object",
-      "additionalProperties": true,
-      "required": ["gm_coo", "finance", "ecommerce", "marketing", "fulfillment"],
-      "properties": {
-        "gm_coo": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 1 },
-        "finance": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 1 },
-        "ecommerce": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 1 },
-        "marketing": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 1 },
-        "fulfillment": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 1 }
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "object", "additionalProperties": true }
       }
     },
-    "risks": { "type": "array", "items": { "type": "object", "additionalProperties": true }, "minItems": 1 },
-    "validation_plan": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": ["day3", "day7", "day14"],
-      "properties": {
-        "day3": { "type": "object", "additionalProperties": true },
-        "day7": { "type": "object", "additionalProperties": true },
-        "day14": { "type": "object", "additionalProperties": true }
-      }
-    }
+    "risks": { "type": "array", "items": { "type": ["object", "string"], "additionalProperties": true }, "minItems": 1 },
+    "validation_plan": { "type": "object", "additionalProperties": true }
   }
 }
