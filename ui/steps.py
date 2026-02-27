@@ -241,9 +241,13 @@ def _trigger_gdrive_backup(
     觸發條件：
       - 環境變數 ENABLE_GDRIVE_WEEKLY_BACKUP=1
       - CLOUD_MEDIA_PROVIDER=gdrive
-      - GOOGLE_DRIVE_FOLDER_ID 已設定
+      - GOOGLE_DRIVE_FOLDER_ID 已設定（或可從 Secret Manager 取得）
 
     失敗不阻斷主流程（只 warning）。
+
+    雲端環境（GOOGLE_CLOUD_PROJECT 存在）下：
+      - 若 folder_id 缺失，嘗試從 Secret Manager 讀取後再決定是否 skip。
+      - token 的 Secret Manager 優先讀取已在 get_gdrive_access_token() 中處理（Idx-045）。
     """
     enable_backup = os.getenv("ENABLE_GDRIVE_WEEKLY_BACKUP", "").strip() == "1"
     if not enable_backup:
@@ -260,6 +264,39 @@ def _trigger_gdrive_backup(
             provider=cfg.provider,
         )
         return
+
+    # 若 folder_id 缺失且在雲端，嘗試從 Secret Manager 取得後 reload config
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if not cfg.google_drive_folder_id and project_id:
+        try:
+            from google.cloud import secretmanager
+
+            client = secretmanager.SecretManagerServiceClient()
+            name = f"projects/{project_id}/secrets/GOOGLE_DRIVE_FOLDER_ID/versions/latest"
+            response = client.access_secret_version(request={"name": name})
+            sm_folder_id = response.payload.data.decode("utf-8").strip()
+
+            if not sm_folder_id:
+                logger.warning(
+                    "Drive 備份：Secret Manager 的 GOOGLE_DRIVE_FOLDER_ID 為空，略過備份",
+                    week_id=week_id,
+                )
+                return
+
+            os.environ["GOOGLE_DRIVE_FOLDER_ID"] = sm_folder_id
+            cfg = load_cloud_config()  # reload 讓 cfg 取用新的 folder_id
+            logger.info(
+                "Drive 備份：已從 Secret Manager 取得 GOOGLE_DRIVE_FOLDER_ID，繼續備份流程",
+                week_id=week_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Drive 備份：Secret Manager 讀取 GOOGLE_DRIVE_FOLDER_ID 失敗，略過備份（不阻斷主流程）。"
+                " 若為權限不足（403），請確認服務 SA 已綁定 roles/secretmanager.secretAccessor。",
+                week_id=week_id,
+                error_type=type(exc).__name__,
+            )
+            return
 
     if not cfg.google_drive_folder_id:
         logger.warning(

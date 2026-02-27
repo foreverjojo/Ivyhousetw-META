@@ -5,11 +5,14 @@
   - 自動在雲端建立/維護子資料夾結構 (`reports/`, `assets/images/`, `assets/videos/`)
   - 掃描 `attached_assets/` 並執行命名、上傳、記錄
   - 上傳後寫入 upload_manifest.json 供回滾與追蹤
+  - 雲端環境（GOOGLE_CLOUD_PROJECT）下優先從 Secret Manager 取最新 Access Token
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +26,8 @@ from core.cloud_config import CloudConfig, load_cloud_config
 from core.config import MEDIA_ASSETS_DIR
 from scripts.media_scanner import scan_media_assets
 from utils.naming import build_media_filename, compute_sha256_8_from_file, infer_material_type
+
+logger = logging.getLogger(__name__)
 
 # Manifest 路徑
 UPLOAD_MANIFEST_PATH = Path("upload_manifest.json")
@@ -44,7 +49,20 @@ class UploadResult:
 
 
 def get_gdrive_access_token(cfg: CloudConfig) -> str:
-    """取得 Google Drive Access Token (優先使用 SA JSON，其次為運作環境變數)。"""
+    """
+    取得 Google Drive Access Token。
+
+    優先序：
+    1. SA JSON（google_application_credentials）：最穩定，維持原本流程。
+    2. 雲端環境（GOOGLE_CLOUD_PROJECT 存在）且未使用 SA JSON：
+       每次優先從 Secret Manager 取最新 access_token（確保 Idx-044 刷新的 token 立即生效）。
+       若讀取失敗（含權限不足 403）：輸出可行動 warning，fallback 至環境變數 token。
+    3. 環境變數 token（cfg.google_drive_access_token）：本機 / fallback 路徑。
+    4. 若三者皆無：raise RuntimeError。
+
+    資安要求：任何 log 絕不輸出 token 值。
+    """
+    # 路徑 1：SA JSON 優先（最穩定，不需 Secret Manager）
     if cfg.google_application_credentials:
         scopes = ["https://www.googleapis.com/auth/drive.file"]
         creds = service_account.Credentials.from_service_account_file(
@@ -53,6 +71,34 @@ def get_gdrive_access_token(cfg: CloudConfig) -> str:
         creds.refresh(Request())
         return creds.token
 
+    # 路徑 2：雲端環境 → 優先從 Secret Manager 取最新 token
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if project_id:
+        try:
+            from google.cloud import secretmanager
+
+            client = secretmanager.SecretManagerServiceClient()
+            name = (
+                f"projects/{project_id}/secrets/GOOGLE_DRIVE_ACCESS_TOKEN/versions/latest"
+            )
+            response = client.access_secret_version(request={"name": name})
+            sm_token = response.payload.data.decode("utf-8").strip()
+            if sm_token:
+                logger.info("Drive 認證：已從 Secret Manager 取得最新 Access Token（不記錄 token）")
+                return sm_token
+            logger.warning(
+                "Secret Manager 的 GOOGLE_DRIVE_ACCESS_TOKEN 為空，fallback 至環境變數。"
+                " 請確認 secret 已有可用版本。"
+            )
+        except Exception as exc:
+            logger.warning(
+                "Secret Manager 讀取 GOOGLE_DRIVE_ACCESS_TOKEN 失敗，fallback 至環境變數。"
+                " 若為權限不足（403），請確認執行服務的 Service Account"
+                " 已綁定 roles/secretmanager.secretAccessor。",
+                error_type=type(exc).__name__,
+            )
+
+    # 路徑 3：環境變數 token（本機 / 雲端 fallback）
     if cfg.google_drive_access_token:
         return cfg.google_drive_access_token
 

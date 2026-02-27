@@ -31,6 +31,8 @@
 | Idx-039 | OpenRouter timeout 重試 + 顧問失敗即中止（先 backup model、仍 timeout 才停止） | P0 | ✅ 已完成 | OpenCode | PASS | 2026-02-23-v1 | `doc/logs/Idx-039_log.md` | Plan：`doc/plans/Idx-039_plan.md`；commit `10e05c2` |
 | Idx-040 | meeting.md 改 A~E 版型 + decisions fallback 去重 | P0 | ⏳ 待處理 | OpenCode | TBD | 2026-02-24-v1 | pending | Plan：`doc/plans/Idx-040_plan.md` |
 | Idx-043 | Google Drive 每週備份 + Drive 端 12 週保留（只移到 Trash） | P0 | ✅ 已完成 | OpenCode | PASS | 2026-02-25-v1 | pending | Plan：`doc/plans/Idx-043_plan.md` |
+| Idx-044 | Google Cloud OAuth Token 自動化部署 | P0 | ✅ 已完成 | OpenCode | PASS | 2026-02-26-v1 | `doc/logs/Idx-044_log.md` | Cloud Function + Scheduler + Secret Manager；端到端刷新已驗證 |
+| Idx-045 | Step F Drive 備份：每次讀取 Secret Manager 最新 Access Token | P0 | ✅ 已完成 | OpenCode | TBD | 2026-02-27-v1 | pending | Plan：`doc/plans/Idx-045_plan.md`；銜接 Idx-044 token 刷新 |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)
