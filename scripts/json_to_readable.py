@@ -12,6 +12,196 @@
 from typing import Any
 
 
+def _looks_like_consultant_task_v1(note: dict[str, Any]) -> bool:
+    if not isinstance(note, dict):
+        return False
+    for k in [
+        "overall_budget_action",
+        "adset_ads_actions",
+        "next_7d_actions",
+        "opportunities",
+        "questions",
+    ]:
+        if k in note:
+            return True
+    return False
+
+
+def _safe_text(v: Any) -> str:
+    s = "" if v is None else str(v)
+    return s.strip()
+
+
+def _pick_text(item: Any) -> str:
+    if item is None:
+        return ""
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, dict):
+        for k in ["text", "point", "item", "summary", "conclusion", "why", "rationale"]:
+            t = _safe_text(item.get(k))
+            if t:
+                return t
+        return _safe_text(item)
+    return _safe_text(item)
+
+
+def _as_lines(value: Any, *, max_items: int = 8) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        t = value.strip()
+        return [t] if t else []
+    if isinstance(value, list):
+        out: list[str] = []
+        for it in value[:max_items]:
+            t = _pick_text(it)
+            if t:
+                out.append(t)
+        return out
+    t = _pick_text(value)
+    return [t] if t else []
+
+
+def _render_consultant_task_v1(note: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+
+    summary = _as_lines(note.get("summary"), max_items=6)
+    if summary:
+        lines.append("### 結論摘要")
+        for s in summary:
+            lines.append(f"- {s}")
+        lines.append("")
+
+    opp = _as_lines(note.get("opportunities"), max_items=6)
+    if opp:
+        lines.append("### 擴量 / 優化機會")
+        for s in opp:
+            lines.append(f"- {s}")
+        lines.append("")
+
+    oba = note.get("overall_budget_action")
+    if isinstance(oba, dict) and oba:
+        action = _safe_text(oba.get("action"))
+        change_pct = oba.get("change_pct")
+        rationale = _safe_text(oba.get("rationale"))
+        headline_parts = [p for p in [action, f"{change_pct}%" if change_pct is not None else ""] if p]
+        headline = " ".join(headline_parts) if headline_parts else "（未提供）"
+        lines.append("### 整體日預算動作（全帳戶平均每日花費節奏）")
+        lines.append(f"- 建議：{headline}")
+        if rationale:
+            lines.append(f"- 依據：{rationale}")
+        lines.append("")
+
+    actions = note.get("adset_ads_actions")
+    if isinstance(actions, list) and actions:
+        lines.append("### Adset / Ad 層級動作")
+        for it in actions[:10]:
+            if not isinstance(it, dict):
+                t = _pick_text(it)
+                if t:
+                    lines.append(f"- {t}")
+                continue
+            level = _safe_text(it.get("level"))
+            name = _safe_text(it.get("name"))
+            action = _safe_text(it.get("action"))
+            why = _safe_text(it.get("why"))
+            kpi = _safe_text(it.get("kpi"))
+            stoploss = _safe_text(it.get("stoploss"))
+
+            head = " ".join([p for p in [f"[{level}]" if level else "", name, action] if p]).strip()
+            if not head:
+                head = _safe_text(it)
+            if not head:
+                continue
+            tail_parts = []
+            if why:
+                tail_parts.append(f"Why：{why}")
+            if kpi:
+                tail_parts.append(f"KPI：{kpi}")
+            if stoploss:
+                tail_parts.append(f"止損：{stoploss}")
+            tail = "；".join(tail_parts)
+            lines.append(f"- {head}" + (f"（{tail}）" if tail else ""))
+        lines.append("")
+
+    next7 = note.get("next_7d_actions")
+    if isinstance(next7, list) and next7:
+        lines.append("### 接下來 7 天待辦")
+        for it in next7[:6]:
+            if not isinstance(it, dict):
+                t = _pick_text(it)
+                if t:
+                    lines.append(f"- {t}")
+                continue
+            task = _safe_text(it.get("task") or it.get("title"))
+            owner = _safe_text(it.get("owner_role") or it.get("owner"))
+            deliverable = _safe_text(it.get("deliverable"))
+            due = _safe_text(it.get("due"))
+            kpi = _safe_text(it.get("kpi"))
+            stoploss = _safe_text(it.get("stoploss"))
+            why = _safe_text(it.get("why"))
+            head = "｜".join([p for p in [owner, task] if p]) or task or _safe_text(it)
+            if not head:
+                continue
+            extras = []
+            if deliverable:
+                extras.append(f"交付物：{deliverable}")
+            if due:
+                extras.append(f"截止：{due}")
+            if kpi:
+                extras.append(f"KPI：{kpi}")
+            if stoploss:
+                extras.append(f"止損：{stoploss}")
+            if why:
+                extras.append(f"Why：{why}")
+            lines.append(f"- {head}" + (f"（{'；'.join(extras)}）" if extras else ""))
+        lines.append("")
+
+    risks = note.get("risks")
+    if isinstance(risks, list) and risks:
+        lines.append("### 風險與備援")
+        for it in risks[:4]:
+            if not isinstance(it, dict):
+                t = _pick_text(it)
+                if t:
+                    lines.append(f"- {t}")
+                continue
+            risk = _safe_text(it.get("risk") or it.get("description"))
+            prob = _safe_text(it.get("probability"))
+            impact = _safe_text(it.get("impact"))
+            mitigation = _safe_text(it.get("mitigation"))
+            alt = _safe_text(it.get("alternative"))
+            head = risk or _safe_text(it)
+            if not head:
+                continue
+            tail = "；".join(
+                [
+                    p
+                    for p in [
+                        f"機率：{prob}" if prob else "",
+                        f"影響：{impact}" if impact else "",
+                        f"緩解：{mitigation}" if mitigation else "",
+                        f"替代：{alt}" if alt else "",
+                    ]
+                    if p
+                ]
+            )
+            lines.append(f"- {head}" + (f"（{tail}）" if tail else ""))
+        lines.append("")
+
+    qs = note.get("questions")
+    if isinstance(qs, list) and qs:
+        lines.append("### 下次週會要確認")
+        for q in qs[:6]:
+            t = _pick_text(q)
+            if t:
+                lines.append(f"- {t}")
+        lines.append("")
+
+    return lines
+
+
 def render_skeleton_insight() -> str:
     """生成 Step C 的骨架屏（Skeleton Screen）"""
     return """
@@ -221,6 +411,11 @@ def render_consultant_note(role: str, note: dict[str, Any]) -> str:
         return f"{info['icon']} **{info['name']}**\n\n⚠️ 分析失敗：{note['error']}"
 
     lines = [f"## {info['icon']} {info['name']}\n", f"_專注：{info['focus']}_\n"]
+
+    # 新版顧問輸出（consultant_task.v1）：優先渲染，避免舊 renderer 欄位對不上
+    if _looks_like_consultant_task_v1(note):
+        lines.extend(_render_consultant_task_v1(note))
+        return "\n".join(lines).rstrip() + "\n"
 
     # 根據不同顧問提取不同欄位
     if role == "A":

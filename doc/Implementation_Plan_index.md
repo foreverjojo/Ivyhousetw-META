@@ -2,7 +2,7 @@
 
 ## 🎯 當前狀態：Phase 4 Stage 2 完成，Meta V2 核心整合達成 (100%)
 
-**最後更新**：2026-01-18
+**最後更新**：2026-02-20
 
 ---
 
@@ -25,6 +25,8 @@
 | Idx-008 | 實現 Plan Summary + 完成後刪除 plan.md | P1 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v5 | `doc/logs/Idx-008_log.md` | log template 加入 summary 區段 |
 | Idx-016 | Trace ID 追蹤（Correlation ID） | P1 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `.agent/logs/Idx-016_log.md` | core.tracing + logger trace_id（logs 已遷移至 .agent/） |
 | Idx-017 | Implementation Plan 移除 MCP Roadmap | P2 | ✅ 已完成 | OpenCode | PASS | 2026-01-18-v1 | `.agent/logs/Idx-017_log.md` | Plan 不再以 MCP 作為 roadmap 概念（logs 已遷移至 .agent/） |
+| Idx-036 | Stage 4：三顧問交叉審核（E2）- 規格/Schema/Prompt | P1 | ⏳ 待處理 | T.B.D. | T.B.D. | 2026-02-20-v1 | （尚未產出） | Plan：`doc/plans/Idx-036_plan.md` |
+| Idx-037 | Stage 4：三顧問交叉審核（E2）- Pipeline/UI/Moderator 整合與測試 | P1 | ⏳ 待處理 | T.B.D. | T.B.D. | 2026-02-20-v1 | （尚未產出） | Plan：`doc/plans/Idx-037_plan.md` |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)

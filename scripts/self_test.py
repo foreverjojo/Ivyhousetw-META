@@ -68,13 +68,22 @@ def expect_pass(name: str, instance: Any, schema_path: Path) -> None:
 
 
 def expect_fail(
-    name: str, instance: Any, schema_path: Path, must_contain: str | None = None
+    name: str,
+    instance: Any,
+    schema_path: Path,
+    must_contain: str | list[str] | None = None,
 ) -> None:
     schema = load_json(schema_path)
     errs = validate_instance(instance, schema)
     if not errs:
         raise AssertionError(f"[FAIL] {name} should FAIL but passed")
-    if must_contain and not any(must_contain in e for e in errs):
+    if isinstance(must_contain, list):
+        if must_contain and not any(any(m in e for m in must_contain) for e in errs):
+            raise AssertionError(
+                f"[FAIL] {name} failed but error did not contain any of {must_contain}.\nErrors:\n- "
+                + "\n- ".join(errs)
+            )
+    elif must_contain and not any(must_contain in e for e in errs):
         raise AssertionError(
             f"[FAIL] {name} failed but error did not contain '{must_contain}'.\nErrors:\n- "
             + "\n- ".join(errs)
@@ -308,63 +317,127 @@ def fixture_inputs_snapshot_v3() -> dict[str, Any]:
 
 def fixture_report_insights() -> dict[str, Any]:
     return {
-        "version": "report_insights.meta.v1",
+        "insights_version": "insights.v1",
         "week_id": "2025-W49",
-        "timezone": "Asia/Taipei",
-        "generated_at": "2025-12-10 10:00:00",
-        "date_range": {"start": "2025-12-04", "end": "2025-12-09"},
-        "kpi": {
-            "spend_twd": 150.0,
-            "website_purchases": 2,
-            "website_purchase_value": 800.0,
-            "roas": 5.3333,
-            "purchases": 2,
-            "purchase_value": 800.0,
+        "date_range": "2025-12-04~2025-12-09",
+        "executive_summary": [
+            "ROAS 表現良好（僅示意；實際數字須引用輸入 report_summary）",
+            "素材組合 A 相對優於 B（僅示意）",
+            "建議先補齊缺失欄位再擴量（僅示意）",
+        ],
+        "what_worked": ["Top 組合共同點：受眾更聚焦（示意）"],
+        "what_didnt": ["Worst 組合共同點：頻次偏高（示意）"],
+        "diagnostics": {
+            "traffic": "流量：CTR/CPM 依輸入判讀（示意）",
+            "conversion": "轉換：CPA/ROAS 依輸入判讀（示意）",
+            "creative": "素材：以 top/worst ads 觀察（示意）",
         },
-        "creative_diagnostics": {"top_ads": [], "bottom_ads": []},
-        "anomalies": [],
-        "next_actions": [{"owner": "Marketing", "action": "Test", "kpi": "ROAS"}],
+        "actions": [
+            {
+                "owner": "Marketing",
+                "task": "建立 2 組素材 A/B 測試",
+                "deliverable": "新素材 2 版 + 上線紀錄",
+                "why": "降低素材疲乏風險（示意）",
+                "kpi": "CTR 上升（示意）",
+                "stoploss": "若 CTR 下降則回滾（示意）",
+            }
+        ],
+        "data_issues": ["缺少部分欄位（示意）"],
+        "open_questions": ["本週是否有重大投放策略調整？（示意）"],
     }
 
 
 def fixture_consultant_notes() -> dict[str, Any]:
     return {
-        "version": "consultant_notes.meta.v1",
+        "consultants_version": "consultants.v1",
         "week_id": "2025-W49",
-        "timezone": "Asia/Taipei",
-        "generated_at": "2025-12-10 10:00:00",
-        "notes": {
-            "performance_marketing": ["A"],
-            "ecommerce": ["B"],
-            "finance": ["C"],
-            "fulfillment": ["D"],
-            "gm_coo": ["E"],
+        "date_range": "2025-12-04~2025-12-09",
+        "avg_daily_spend_twd_calc": 1000.0,
+        "consultant_A": {
+            "consultant_key": "A",
+            "summary": ["成效面結論（示意）"],
+            "opportunities": ["可擴量機會（示意）"],
+            "risks": [
+                {
+                    "risk": "轉換波動",
+                    "probability": "中",
+                    "impact": "影響放量",
+                    "mitigation": "先小幅調整",
+                    "alternative": "先做素材測試",
+                }
+            ],
+            "overall_budget_action": {
+                "action": "hold",
+                "change_pct": 0,
+                "rationale": "先確認資料口徑一致（示意）",
+            },
+            "adset_ads_actions": [
+                {
+                    "level": "adset",
+                    "name": "測試廣告組合",
+                    "action": "increase",
+                    "why": "ROAS 較佳（示意）",
+                    "kpi": "ROAS",
+                    "stoploss": "ROAS 低於門檻則回復",
+                }
+            ],
+            "next_7d_actions": [
+                {
+                    "task": "調整預算節奏",
+                    "owner_role": "Marketing",
+                    "deliverable": "預算調整紀錄",
+                    "due": "D+2",
+                    "kpi": "ROAS",
+                    "stoploss": "ROAS 下滑則停止",
+                    "why": "避免過快放量（示意）",
+                }
+            ],
+            "questions": ["本週是否有促銷檔期？（示意）"],
+        },
+        "consultant_B": {
+            "consultant_key": "B",
+            "summary": ["創意面結論（示意）"],
+            "overall_budget_action": {"action": "hold", "change_pct": 0, "rationale": "（示意）"},
+        },
+        "consultant_C": {
+            "consultant_key": "C",
+            "summary": ["策略面結論（示意）"],
+            "overall_budget_action": {"action": "hold", "change_pct": 0, "rationale": "（示意）"},
         },
     }
 
 
 def fixture_workflow_state() -> dict[str, Any]:
     return {
-        "version": "workflow_state.meta_weekly.v1",
+        "schema_version": "workflow_state.v1",
         "week_id": "2025-W49",
-        "timezone": "Asia/Taipei",
-        "date_range": {"start": "2025-12-04", "end": "2025-12-09"},
-        "kpi": {
-            "meta_spend": 150.0,
-            "meta_website_purchases": 2,
-            "meta_website_purchase_value": 800.0,
-            "meta_roas": 5.3333,
-        },
+        "date_range": "2025-12-04~2025-12-09",
+        "kpi_snapshot": {"meta": {"spend_twd": 150.0}, "web": {"orders": 2}},
+        "decisions": ["做：先確立口徑（示意）"],
         "guardrail_check": {"tier1": {}, "tier2": {}},
+        "consultant_summary": ["共識：先修資料口徑（示意）"],
         "department_actions": {
-            "gm_coo": [{"task": "t"}],
-            "finance": [{"task": "t"}],
-            "ecommerce": [{"task": "t"}],
-            "marketing": [{"task": "t"}],
-            "fulfillment": [{"task": "t"}],
+            "GM": [
+                {
+                    "task": "決定本週主口徑（示意）",
+                    "deliverable": "口徑定義（示意）",
+                    "due": "D+1",
+                    "kpi": "下週可比較（示意）",
+                    "stoploss": "無法對齊則改採單一口徑（示意）",
+                }
+            ],
+            "Marketing": [
+                {
+                    "task": "執行素材 A/B（示意）",
+                    "deliverable": "測試結果（示意）",
+                    "due": "D+7",
+                    "kpi": "CTR（示意）",
+                    "stoploss": "CTR 下滑則停止（示意）",
+                }
+            ],
         },
         "risks": [{"risk": "r"}],
-        "validation_plan": {"day3": {}, "day7": {}, "day14": {}},
+        "validation_plan": {"3天": "（示意）", "7天": "（示意）", "14天": "（示意）"},
     }
 
 
@@ -430,7 +503,12 @@ def test_step2_schemas_pass_fail() -> None:
         # FAIL: total row not dropped (name empty after drop)
         bad4 = fixture_inputs_snapshot_ad()
         bad4["rows"][0]["ad_name"] = ""
-        expect_fail("inputs_snapshot ad empty name FAIL", bad4, p_ad, must_contain="minLength")
+        expect_fail(
+            "inputs_snapshot ad empty name FAIL",
+            bad4,
+            p_ad,
+            must_contain=["minLength", "non-empty"],
+        )
     else:
         print("[SKIP] row-level input snapshot schemas not found (ok for metadata-only MVP)")
 

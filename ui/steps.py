@@ -24,7 +24,12 @@ from core import (
     SchemaValidationError,
     write_pipeline_state,
 )
-from core.validation import validate_report_summary as _validate_report_summary_raw
+from core.validation import (
+    validate_consultant_notes as _validate_consultant_notes_raw,
+    validate_report_insights as _validate_report_insights_raw,
+    validate_report_summary as _validate_report_summary_raw,
+    validate_workflow_state as _validate_workflow_state_raw,
+)
 from core.logging import get_logger
 
 # Utils imports
@@ -106,6 +111,21 @@ def ensure_week_meta_dirs(week_id: str) -> None:
 def validate_report_summary(rs: dict) -> None:
     """包裝函式：自動傳入 SCHEMAS_DIR"""
     _validate_report_summary_raw(rs, SCHEMAS_DIR)
+
+
+def validate_report_insights(ri: dict) -> None:
+    """包裝函式：自動傳入 SCHEMAS_DIR"""
+    _validate_report_insights_raw(ri, SCHEMAS_DIR)
+
+
+def validate_consultant_notes(cn: dict) -> None:
+    """包裝函式：自動傳入 SCHEMAS_DIR"""
+    _validate_consultant_notes_raw(cn, SCHEMAS_DIR)
+
+
+def validate_workflow_state(ws: dict) -> None:
+    """包裝函式：自動傳入 SCHEMAS_DIR"""
+    _validate_workflow_state_raw(ws, SCHEMAS_DIR)
 
 
 def get_prev_week_id(current_week_id: str) -> Optional[str]:
@@ -499,6 +519,20 @@ def run_step_b(
         json.dumps(report_summary, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
+    # Schema validation（唯一真值 / 防漂移）
+    try:
+        validate_report_summary(report_summary)
+    except SchemaValidationError as e:
+        write_pipeline_state(
+            vdir,
+            "B(validate_error)",
+            mode_label,
+            status="error",
+            error=str(e),
+            details=getattr(e, "details", None),
+        )
+        raise
+
     # 載入前一週 Context
     week_id = report_summary.get("week_id", "Unknown")
     prev_ctx = load_prev_week_context(week_id)
@@ -668,6 +702,19 @@ def run_step_c(
             version_fp=vdir.name,
         )  # type: ignore[arg-type]
 
+        try:
+            validate_report_insights(insights)
+        except SchemaValidationError as e:
+            write_pipeline_state(
+                vdir,
+                "C(validate_error)",
+                mode_label,
+                status="error",
+                error=str(e),
+                details=getattr(e, "details", None),
+            )
+            raise
+
         status.write("💾 儲存結果...")
         write_json(vdir / "report_insights.json", insights)
         st.session_state["report_insights"] = insights
@@ -800,6 +847,19 @@ def run_step_e(
             on_consultant_done=None,  # Step E 移除即時渲染（避免被 Step F 覆蓋且意義不大）
             version_fp=vdir.name,
         )
+
+        try:
+            validate_consultant_notes(cn)
+        except SchemaValidationError as e:
+            write_pipeline_state(
+                vdir,
+                "E(validate_error)",
+                mode_label,
+                status="error",
+                error=str(e),
+                details=getattr(e, "details", None),
+            )
+            raise
         write_json(vdir / "consultant_notes.json", cn)
         st.session_state["consultant_notes"] = cn
 
@@ -862,6 +922,19 @@ def run_step_f_final(
 
         rs_ctx = rs_with_context(rs, current_fp, resolved_fp, prev_ctx)  # type: ignore[arg-type]
         ws = build_workflow_state(rs_ctx, ri, consultant_notes=cn, step="F", version_fp=vdir.name)
+
+        try:
+            validate_workflow_state(ws)
+        except SchemaValidationError as e:
+            write_pipeline_state(
+                vdir,
+                "F(validate_error)",
+                mode_label,
+                status="error",
+                error=str(e),
+                details=getattr(e, "details", None),
+            )
+            raise
         md = build_meeting_markdown(ws, rs_ctx, ri)
         write_artifacts(vdir, md, ws)
 

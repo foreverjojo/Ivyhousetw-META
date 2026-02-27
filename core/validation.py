@@ -57,3 +57,21 @@ def validate_report_summary(rs: dict, schemas_dir: Path) -> None:
     """驗證 report_summary.json"""
     schema = _load_schema("report_summary.v1.json", schemas_dir)
     validate_json(rs, schema, label="report_summary.v1")
+
+
+def validate_report_insights(ri: dict, schemas_dir: Path) -> None:
+    """驗證 report_insights.json"""
+    schema = _load_schema("report_insights.v1.json", schemas_dir)
+    validate_json(ri, schema, label="report_insights.v1")
+
+
+def validate_consultant_notes(cn: dict, schemas_dir: Path) -> None:
+    """驗證 consultant_notes.json"""
+    schema = _load_schema("consultant_notes.v1.json", schemas_dir)
+    validate_json(cn, schema, label="consultant_notes.v1")
+
+
+def validate_workflow_state(ws: dict, schemas_dir: Path) -> None:
+    """驗證 workflow_state.json"""
+    schema = _load_schema("workflow_state.v1.json", schemas_dir)
+    validate_json(ws, schema, label="workflow_state.v1")

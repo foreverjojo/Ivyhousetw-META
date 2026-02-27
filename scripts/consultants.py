@@ -532,6 +532,19 @@ def generate_consultant_notes(
     }
 
 
+def run_three_consultants(
+    report_summary: dict[str, Any],
+    report_insights: dict[str, Any],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Legacy wrapper（相容舊入口 app_legacy_refactored.py）。
+
+    新主流程請改用 generate_consultant_notes()。
+    """
+
+    return generate_consultant_notes(report_summary, report_insights, **kwargs)
+
+
 def run_visual_consultant(
     *,
     max_images: int = 6,
