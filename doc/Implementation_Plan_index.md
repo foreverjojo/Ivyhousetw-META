@@ -15,6 +15,7 @@
 
 | Index | 任務標題 | 優先級 | Status | Executor Tool | QA Result | Plan Version | Log 檔 | 備註 |
 |-------|----------|--------|--------|---------------|-----------|-------------|--------|------|
+| Idx-047 | 整併 recovery/stash1-20260227（commit 61b86cc）：整理後可合回 main | P1 | ⏳ 待處理 | TBD | TBD | 2026-02-27-v1 | pending | Plan：`doc/plans/Idx-047_plan.md`；來源分支：`recovery/stash1-20260227` |
 | Idx-046 | 清理剩餘 stash：以 recovery 分支保存並清空 | P1 | ✅ 已完成 | OpenCode | PASS WITH RISK | 2026-02-27-v1 | `doc/logs/Idx-046_log.md` | Plan：`doc/plans/Idx-046_plan.md`；分支：`recovery/stash0-20260227`、`recovery/stash1-20260227` |
 | Idx-001 | 建立 `doc/logs/` 資料夾 + Log 範本 | P0 | ✅ 已完成 | Manual | PASS | — | — | 已建立範本 `Idx-000_log.template.md` |
 | Idx-002 | 更新 Index 表欄位與治理資訊 | P0 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v1 | `doc/logs/Idx-002_log.md` | Index 清理與統一完成 |
@@ -33,9 +34,10 @@
 | Idx-040 | meeting.md 改 A~E 版型 + decisions fallback 去重 | P0 | ⏳ 待處理 | OpenCode | TBD | 2026-02-24-v1 | pending | Plan：`doc/plans/Idx-040_plan.md` |
 | Idx-043 | Google Drive 每週備份 + Drive 端 12 週保留（只移到 Trash） | P0 | ✅ 已完成 | OpenCode | PASS | 2026-02-25-v1 | pending | Plan：`doc/plans/Idx-043_plan.md` |
 | Idx-044 | Google Cloud OAuth Token 自動化部署 | P0 | ✅ 已完成 | OpenCode | PASS | 2026-02-26-v1 | `doc/logs/Idx-044_log.md` | Cloud Function + Scheduler + Secret Manager；端到端刷新已驗證 |
-| Idx-045 | Step F Drive 備份：每次讀取 Secret Manager 最新 Access Token | P0 | ✅ 已完成 | OpenCode | TBD | 2026-02-27-v1 | pending | Plan：`doc/plans/Idx-045_plan.md`；銜接 Idx-044 token 刷新 |
 
 ### 狀態說明
+| Idx-046 | 清理剩餘 stash：以 recovery 分支保存並清空 | P1 | 🔄 進行中 | opencode | TBD | 2026-02-27-v1 | pending | Plan：`doc/plans/Idx-046_plan.md`；兩個 stash 各自推分支保存 |
+
 - ✅ 已完成 (CLOSED)
 - 🔄 進行中 (IN_PROGRESS)
 - ⏳ 待處理 (NOT_STARTED)
