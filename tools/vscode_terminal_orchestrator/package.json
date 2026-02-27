@@ -140,6 +140,12 @@
           "default": 10,
           "description": "Workflow loop: maximum number of QA rounds before auto-stop."
         },
+        "ivyhouseTerminalOrchestrator.workflowAskMode": {
+          "type": "string",
+          "default": "batch",
+          "enum": ["batch", "interactive", "ask_questions"],
+          "description": "Workflow loop: when QA FAIL reaches max rounds, either print a structured prompt and wait for /workflow/decision API (batch / ask_questions), or use ask_questions mode (interactive is an alias for ask_questions; no longer uses QuickPick)."
+        },
         "ivyhouseTerminalOrchestrator.workflowTimeoutMs": {
           "type": "number",
           "default": 1800000,
