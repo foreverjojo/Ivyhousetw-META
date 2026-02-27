@@ -34,6 +34,8 @@
 
 - **Main branch（文件）**：
   - Plan commit：`1e6579a`（`doc/plans/Idx-046_plan.md`）
+  - Log commit：`b0b4a86`（`doc/logs/Idx-046_log.md`）
+  - Index commit：`8ef9ddc`（`doc/Implementation_Plan_index.md` 插入 Idx-046 列）
 
 ---
 
