@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +56,7 @@ def _sha256_8_file(path: Path) -> str:
 
 def _now_utc_iso() -> str:
     """回傳目前 UTC 時間的 ISO 字串（以 Z 結尾）"""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _collect_whitelist_files(vdir: Path) -> list[Path]:
@@ -171,6 +171,10 @@ def upload_version_to_drive(
     cfg = cfg or load_cloud_config()
     timestamp = _now_utc_iso()
 
+    def _is_sa_quota_error(exc: Exception) -> bool:
+        msg = str(exc)
+        return "Service Accounts do not have storage quota" in msg
+
     # 收集待備份檔案
     files_to_upload = _collect_whitelist_files(vdir)
 
@@ -200,18 +204,95 @@ def upload_version_to_drive(
         return manifest
 
     # === 實際上傳模式 ===
-    token = get_gdrive_access_token(cfg)
-    root_folder_id = cfg.google_drive_folder_id
-    if not root_folder_id:
-        raise RuntimeError("缺少 GOOGLE_DRIVE_FOLDER_ID，無法備份至 Drive。")
+    try:
+        token = get_gdrive_access_token(cfg)
+        root_folder_id = cfg.google_drive_folder_id
+        if not root_folder_id:
+            raise RuntimeError("缺少 GOOGLE_DRIVE_FOLDER_ID，無法備份至 Drive。")
 
-    # 確保 Drive 資料夾結構存在
-    fp_folder_id = _ensure_drive_backup_path(
-        token, root_folder_id, week_id, fp_code, cfg.http_timeout_s
-    )
+        # 確保 Drive 資料夾結構存在
+        fp_folder_id = _ensure_drive_backup_path(
+            token, root_folder_id, week_id, fp_code, cfg.http_timeout_s
+        )
+    except Exception as exc:
+
+        def _sa_email_from_json(path: str) -> str | None:
+            try:
+                p = Path(path)
+                data = json.loads(p.read_text(encoding="utf-8"))
+                email = data.get("client_email")
+                return str(email).strip() if isinstance(email, str) and email.strip() else None
+            except Exception:
+                return None
+
+        msg = str(exc)
+        hints: list[str] = []
+        # 404 notFound on parent folder almost always means the folder isn't visible
+        # (not shared to the credential) or the folder_id is wrong.
+        if "File not found:" in msg:
+            if cfg.google_application_credentials:
+                sa_email = _sa_email_from_json(cfg.google_application_credentials)
+                if sa_email:
+                    hints.append(
+                        f"請確認 GOOGLE_DRIVE_FOLDER_ID 已分享給 Service Account：{sa_email}"
+                    )
+                    hints.append("若目標在 Shared Drive，請確認 SA 已加入該 Shared Drive 成員")
+            hints.append("也請確認 GOOGLE_DRIVE_FOLDER_ID 正確且未被刪除")
+
+        # 401 on token-based path usually indicates an expired/invalid access token.
+        if "Invalid Credentials" in msg or "invalid authentication" in msg.lower():
+            hints.append(
+                "若使用 GOOGLE_DRIVE_ACCESS_TOKEN，請更新為有效的 OAuth access token（短效，過期需刷新）"
+            )
+
+        if "Service Accounts do not have storage quota" in msg:
+            hints.append(
+                "此錯誤代表 Service Account 在 My Drive 無配額：請改用 OAuth token 或把備份根資料夾放在 Shared Drive"
+            )
+
+        error_text = msg
+        if hints:
+            # 把 hints 放前面，避免 300 字截斷後看不到可行動資訊。
+            error_text = "；".join(hints) + " | " + msg
+
+        # 重要：即使初始化失敗（例如 parent folder 權限/不存在），也要落盤一份 manifest
+        # 讓 UI/使用者可以在不看 console log 的情況下回溯原因。
+        entries: list[dict[str, Any]] = []
+        for p in files_to_upload:
+            rel = str(p.relative_to(vdir))
+            try:
+                sha8 = _sha256_8_file(p)
+                size = p.stat().st_size
+            except Exception:
+                sha8 = None
+                size = None
+            entries.append(
+                {
+                    "timestamp": timestamp,
+                    "local_rel_path": rel,
+                    "sha256_8": sha8,
+                    "size": size,
+                    "status": "error",
+                    "remote_id": None,
+                    "remote_url": None,
+                    "error": error_text[:300],
+                }
+            )
+
+        manifest = _build_manifest(
+            timestamp=timestamp,
+            week_id=week_id,
+            fp_code=fp_code,
+            entries=entries,
+            dry_run=False,
+        )
+        _write_manifest(vdir, manifest)
+        raise
 
     # 建立 inputs/raw/ 對應的 Drive 子資料夾 cache
     subfolder_cache: dict[str, str] = {}
+    oauth_fallback_enabled = False
+    oauth_fallback_attempted = False
 
     def _get_or_create_subfolder(rel_parts: tuple[str, ...]) -> str:
         """遞迴確保子資料夾存在，回傳最終 folder ID"""
@@ -267,6 +348,81 @@ def upload_version_to_drive(
                 }
             )
         except Exception as exc:
+            # 特例：SA 上傳被 Drive quota 規則擋下（403），自動切到 OAuth token 重試一次。
+            if (
+                (not oauth_fallback_enabled)
+                and (not oauth_fallback_attempted)
+                and _is_sa_quota_error(exc)
+            ):
+                oauth_fallback_attempted = True
+                original_token = token
+                try:
+                    oauth_token = get_gdrive_access_token(cfg, auth_mode="oauth")
+                    # 切換成功後才污染全域狀態。
+                    # 重要：為避免同一次 run 產生兩套同名資料夾結構，這裡沿用既有 folder IDs
+                    # （初始已成功 ensure 出 fp_folder_id），不要再用新 token 重新 ensure 一次。
+                    token = oauth_token
+                    oauth_fallback_enabled = True
+
+                    # 重新計算 target folder（沿用既有 cache；若缺少會用 OAuth token 補建）
+                    parts = rel_path.parts
+                    if len(parts) > 1:
+                        parent_parts = parts[:-1]
+                        target_folder_id = _get_or_create_subfolder(parent_parts)
+                    else:
+                        target_folder_id = fp_folder_id
+
+                    data = p.read_bytes()
+                    result = _drive_upload_bytes(
+                        token=token,
+                        folder_id=target_folder_id,
+                        data=data,
+                        filename=rel_path.name,
+                        timeout=cfg.http_timeout_s,
+                    )
+                    entries.append(
+                        {
+                            "timestamp": timestamp,
+                            "local_rel_path": rel,
+                            "sha256_8": sha8,
+                            "size": size,
+                            "status": "uploaded",
+                            "remote_id": result.get("id"),
+                            "remote_url": result.get("webViewLink"),
+                        }
+                    )
+                    continue
+                except Exception as oauth_exc:
+                    token = original_token
+                    err = str(oauth_exc)
+                    if (
+                        "invalid authentication credentials" in err.lower()
+                        or "Invalid Credentials" in err
+                    ):
+                        err = (
+                            "偵測到 Service Account 無配額（403）；已嘗試切換 OAuth token 但 token 無效/過期（401）。"
+                            "請更新 GOOGLE_DRIVE_ACCESS_TOKEN（或確認 Secret Manager 的 GOOGLE_DRIVE_ACCESS_TOKEN 為最新且執行身分有讀取權限）"
+                            f" | {oauth_exc}"
+                        )
+                    else:
+                        err = (
+                            "偵測到 Service Account 無配額（403）；已嘗試切換 OAuth token 仍失敗"
+                            f"：{oauth_exc}"
+                        )
+                    entries.append(
+                        {
+                            "timestamp": timestamp,
+                            "local_rel_path": rel,
+                            "sha256_8": sha8,
+                            "size": size,
+                            "status": "error",
+                            "remote_id": None,
+                            "remote_url": None,
+                            "error": err[:300],
+                        }
+                    )
+                    continue
+
             entries.append(
                 {
                     "timestamp": timestamp,
@@ -339,6 +495,7 @@ def main() -> None:
     import argparse
 
     from core import HISTORY_ROOT
+    from core.env_loader import load_environment_variables
     from utils.path_utils import read_latest_ptr, version_dir
 
     parser = argparse.ArgumentParser(
@@ -350,6 +507,13 @@ def main() -> None:
     parser.add_argument("--fp", default=None, help="fingerprint 短碼（預設讀取 latest.json）")
     parser.add_argument("--dry-run", action="store_true", help="乾跑模式：不實際上傳，只列出計畫")
     args = parser.parse_args()
+
+    # 與 Streamlit 執行路徑一致：先載入 ifp.env/.env +（若有）Secret Manager。
+    # 讓 CLI 測試不需要手動 export 一堆環境變數。
+    try:
+        load_environment_variables()
+    except Exception as exc:
+        print(f"[WARN] 環境變數載入失敗（仍會嘗試用目前環境繼續）：{exc}")
 
     week_id = args.week
     fp_code = args.fp

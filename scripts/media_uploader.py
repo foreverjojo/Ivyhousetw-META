@@ -48,11 +48,16 @@ class UploadResult:
     error: str | None = None
 
 
-def get_gdrive_access_token(cfg: CloudConfig) -> str:
+def get_gdrive_access_token(cfg: CloudConfig, *, auth_mode: str = "auto") -> str:
     """
     取得 Google Drive Access Token。
 
-    優先序：
+    auth_mode：
+    - auto（預設）：維持原本流程（SA JSON 優先）。
+    - oauth：忽略 SA JSON，強制走 OAuth Access Token 路徑（Secret Manager / env）。
+    - service_account：強制要求 SA JSON；若缺少則 raise。
+
+    優先序（auto）：
     1. SA JSON（google_application_credentials）：最穩定，維持原本流程。
     2. 雲端環境（GOOGLE_CLOUD_PROJECT 存在）且未使用 SA JSON：
        每次優先從 Secret Manager 取最新 access_token（確保 Idx-044 刷新的 token 立即生效）。
@@ -62,8 +67,12 @@ def get_gdrive_access_token(cfg: CloudConfig) -> str:
 
     資安要求：任何 log 絕不輸出 token 值。
     """
-    # 路徑 1：SA JSON 優先（最穩定，不需 Secret Manager）
-    if cfg.google_application_credentials:
+    mode = (auth_mode or "auto").strip().lower()
+    if mode not in {"auto", "oauth", "service_account"}:
+        raise ValueError(f"不支援的 Drive auth_mode：{auth_mode}")
+
+    # 路徑 1：SA JSON（最穩定，不需 Secret Manager）
+    if mode in {"auto", "service_account"} and cfg.google_application_credentials:
         scopes = ["https://www.googleapis.com/auth/drive.file"]
         creds = service_account.Credentials.from_service_account_file(
             cfg.google_application_credentials, scopes=scopes
@@ -71,16 +80,31 @@ def get_gdrive_access_token(cfg: CloudConfig) -> str:
         creds.refresh(Request())
         return creds.token
 
-    # 路徑 2：雲端環境 → 優先從 Secret Manager 取最新 token
-    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if mode == "service_account":
+        raise RuntimeError("缺少 GOOGLE_APPLICATION_CREDENTIALS（指定 service_account 模式需要）。")
+
+    def _extract_project_id_from_sa_json(path: str) -> str | None:
+        try:
+            p = Path(path)
+            data = json.loads(p.read_text(encoding="utf-8"))
+            pid = data.get("project_id")
+            return str(pid).strip() if isinstance(pid, str) and pid.strip() else None
+        except Exception:
+            return None
+
+    # 路徑 2：雲端/本機（只要有 project_id）→ 優先從 Secret Manager 取最新 token
+    # 注意：本 repo 其他模組常用 GCP_PROJECT_ID，因此此處也一併支援，避免本機環境拿到過期 env token。
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT_ID")
+    if (not project_id) and cfg.google_application_credentials:
+        # 即使 auth_mode="oauth" 會忽略 SA JSON 作為認證方式，仍可借用 JSON 內的 project_id
+        # 來定位 Secret Manager（不涉及使用 SA 做 API auth）。
+        project_id = _extract_project_id_from_sa_json(cfg.google_application_credentials)
     if project_id:
         try:
             from google.cloud import secretmanager
 
             client = secretmanager.SecretManagerServiceClient()
-            name = (
-                f"projects/{project_id}/secrets/GOOGLE_DRIVE_ACCESS_TOKEN/versions/latest"
-            )
+            name = f"projects/{project_id}/secrets/GOOGLE_DRIVE_ACCESS_TOKEN/versions/latest"
             response = client.access_secret_version(request={"name": name})
             sm_token = response.payload.data.decode("utf-8").strip()
             if sm_token:
@@ -92,10 +116,10 @@ def get_gdrive_access_token(cfg: CloudConfig) -> str:
             )
         except Exception as exc:
             logger.warning(
-                "Secret Manager 讀取 GOOGLE_DRIVE_ACCESS_TOKEN 失敗，fallback 至環境變數。"
+                "Secret Manager 讀取 GOOGLE_DRIVE_ACCESS_TOKEN 失敗（%s），fallback 至環境變數。"
                 " 若為權限不足（403），請確認執行服務的 Service Account"
                 " 已綁定 roles/secretmanager.secretAccessor。",
-                error_type=type(exc).__name__,
+                type(exc).__name__,
             )
 
     # 路徑 3：環境變數 token（本機 / 雲端 fallback）
@@ -117,18 +141,36 @@ def ensure_gdrive_folder(
     if parent_id:
         query += f" and '{parent_id}' in parents"
 
-    url = f"https://www.googleapis.com/drive/v3/files?q={requests.utils.quote(query)}&fields=files(id,name)"
+    # Shared Drive 注意事項：
+    # - 目標 parent_id 若在 Shared Drive，未帶 supportsAllDrives/includeItemsFromAllDrives
+    #   可能會拿到 404 (File not found) 即使權限實際存在。
+    url = (
+        "https://www.googleapis.com/drive/v3/files"
+        f"?q={requests.utils.quote(query)}"
+        "&fields=files(id,name,createdTime)"
+        "&supportsAllDrives=true"
+        "&includeItemsFromAllDrives=true"
+        "&corpora=allDrives"
+        "&orderBy=createdTime"
+    )
     headers = {"Authorization": f"Bearer {token}"}
 
     resp = requests.get(url, headers=headers, timeout=timeout)
     if resp.status_code == 200:
         files = resp.json().get("files", [])
         if files:
+            if len(files) > 1:
+                logger.warning(
+                    "偵測到重複的 Drive 資料夾（name=%s, parent_id=%s）：%s 個，將使用最早建立者。",
+                    folder_name,
+                    parent_id,
+                    len(files),
+                )
             return files[0]["id"]
 
     # 不存在則建立
     print(f"📁 雲端資料夾 '{folder_name}' 不存在，正在建立...")
-    create_url = "https://www.googleapis.com/drive/v3/files"
+    create_url = "https://www.googleapis.com/drive/v3/files?supportsAllDrives=true"
     metadata = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
     if parent_id:
         metadata["parents"] = [parent_id]
