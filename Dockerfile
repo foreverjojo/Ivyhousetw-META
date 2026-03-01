@@ -40,8 +40,9 @@ ENV STREAMLIT_SERVER_HEADLESS=true
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 
 # Health check
+# Streamlit 本身不保證提供 /health，因此以 / 作為最小存活檢查。
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+    CMD curl -f http://localhost:${PORT}/ || exit 1
 
 # Run the application
 CMD ["python", "main.py"]

@@ -169,7 +169,7 @@ SERVICE_URL=$(gcloud run services describe ivyhouse-meta-analyzer \
   --format="value(status.url)")
 
 # 測試健康檢查
-curl $SERVICE_URL/health
+curl $SERVICE_URL/
 
 # 預期輸出：{"status":"healthy"}
 ```
