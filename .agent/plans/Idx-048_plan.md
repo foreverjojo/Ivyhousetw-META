@@ -11,24 +11,24 @@ execution_backend_policy: extension-sendtext-required
 scope_exceptions: []
 
 # Engineer 執行
-executor_tool: [待用戶確認: codex-cli|opencode]
+executor_tool: opencode
 executor_backend: ivyhouse_sendtext_extension
 monitor_backend: proposed-primary-with-extension-fallback
-executor_tool_version: [pending]
-executor_user: [pending]
-executor_start: [pending]
-executor_end: [pending]
-session_id: [pending]
-last_change_tool: [codex-cli|opencode]
+executor_tool_version: N/A
+executor_user: vscode
+executor_start: 2026-02-27T18:52:03+00:00
+executor_end: 2026-02-27T18:52:03+00:00
+session_id: N/A
+last_change_tool: opencode
 
 # QA 執行
-qa_tool: [待用戶確認: codex-cli|opencode]
-qa_tool_version: [pending]
-qa_user: [pending]
-qa_start: [pending]
-qa_end: [pending]
-qa_result: [PASS|PASS_WITH_RISK|FAIL]
-qa_compliance: [✅ 符合|⚠️ 例外：原因]
+qa_tool: codex-cli
+qa_tool_version: N/A
+qa_user: vscode
+qa_start: 2026-02-27T18:52:03+00:00
+qa_end: 2026-02-27T18:52:03+00:00
+qa_result: PASS_WITH_RISK
+qa_compliance: ✅ 符合
 
 # 收尾
 log_file_path: .agent/logs/Idx-048_log.md
