@@ -9,15 +9,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from scripts.gdrive_retention import (
     CONFIRM_STRING,
     compute_weeks_to_trash,
     parse_week_folder_name,
     sort_week_folders,
 )
-
 
 # ===========================
 # parse_week_folder_name

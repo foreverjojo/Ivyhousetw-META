@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -244,7 +244,7 @@ def run_retention(
     to_trash, to_keep = compute_weeks_to_trash(sorted_entries, keep_weeks)
 
     # 組裝報告（dry-run 結果）
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     report: dict[str, Any] = {
         "schema_version": "gdrive_retention.v1",
         "timestamp": timestamp,
