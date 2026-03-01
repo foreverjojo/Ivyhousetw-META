@@ -1,6 +1,11 @@
-"""
-Flask wrapper for Streamlit app - Google Cloud Run compatible
-Listens on PORT environment variable
+"""Cloud Run 入口點（Streamlit 啟動器）。
+
+職責：
+  - 監聽 `PORT` 環境變數（Cloud Run 必需）
+  - 啟動 Streamlit 並處理 SIGTERM/SIGINT 優雅關機
+
+注意：
+  - Streamlit 本身會在該 PORT 提供 UI；健康檢查建議使用 `/`。
 """
 
 import os
@@ -8,20 +13,14 @@ import signal
 import subprocess
 import sys
 
-from flask import Flask
-
-app = Flask(__name__)
-
-# Store streamlit process
-streamlit_process = None
+streamlit_process: subprocess.Popen[str] | None = None
 
 
-def start_streamlit():
-    """Start Streamlit server"""
+def start_streamlit() -> None:
+    """啟動 Streamlit server（blocking）。"""
     global streamlit_process
-    port = int(os.environ.get("PORT", 8080))
 
-    # Streamlit configuration
+    port = int(os.environ.get("PORT", 8080))
     streamlit_cmd = [
         "streamlit",
         "run",
@@ -42,13 +41,11 @@ def start_streamlit():
 
     streamlit_process = subprocess.Popen(streamlit_cmd)
     print(f"Streamlit started on port {port}")
-
-    # Wait for streamlit process
     streamlit_process.wait()
 
 
-def signal_handler(sig, frame):
-    """Handle shutdown signals"""
+def signal_handler(sig, frame) -> None:
+    """處理關機訊號（SIGTERM/SIGINT）。"""
     print("Shutting down gracefully...")
     if streamlit_process:
         streamlit_process.terminate()
@@ -56,29 +53,12 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-# Register signal handlers
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-@app.route("/")
-def root():
-    """Health check endpoint"""
-    return {"status": "ok", "app": "Ivy House Meta Weekly MVP", "message": "Streamlit is running"}
-
-
-@app.route("/health")
-def health():
-    """Health check for Cloud Run"""
-    return {"status": "healthy"}, 200
-
-
 if __name__ == "__main__":
-    # Get port from environment
     port = int(os.environ.get("PORT", 8080))
-
     print(f"Starting application on port {port}")
     print("Starting Streamlit server...")
-
-    # Start Streamlit in the main process
     start_streamlit()

@@ -14,13 +14,14 @@ Google Cloud Function: 自動刷新 Google Drive OAuth Access Token
     --set-env-vars PROJECT_ID=ivyhouse-ad-analyzer
 """
 
+import json
+import logging
+import os
+from datetime import datetime, timedelta
+
 import functions_framework
 import requests
-import json
-import os
 from google.cloud import secretmanager
-from datetime import datetime, timedelta
-import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -32,7 +33,7 @@ def get_secret(secret_name: str, project_id: str) -> str:
         client = secretmanager.SecretManagerServiceClient()
         secret_path = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
         response = client.access_secret_version(request={"name": secret_path})
-        return response.payload.data.decode('UTF-8')
+        return response.payload.data.decode("UTF-8")
     except Exception as e:
         logger.error(f"❌ 讀取 secret '{secret_name}' 失敗：{str(e)}")
         raise
@@ -44,11 +45,8 @@ def update_secret(secret_name: str, secret_value: str, project_id: str) -> bool:
         client = secretmanager.SecretManagerServiceClient()
         secret_path = f"projects/{project_id}/secrets/{secret_name}"
 
-        response = client.add_secret_version(
-            request={
-                "parent": secret_path,
-                "payload": {"data": secret_value.encode('UTF-8')}
-            }
+        client.add_secret_version(
+            request={"parent": secret_path, "payload": {"data": secret_value.encode("UTF-8")}}
         )
 
         logger.info(f"✅ 已更新 secret：{secret_name}")
@@ -62,12 +60,9 @@ def update_secret(secret_name: str, secret_value: str, project_id: str) -> bool:
 def refresh_token(request):
     """Cloud Function 入口點"""
 
-    project_id = os.environ.get('PROJECT_ID')
+    project_id = os.environ.get("PROJECT_ID")
     if not project_id:
-        return {
-            "status": "error",
-            "message": "PROJECT_ID 環境變數未設定"
-        }, 500
+        return {"status": "error", "message": "PROJECT_ID 環境變數未設定"}, 500
 
     logger.info("=" * 80)
     logger.info("🔄 開始刷新 Google Drive OAuth Token")
@@ -80,16 +75,16 @@ def refresh_token(request):
         client_id = get_secret("GOOGLE_DRIVE_CLIENT_ID", project_id)
         client_secret = get_secret("GOOGLE_DRIVE_CLIENT_SECRET", project_id)
         refresh_token = get_secret("GOOGLE_DRIVE_REFRESH_TOKEN", project_id)
-        current_access_token = get_secret("GOOGLE_DRIVE_ACCESS_TOKEN", project_id)
+        get_secret("GOOGLE_DRIVE_ACCESS_TOKEN", project_id)
 
-        logger.info(f"✅ 成功讀取 secrets")
+        logger.info("✅ 成功讀取 secrets")
 
         # 檢查 refresh_token 是否是佔位符
         if "PLACEHOLDER" in refresh_token:
             return {
                 "status": "error",
                 "message": "Refresh Token 尚未設定。請執行初始授權流程。",
-                "action": "需要在 Google Cloud Console 中手動更新 GOOGLE_DRIVE_REFRESH_TOKEN secret"
+                "action": "需要在 Google Cloud Console 中手動更新 GOOGLE_DRIVE_REFRESH_TOKEN secret",
             }, 400
 
         # 2. 交換新的 access_token
@@ -101,7 +96,7 @@ def refresh_token(request):
             "client_id": client_id,
             "client_secret": client_secret,
             "refresh_token": refresh_token,
-            "grant_type": "refresh_token"
+            "grant_type": "refresh_token",
         }
 
         response = requests.post(token_endpoint, data=payload, timeout=10)
@@ -113,18 +108,18 @@ def refresh_token(request):
             return {
                 "status": "error",
                 "message": f"Token 交換失敗：{response.text}",
-                "status_code": response.status_code
+                "status_code": response.status_code,
             }, response.status_code
 
         token_response = response.json()
-        new_access_token = token_response.get('access_token')
-        expires_in = token_response.get('expires_in', 3600)
+        new_access_token = token_response.get("access_token")
+        expires_in = token_response.get("expires_in", 3600)
 
         if not new_access_token:
             return {
                 "status": "error",
                 "message": "回應中缺少 access_token",
-                "response": token_response
+                "response": token_response,
             }, 400
 
         logger.info(f"✅ 成功取得新 access_token（有效期：{expires_in} 秒）")
@@ -135,8 +130,8 @@ def refresh_token(request):
         update_secret("GOOGLE_DRIVE_ACCESS_TOKEN", new_access_token, project_id)
 
         # 如果回應中有新的 refresh_token，也更新它
-        if 'refresh_token' in token_response:
-            new_refresh_token = token_response['refresh_token']
+        if "refresh_token" in token_response:
+            new_refresh_token = token_response["refresh_token"]
             update_secret("GOOGLE_DRIVE_REFRESH_TOKEN", new_refresh_token, project_id)
             logger.info("🔄 refresh_token 也已更新")
 
@@ -150,7 +145,7 @@ def refresh_token(request):
             "access_token_refreshed": True,
             "expires_in": expires_in,
             "expiry_time": expiry_time.isoformat() + "Z",
-            "next_refresh": (datetime.utcnow() + timedelta(days=6)).isoformat() + "Z"
+            "next_refresh": (datetime.utcnow() + timedelta(days=6)).isoformat() + "Z",
         }
 
         logger.info("=" * 80)
@@ -164,12 +159,10 @@ def refresh_token(request):
     except Exception as e:
         logger.error(f"❌ 未預期的錯誤：{str(e)}")
         import traceback
+
         logger.error(traceback.format_exc())
 
-        return {
-            "status": "error",
-            "message": f"未預期的錯誤：{str(e)}"
-        }, 500
+        return {"status": "error", "message": f"未預期的錯誤：{str(e)}"}, 500
 
 
 if __name__ == "__main__":
@@ -177,7 +170,7 @@ if __name__ == "__main__":
     import sys
 
     # 設定環境變數
-    os.environ['PROJECT_ID'] = 'ivyhouse-ad-analyzer'
+    os.environ["PROJECT_ID"] = "ivyhouse-ad-analyzer"
 
     # 模擬 HTTP request
     class MockRequest:

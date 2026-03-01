@@ -4,11 +4,10 @@
 
 您的 Python 專案已成功改造為適合 Google Cloud Run 部署的格式！
 
-### 1. **main.py** - Flask 包裝器
-- ✅ 使用 Flask 包裝 Streamlit 應用
+### 1. **main.py** - Streamlit 啟動器（Cloud Run）
 - ✅ 監聽 `PORT` 環境變數（Cloud Run 必需）
-- ✅ 提供健康檢查端點 `/health`
-- ✅ 優雅關機處理（SIGTERM/SIGINT）
+- ✅ 啟動 Streamlit 並在收到 SIGTERM/SIGINT 時優雅關機
+- ✅ 健康檢查建議以 `/` 作為最小存活檢查（由 Streamlit 回應）
 
 ### 2. **Dockerfile** - 容器配置
 - ✅ 基於 `python:3.11-slim`
