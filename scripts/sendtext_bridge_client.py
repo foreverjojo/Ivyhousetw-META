@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """SendText Bridge Python client (localhost-only helper).
 
+用途：本機 localhost 輔助工具，用於呼叫 VS Code extension 的 SendText Bridge HTTP server。
+
 This client talks to the local VS Code extension "IvyHouse Terminal Orchestrator"
 SendText Bridge HTTP server.
 
@@ -14,6 +16,9 @@ Examples:
   python scripts/sendtext_bridge_client.py send --terminal-kind codex --text "hi" --submit
   python scripts/sendtext_bridge_client.py workflow-start --plan-id Idx-025 --scope workflow
   python scripts/sendtext_bridge_client.py workflow-status
+    python scripts/sendtext_bridge_client.py workflow-decision --decision CONTINUE --decision-id <id>
+    python scripts/sendtext_bridge_client.py workflow-decision --decision MORE_INFO --decision-id <id> --free-text "想看 QA log tail"
+    python scripts/sendtext_bridge_client.py stop-workflow --reason "user_requested"
 """
 
 from __future__ import annotations
@@ -166,6 +171,39 @@ def cmd_workflow_status(args: argparse.Namespace) -> int:
     return _print_result(status, payload)
 
 
+def cmd_stop_workflow(args: argparse.Namespace) -> int:
+    cfg = _build_cfg(args)
+    body = {"reason": str(args.reason or "api_stop_workflow")}
+    status, payload = _request_json(cfg, "POST", "/stop-workflow", body, require_token=True)
+    return _print_result(status, payload)
+
+
+def cmd_workflow_decision(args: argparse.Namespace) -> int:
+    """POST /workflow/decision — submit a coordinator decision.
+
+    decisionId must match the current pendingDecision.decisionId from /workflow/status.
+
+    decision values:
+    - CONTINUE
+    - STOP
+    - MORE_INFO
+    - FREEFORM (free-text note; will re-prompt for a final explicit decision)
+    """
+
+    if not args.decision and not args.free_text:
+        raise RuntimeError("missing_input: provide --decision and/or --free-text")
+
+    cfg = _build_cfg(args)
+    body: dict[str, Any] = {
+        "decisionId": str(args.decision_id),
+        "decision": str(args.decision).upper() if args.decision else None,
+        "freeText": str(args.free_text) if args.free_text else None,
+        "phase": str(args.phase or "initial"),
+    }
+    status, payload = _request_json(cfg, "POST", "/workflow/decision", body, require_token=True)
+    return _print_result(status, payload)
+
+
 def _add_common_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--host", default=DEFAULT_HOST, help=f"bridge host (default: {DEFAULT_HOST})")
     p.add_argument(
@@ -209,6 +247,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_wf_status = sub.add_parser("workflow-status", help="GET /workflow/status")
     _add_common_flags(p_wf_status)
     p_wf_status.set_defaults(func=cmd_workflow_status)
+
+    p_wf_decision = sub.add_parser("workflow-decision", help="POST /workflow/decision")
+    _add_common_flags(p_wf_decision)
+    p_wf_decision.add_argument("--decision-id", required=True, help="pendingDecision.decisionId")
+    p_wf_decision.add_argument(
+        "--decision",
+        default=None,
+        choices=["CONTINUE", "STOP", "MORE_INFO", "FREEFORM"],
+        help="decision value",
+    )
+    p_wf_decision.add_argument(
+        "--free-text",
+        default=None,
+        help="optional freeform text (note or MORE_INFO request details)",
+    )
+    p_wf_decision.add_argument(
+        "--phase",
+        default="initial",
+        choices=["initial", "final"],
+        help="decision phase hint (default: initial)",
+    )
+    p_wf_decision.set_defaults(func=cmd_workflow_decision)
+
+    p_stop_wf = sub.add_parser("stop-workflow", help="POST /stop-workflow")
+    _add_common_flags(p_stop_wf)
+    p_stop_wf.add_argument(
+        "--reason",
+        default="api_stop_workflow",
+        help="stop reason (default: api_stop_workflow)",
+    )
+    p_stop_wf.set_defaults(func=cmd_stop_workflow)
 
     return parser
 
