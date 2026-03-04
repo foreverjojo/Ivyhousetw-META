@@ -12,16 +12,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY requirements.txt ./
 
 # Install uv for faster dependency resolution
 RUN pip install --no-cache-dir uv
 
 # Install Python dependencies using uv
-RUN uv pip install --system --no-cache -r pyproject.toml
-
-# Install Flask for main.py wrapper
-RUN pip install --no-cache-dir flask
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy application code
 COPY . .

@@ -1,0 +1,53 @@
+# Cloud Build 設定：push 到 main 後自動 build Docker image 並部署到 Cloud Run。
+# 注意：
+# - Cloud Run service name 必須是小寫（建議 ivyhouse-meta-analyzer）。
+# - 預設為「私有服務」（不允許未登入存取）。若要公開，將 _ALLOW_UNAUTH 設為 true。
+
+substitutions:
+  _REGION: "us-central1"
+  _SERVICE_NAME: "ivyhouse-meta-analyzer"
+  _MEMORY: "2Gi"
+  _CPU: "2"
+  _TIMEOUT: "3600s"
+  _ALLOW_UNAUTH: "false"
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA"
+      - "."
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA"
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
+    args:
+      - "-ceu"
+      - |
+        if [[ "${_ALLOW_UNAUTH}" == "true" ]]; then
+          AUTH_FLAG="--allow-unauthenticated"
+        else
+          AUTH_FLAG="--no-allow-unauthenticated"
+        fi
+
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --image "gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA" \
+          --region "${_REGION}" \
+          --platform "managed" \
+          --quiet \
+          --port "8080" \
+          --memory "${_MEMORY}" \
+          --cpu "${_CPU}" \
+          --timeout "${_TIMEOUT}" \
+          ${AUTH_FLAG}
+
+images:
+  - "gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
