@@ -7,6 +7,9 @@
 
 ## [未發布]
 
+### 驗證
+- 2026-03-06：驗證 main push 可自動觸發 Cloud Build 並部署至 Cloud Run。
+
 ### 規劃中
 - Phase 4: Streamlit Crew Console MVP
 - Trace ID 追蹤系統
