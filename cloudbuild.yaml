@@ -44,7 +44,7 @@ steps:
           --memory "${_MEMORY}" \
           --cpu "${_CPU}" \
           --timeout "${_TIMEOUT}" \
-          ${AUTH_FLAG}
+          $${AUTH_FLAG}
 
 images:
   - "gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA"
