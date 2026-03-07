@@ -11,9 +11,12 @@ if [ "$#" -lt 4 ]; then
     echo ""
     echo "必要環境變數："
     echo "  IAP_OAUTH_CLIENT_ID       IAP custom OAuth client ID"
-    echo "  IAP_OAUTH_CLIENT_SECRET   IAP custom OAuth client secret"
+    echo "  IAP_OAUTH_CLIENT_SECRET   IAP custom OAuth client secret（或改用 Secret Manager）"
     echo ""
     echo "可選環境變數："
+    echo "  IAP_OAUTH_CLIENT_SECRET_NAME     Secret Manager secret 名稱（若未直接提供 secret）"
+    echo "  IAP_OAUTH_CLIENT_SECRET_VERSION  Secret version；預設 latest"
+    echo "  IAP_OAUTH_CLIENT_SECRET_PROJECT  Secret 所在 project；預設與 PROJECT_ID 相同"
     echo "  STATIC_IP_NAME            預設 ivyhouse-meta-iap-ip"
     echo "  MANAGED_CERT_NAME         預設 ivyhouse-meta-iap-managed-cert"
     echo "  NEG_NAME                  預設 ivyhouse-meta-iap-neg"
@@ -43,8 +46,35 @@ FORWARDING_RULE_NAME="${FORWARDING_RULE_NAME:-ivyhouse-meta-iap-fr}"
 TEST_CERT_NAME="${TEST_CERT_NAME:-ivyhouse-meta-iap-cert}"
 IAP_SA="service-$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')@gcp-sa-iap.iam.gserviceaccount.com"
 
+load_iap_oauth_client_secret() {
+    local secret_project="${IAP_OAUTH_CLIENT_SECRET_PROJECT:-$PROJECT_ID}"
+    local secret_version="${IAP_OAUTH_CLIENT_SECRET_VERSION:-latest}"
+
+    if [ -n "${IAP_OAUTH_CLIENT_SECRET:-}" ]; then
+        return
+    fi
+
+    if [ -z "${IAP_OAUTH_CLIENT_SECRET_NAME:-}" ]; then
+        return
+    fi
+
+    echo "⏳ 從 Secret Manager 載入 IAP OAuth client secret..."
+    IAP_OAUTH_CLIENT_SECRET="$(gcloud secrets versions access "$secret_version" \
+        --secret="$IAP_OAUTH_CLIENT_SECRET_NAME" \
+        --project="$secret_project" 2>/dev/null || true)"
+
+    if [ -z "$IAP_OAUTH_CLIENT_SECRET" ]; then
+        echo "❌ 無法從 Secret Manager 讀取 IAP OAuth client secret：$secret_project/$IAP_OAUTH_CLIENT_SECRET_NAME@$secret_version"
+        exit 1
+    fi
+
+    echo "✅ 已從 Secret Manager 載入 IAP OAuth client secret"
+}
+
+load_iap_oauth_client_secret
+
 if [ -z "${IAP_OAUTH_CLIENT_ID:-}" ] || [ -z "${IAP_OAUTH_CLIENT_SECRET:-}" ]; then
-    echo "❌ 必須提供 IAP_OAUTH_CLIENT_ID 與 IAP_OAUTH_CLIENT_SECRET"
+    echo "❌ 必須提供 IAP_OAUTH_CLIENT_ID，以及 IAP_OAUTH_CLIENT_SECRET 或 IAP_OAUTH_CLIENT_SECRET_NAME"
     exit 1
 fi
 
@@ -338,6 +368,7 @@ gcloud services enable \
     run.googleapis.com \
     compute.googleapis.com \
     iap.googleapis.com \
+    secretmanager.googleapis.com \
     cloudresourcemanager.googleapis.com \
     --project="$PROJECT_ID" >/dev/null
 echo "✅ 必要 API 已啟用"

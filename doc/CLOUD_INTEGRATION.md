@@ -54,7 +54,7 @@ graph LR
 - direct IAP on Cloud Run 雖然文件上存在，但此 project 不屬於 organization，因此無法採用。
 - 目前驗證入口使用 self-signed certificate + static IP；正式環境應切到自訂網域 + Google-managed certificate。
 - Cloud Run 已收斂為 `internal-and-cloud-load-balancing` ingress，避免外部直接經由 `run.app` 旁路。
-- 2026-03-07 真人瀏覽器驗收新增發現：IAM generic OAuth client 可支撐 IAP backend 與程式化 token 驗證，但 live browser flow 仍回 `invalid_client`；最終外部登入仍需 customer-owned OAuth consent screen client。
+- 2026-03-07 已完成 customer-owned OAuth client 修復：Google Auth Platform 上建立的 Web OAuth client 可支撐 live browser flow，並已成功完成帳戶選擇、OAuth 同意與首頁載入。
 
 ---
 
@@ -178,11 +178,11 @@ CLOUD_HTTP_TIMEOUT_S=120
 ### 4.4 OAuth Client 注意事項
 
 - 舊 `gcloud iap oauth-brands` / `gcloud iap oauth-clients` 路線已被官方標示將淘汰，且在本專案會被 `Project must belong to an organization` 阻擋。
-- 本輪驗證改用 `gcloud alpha iam oauth-clients` 建立 generic OAuth client。
+- `gcloud alpha iam oauth-clients` 曾作為探查用 generic client API，但最終正式 browser flow 仍需 Google Auth Platform 建立的 customer-owned Web OAuth client。
 - IAP 實際使用的 redirect URI 必須是：
     - `https://iap.googleapis.com/v1/oauth/clientIds/<CLIENT_ID>:handleRedirect`
 - OAuth client secret 屬敏感資訊，必須放在 Secret Manager 或其他安全儲存，不得寫入 repo。
-- 2026-03-07 真人瀏覽器驗收顯示：generic OAuth client 雖可被 IAP backend 接受，但 Google Accounts browser flow 仍可能回 `The OAuth client was not found`；正式登入需改用具 OAuth consent screen 的 customer-owned OAuth client。
+- 目前正式 client 已改為 `971489052398-untjbrcfdlqc5bg61hbce6aigeia033e.apps.googleusercontent.com`；live 入口實測可成功導向 Google OAuth 並回到應用首頁。
 
 ### 4.5 上傳後追蹤與回滾
 

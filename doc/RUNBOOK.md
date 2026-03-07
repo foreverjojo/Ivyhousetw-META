@@ -147,7 +147,9 @@ gcloud run services describe ivyhouse-meta-analyzer \
 
 ```bash
 export IAP_OAUTH_CLIENT_ID="<iap-client-id>"
-read -rsp "IAP OAuth client secret: " IAP_OAUTH_CLIENT_SECRET && export IAP_OAUTH_CLIENT_SECRET && echo
+export IAP_OAUTH_CLIENT_SECRET_NAME="iap-oauth-client-secret"
+# 如需跨專案取 secret，可另外提供：
+# export IAP_OAUTH_CLIENT_SECRET_PROJECT="ivyhouse-ad-analyzer"
 # 若要同時清理不在 allowlist 內的既有 accessor，另外提供：
 # export IAP_ACCESS_MEMBERS="user:foreverwow001@gmail.com,serviceAccount:971489052398-compute@developer.gserviceaccount.com"
 
@@ -158,9 +160,11 @@ bash scripts/setup_cloud_run_iap_entry.sh \
   adanalyzer.shincold.com
 ```
 
+執行腳本的操作者需具備目標 secret 的讀取權限，例如 `roles/secretmanager.secretAccessor`。
+
   - 快速診斷：
     - `302` 到 `accounts.google.com`：IAP 前門正常，接著檢查登入帳號是否在 IAP IAM allowlist。
-    - `401 invalid_client` / `The OAuth client was not found`：目前掛在 IAP 的 client 不是可供 browser login 的 custom OAuth client；需改用 Google Auth Platform / OAuth consent screen 建立 customer-owned client，再重新套用至 IAP。
+    - `401 invalid_client` / `The OAuth client was not found`：目前 live client 不存在、redirect URI 不正確，或入口仍在吐舊 client。先檢查 `gcloud compute backend-services describe ... --format='json(iap)'` 與 `curl -I https://adanalyzer.shincold.com/` 的 `Location` 是否一致；必要時重新執行 `gcloud iap web enable ...` 或可重跑腳本。
     - `403`：優先檢查 `roles/iap.httpsResourceAccessor` 是否綁在正確的 backend service，而不是只看 project IAM。
     - `404` 來自 `run.app`：這通常表示 Cloud Run ingress 收斂正常，`run.app` 已不是對外入口。
     - 憑證錯誤：優先檢查 DNS 是否已切到 `34.95.93.163`，以及 managed certificate 是否已 `ACTIVE`。

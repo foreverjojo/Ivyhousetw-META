@@ -20,7 +20,7 @@
 本計畫的官方 research 結論：
 - **原第一優先（理論上最簡）**：直接在 Cloud Run 上啟用 IAP（官方文件標示為 Preview）。
 - **實際執行結果**：此專案不屬於任何 organization，已被 direct IAP 官方前提阻塞，因此本任務已正式切換到 `External HTTPS Load Balancer + Serverless NEG + IAP`。
-- **已驗證 MVP 路線**：`Global External HTTPS Load Balancer + Serverless NEG + IAP` 可在本專案落地，並已成功回傳 IAP 302 與帶 token 的 HTTP 200；但 2026-03-07 真人瀏覽器驗收顯示目前使用的 generic OAuth client 仍不足以完成最終 browser login。
+- **已驗證 MVP 路線**：`Global External HTTPS Load Balancer + Serverless NEG + IAP` 已在本專案落地，且 2026-03-07 已改用 Google Auth Platform 建立 customer-owned Web OAuth client，真人瀏覽器驗收可成功完成登入並進入首頁。
 
 ### Non-goals
 - ❌ 不改為方案 B（不把 Cloud Run 改成公開入口 + app 內登入）。
@@ -65,7 +65,8 @@ research_required: true
 - ✅ VERIFIED - `gcloud iap oauth-brands create` 在本專案會回 `Project must belong to an organization`，再次證實舊 IAP brand/client API 路線不可行。
 - ✅ VERIFIED - `gcloud alpha iam oauth-clients` 可在本專案建立 generic OAuth client 與 credential，IAP backend service 也接受該 client id/secret。
 - ✅ VERIFIED - 以 `https://iap.googleapis.com/v1/oauth/clientIds/<CLIENT_ID>:handleRedirect` 作為 redirect URI 後，IAP 入口會對未登入請求回 302 至 Google OAuth，且對帶正確 OIDC token 的請求回 200。
-- ⚠️ RISK: verified - 2026-03-07 真人瀏覽器驗收顯示目前 generic OAuth client 在 Google Accounts 回 `invalid_client`；最終 browser login 仍需 customer-owned OAuth consent screen client。
+- ✅ VERIFIED - 2026-03-07 已於 Google Auth Platform 建立 customer-owned Web OAuth client，並完成 IAP backend 回綁與真人瀏覽器驗收。
+- ⚠️ RISK: verified - 目前 OAuth consent screen 仍為 `External / 測試`，且隱私權政策 / 服務條款頁面建議改為公開網址後再進一步正式發布。
 
 ---
 
@@ -123,7 +124,7 @@ research_required: true
 ### 2. 最小可行路線
 - 以 Google 前置登入層作為單一入口。
 - **已執行路線**：建立 `Global External HTTPS Load Balancer`，後端以 `serverless NEG` 指向 `ivyhouse-meta-analyzer`，並在 backend service 啟用 IAP。
-- OAuth client 不再使用舊 IAP brand/client API，而是使用 generic OAuth client API 建立 custom client，再把 redirect URI 更新為 IAP 實際使用的 `handleRedirect`。
+- OAuth client 不再使用舊 IAP brand/client API；正式 browser flow 改由 Google Auth Platform 建立 customer-owned Web OAuth client，並把 redirect URI 設為 IAP 實際使用的 `handleRedirect`。
 - 以 allowlist 的 Google 帳號或 Google 群組作為第一版授權模型，不導入 user database。
 - Cloud Run 已收斂為 `internal-and-cloud-load-balancing` ingress，避免從 `run.app` 直接繞過前置入口。
 
@@ -197,8 +198,8 @@ qa_tool_version: N/A
 qa_user: vscode
 qa_start: 2026-03-07T16:24:00Z
 qa_end: 2026-03-07T17:16:24Z
-qa_result: FAIL
-qa_compliance: ✅ 已以 codex-cli 完成 formal cross-QA；但 2026-03-07 真人瀏覽器驗收發現 live browser login 仍被 `invalid_client` 阻塞
+qa_result: PASS_WITH_RISK
+qa_compliance: ✅ 已以 codex-cli 完成 formal cross-QA，且 2026-03-07 完成 customer-owned OAuth client 回綁與真人瀏覽器驗收；剩餘風險為 External/測試中與公開條款頁面待補強
 
 # 收尾
 log_file_path: doc/logs/Idx-051_log.md

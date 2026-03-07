@@ -9,10 +9,10 @@
 ## Metadata
 
 - **Start Time**: 2026-03-06 16:22:00 UTC
-- **End Time**: 2026-03-07 17:16:24 UTC
+- **End Time**: 2026-03-07 18:15:45 UTC
 - **Engineer**: opencode（依 Plan 工具選擇）
 - **QA**: codex-cli（Plan 指定；已完成 formal cross-QA）
-- **Duration**: 多輪執行，含 2026-03-07 的修正與 cross-QA 收尾
+- **Duration**: 多輪執行，含 2026-03-07 的 customer-owned OAuth client 修正、Secret Manager 收斂與真人瀏覽器驗收
 
 ---
 
@@ -62,7 +62,13 @@
   - `https://iap.googleapis.com/v1/oauth/clientIds/a5889775f-e34f-481b-b30f-9ab52de675bc:handleRedirect`
 - 更新 OAuth client redirect URI 後，未登入請求會正確 302 到 Google OAuth。
 
-3. 實際建立的 GCP 驗證資源
+3. customer-owned OAuth client 修復完成
+- 在 Google Auth Platform 建立 customer-owned Web OAuth client：`971489052398-untjbrcfdlqc5bg61hbce6aigeia033e.apps.googleusercontent.com`。
+- 重新將 IAP backend service 綁定到新的 OAuth client / secret。
+- live 入口的 `Location` header 已切換為新的 client id，不再引用舊的 generic client。
+- 真人瀏覽器驗收已成功完成：Google 帳戶選擇頁 → OAuth 同意頁 → `首頁 | Ivy House Meta`。
+
+4. 實際建立的 GCP 驗證資源
 - Global static IP: `ivyhouse-meta-iap-ip` → `34.95.93.163`
 - SSL certificate: `ivyhouse-meta-iap-cert`（self-managed / self-signed）
 - Serverless NEG: `ivyhouse-meta-iap-neg`
@@ -71,7 +77,7 @@
 - Target HTTPS proxy: `ivyhouse-meta-iap-proxy`
 - Forwarding rule: `ivyhouse-meta-iap-fr`
 
-4. 權限與硬化
+5. 權限與硬化
 - 建立 IAP service identity：`service-971489052398@gcp-sa-iap.iam.gserviceaccount.com`
 - 授予該 principal `roles/run.invoker`
 - 在 IAP backend service 資源層級授予下列 principal `roles/iap.httpsResourceAccessor`
@@ -79,17 +85,20 @@
   - `serviceAccount:971489052398-compute@developer.gserviceaccount.com`
 - 將 Cloud Run ingress 更新為 `internal-and-cloud-load-balancing`
 
-5. 驗收結果
+6. 驗收結果
 - 未登入請求 `https://34.95.93.163/`：HTTP 302 → `accounts.google.com`
 - 帶 `aud=<IAP client id>` 且含 `email` claim 的 impersonated service account OIDC token：HTTP 200，成功回傳 Streamlit HTML
 - 直接外部請求 `https://ivyhouse-meta-analyzer-dlnp2adjbq-de.a.run.app/`：在 ingress 收斂後回 HTTP 404
 - 正式子網域 `https://adanalyzer.shincold.com/`：Google-managed certificate 已啟用，未登入請求回 HTTP 302 → `accounts.google.com`
-- 2026-03-07 真人瀏覽器驗收：Google 直接回 `Access blocked: Authorization Error` / `The OAuth client was not found` / `Error 401: invalid_client`
+- 2026-03-07 customer-owned OAuth client 回綁後，入口已改回新的 Google OAuth authorize URL。
+- 2026-03-07 真人瀏覽器驗收：成功通過 Google 帳戶選擇頁、OAuth 同意頁，最後載入 `首頁 | Ivy House Meta`。
+- 2026-03-07 最小 smoke test：`bash -n scripts/setup_cloud_run_iap_entry.sh` 通過，且以 `IAP_OAUTH_CLIENT_SECRET_NAME=iap-oauth-client-secret` 重跑腳本後，backend service 仍指向 `971489052398-untjbrcfdlqc5bg61hbce6aigeia033e.apps.googleusercontent.com`，`curl -I https://adanalyzer.shincold.com/` 仍回新的 Google OAuth authorize URL。
 
-6. 第 2 步腳本化
+7. 第 2 步腳本化
 - 新增 `scripts/setup_cloud_run_iap_entry.sh`，將 LB + NEG + IAP + ingress 收斂流程做成可重跑腳本。
-- 腳本不保存 OAuth client secret，改由執行時環境變數注入。
+- 腳本不保存 OAuth client secret，支援執行時環境變數注入，或從 Secret Manager 讀取 `IAP_OAUTH_CLIENT_SECRET_NAME`。
 - 腳本已補齊多輪 review 修正：IAP enable idempotency、managed cert/NEG drift、global LB scope、forwarding rule / backend 收斂，以及 IAP allowlist 管理。
+- 2026-03-07 已以 `IAP_OAUTH_CLIENT_SECRET_NAME=iap-oauth-client-secret` 成功重跑腳本，驗證 Secret Manager 路徑可用。
 
 ---
 
@@ -99,7 +108,7 @@
 **Solution**: 改走 `External HTTPS Load Balancer + Serverless NEG + IAP` fallback。
 
 ### Challenge: 舊 IAP OAuth brand/client API 在本專案無法使用
-**Solution**: 改用 `gcloud alpha iam oauth-clients` 建立 generic OAuth client 與 credential。
+**Solution**: 先用 generic OAuth client 驗證 IAP backend 路徑，再改由 Google Auth Platform 建立 customer-owned Web OAuth client 完成真人瀏覽器登入。
 
 ### Challenge: 一開始不知道 IAP 真正需要的 redirect URI
 **Solution**: 先啟用 IAP 觀察未登入 302，從 `Location` header 反推出 `handleRedirect` URI，再回寫到 OAuth client。
@@ -115,55 +124,58 @@
 |--------|---------|------|---------|
 | Google 前置登入架構 | LB + NEG + IAP | direct IAP 已被 organization 前提阻塞 | 公開 Cloud Run + app 內登入 |
 | TLS 驗證入口 | self-signed + static IP | 快速驗證 IAP / LB 路徑，不等待 DNS | 自訂網域 + Google-managed certificate |
-| OAuth client 建立方式 | generic OAuth client API | 舊 IAP brand/client API 在本專案不可用 | Console 手動建立 OAuth client |
+| OAuth client 建立方式 | Google Auth Platform customer-owned Web client | 可完成真人瀏覽器登入與 OAuth consent screen | generic OAuth client API |
 
 ---
 
 ## QA Status
 
-- **Status**: ❌ FAIL
+- **Status**: ⚠️ PASS WITH RISK
 - **QA Date**: 2026-03-07
 - **QA Notes**:
   - 已完成 infra 路徑實測：IAP 302、token-auth 200、Cloud Run ingress 收斂後 run.app 不再可作為對外入口。
   - 已以 `codex-cli` 非互動 review 進行 formal cross-QA，並依 findings 補齊腳本的重跑安全性、權限範圍與資源漂移收斂。
-  - `shellcheck` 在此環境不可用，因此 shell 腳本靜態驗證目前以 `bash -n` 與 `codex-cli` review 為主。
-  - 2026-03-07 真人瀏覽器驗收失敗：目前掛在 IAP backend 的 generic OAuth client 會在 Google Accounts 回 `invalid_client`，因此最終 browser login 尚未達標。
+  - 2026-03-07 已完成 customer-owned OAuth client 回綁，live 入口 `curl -I` 會吐出新的 Google OAuth authorize URL，且真人瀏覽器驗收已成功回到首頁。
+  - `shellcheck` 在此環境不可用，因此 shell 腳本靜態驗證目前以 `bash -n` 與 runtime smoke test 為主。
 
 ### ⚠️ Cross-QA Compliance
 
 **Executor**: opencode
 **QA Tool**: codex-cli
-**QA Compliance**: ✅ 已依 Plan 以不同工具完成 formal cross-QA；但最終真人瀏覽器驗收失敗，因此任務結果為 FAIL
+**QA Compliance**: ⚠️ formal cross-QA 仍以前一輪 `codex-cli` 為準；本輪 customer-owned OAuth client 修復已補做 runtime 驗收，但尚未追加第二輪不同工具的 repo-side review
 
 ### Test Results
 - [x] 整合測試通過（IAP + LB + Cloud Run 路徑可達）
 - [x] 手動命令驗證通過（HTTP 302 / HTTP 200 / run.app 404）
 - [x] 文檔已更新（Index + Plan/Log + Deploy/Cloud Integration + Runbook）
 - [x] 正式 cross-QA 完成（`codex-cli` 非互動 review，多輪 findings 已修正）
-- [x] 實際瀏覽器人工驗收已執行，但結果為 `invalid_client` / FAIL
+- [x] customer-owned OAuth client 已建立並回綁至 IAP backend
+- [x] Secret Manager secret `iap-oauth-client-secret` 已建立並由腳本成功讀取
+- [x] 最小 smoke test 已通過（`bash -n` + 腳本重跑 + live 302 + 首頁載入）
+- [x] 實際瀏覽器人工驗收已執行，結果為 PASS（帳戶選擇 → OAuth 同意 → 首頁）
 
 ---
 
 ## Outcome
 
-- `LB + NEG + IAP + custom domain` 的基礎設施路徑已成立，且程式化 access 可用。
-- 但目前使用的 generic OAuth client 仍無法完成真人瀏覽器登入，因此 Idx-051 尚未達成最終驗收。
+- `LB + NEG + IAP + custom domain` 的基礎設施路徑已成立，且 customer-owned OAuth client 已成功接手 browser flow。
+- 授權使用者現在可透過 Google OAuth 瀏覽器流程登入並進入 `Ivy House Meta` 首頁。
 
 ---
 
 ## Residual Risks
 
-1. 尚未完成 user browser 的人工登入驗收，因此最終使用者體驗仍缺一次真人流程確認。
-2. `shellcheck` 不在目前環境內，shell 腳本未做該工具的額外 lint。
-3. 若未提供 `IAP_ACCESS_MEMBERS` 完整 allowlist，腳本會採安全的「補齊但不刪除既有 accessor」模式；需要收斂授權名單時應明確提供完整 allowlist。
-4. live IAP backend 目前使用的 client 雖存在於 IAM API，但真人瀏覽器登入會回 `invalid_client`；需改成具 OAuth consent screen 的 customer-owned OAuth client。
+1. OAuth consent screen 目前仍為 `External / 測試`；若要擴大給更多外部使用者，需再處理正式發布與驗證。
+2. 目前條款與隱私權政策連結雖已填入 OAuth consent screen，但建議改成真正公開、可直接存取的頁面，而非受 IAP 保護的 app 路由。
+3. `shellcheck` 不在目前環境內，shell 腳本未做該工具的額外 lint。
+4. 若未提供 `IAP_ACCESS_MEMBERS` 完整 allowlist，腳本會採安全的「補齊但不刪除既有 accessor」模式；需要收斂授權名單時應明確提供完整 allowlist。
 
 ---
 
 ## Next Steps
 
-1. 先在 Google Auth Platform / OAuth consent screen 建立真正可供 browser login 的 customer-owned OAuth client。
-2. 以新的 client id / secret 重新套用 IAP backend service，然後重做真人瀏覽器登入驗收。
+1. 視需要把 OAuth consent screen 從 `測試中` 推進到正式發布，並完成 Google 驗證流程。
+2. 將隱私權政策 / 服務條款改成公開頁面，避免未登入使用者點擊說明連結時落到受保護路徑。
 3. 若後續要精準縮減 IAP 可存取對象，執行腳本時改用 `IAP_ACCESS_MEMBERS` 提供完整 allowlist。
 
 ---
