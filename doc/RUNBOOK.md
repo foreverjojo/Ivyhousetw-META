@@ -105,6 +105,66 @@ python scripts/portable/check_extensions_consistency.py --verbose
 python scripts/portable/check_extensions_consistency.py --fix
 ```
 
+- `adanalyzer.shincold.com` 無法進入或只看到 403/404：
+  - 先確認 DNS 是否解析到 Load Balancer IP `34.95.93.163`。
+  - 檢查 Google-managed certificate 是否為 `ACTIVE`：
+
+```bash
+gcloud compute ssl-certificates describe ivyhouse-meta-iap-managed-cert \
+  --global \
+  --project=ivyhouse-ad-analyzer \
+  --format='yaml(managed.status,managed.domainStatus)'
+```
+
+  - 檢查 backend service 的 IAP 是否啟用且 client ID 正確：
+
+```bash
+gcloud compute backend-services describe ivyhouse-meta-iap-backend \
+  --global \
+  --project=ivyhouse-ad-analyzer \
+  --format='json(iap)'
+```
+
+  - 檢查 IAP backend service IAM 是否真的包含目標使用者 / service account：
+
+```bash
+gcloud iap web get-iam-policy \
+  --resource-type=backend-services \
+  --service=ivyhouse-meta-iap-backend \
+  --project=ivyhouse-ad-analyzer
+```
+
+  - 檢查 Cloud Run ingress 是否已收斂為 `internal-and-cloud-load-balancing`：
+
+```bash
+gcloud run services describe ivyhouse-meta-analyzer \
+  --region=asia-east1 \
+  --project=ivyhouse-ad-analyzer \
+  --format='value(spec.template.metadata.annotations.run.googleapis.com/ingress)'
+```
+
+  - 若要重建入口資源，重新執行：
+
+```bash
+export IAP_OAUTH_CLIENT_ID="<iap-client-id>"
+read -rsp "IAP OAuth client secret: " IAP_OAUTH_CLIENT_SECRET && export IAP_OAUTH_CLIENT_SECRET && echo
+# 若要同時清理不在 allowlist 內的既有 accessor，另外提供：
+# export IAP_ACCESS_MEMBERS="user:foreverwow001@gmail.com,serviceAccount:971489052398-compute@developer.gserviceaccount.com"
+
+bash scripts/setup_cloud_run_iap_entry.sh \
+  ivyhouse-ad-analyzer \
+  asia-east1 \
+  ivyhouse-meta-analyzer \
+  adanalyzer.shincold.com
+```
+
+  - 快速診斷：
+    - `302` 到 `accounts.google.com`：IAP 前門正常，接著檢查登入帳號是否在 IAP IAM allowlist。
+    - `401 invalid_client` / `The OAuth client was not found`：目前掛在 IAP 的 client 不是可供 browser login 的 custom OAuth client；需改用 Google Auth Platform / OAuth consent screen 建立 customer-owned client，再重新套用至 IAP。
+    - `403`：優先檢查 `roles/iap.httpsResourceAccessor` 是否綁在正確的 backend service，而不是只看 project IAM。
+    - `404` 來自 `run.app`：這通常表示 Cloud Run ingress 收斂正常，`run.app` 已不是對外入口。
+    - 憑證錯誤：優先檢查 DNS 是否已切到 `34.95.93.163`，以及 managed certificate 是否已 `ACTIVE`。
+
 ## 回滾/回復（手動）
 - 回滾 container image：修改 `.devcontainer/devcontainer.json` 中的 `image` 欄位回到先前已知 digest，或在本地使用舊 tag。
 - 回滾程式碼：

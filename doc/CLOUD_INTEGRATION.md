@@ -40,6 +40,22 @@ graph TB
     A --> D
 ```
 
+### 1.1 私有網站入口（Idx-051）
+
+```mermaid
+graph LR
+    A[Browser] --> B[External HTTPS Load Balancer]
+    B --> C[IAP]
+    C --> D[Serverless NEG]
+    D --> E[Cloud Run: ivyhouse-meta-analyzer]
+```
+
+- 本專案目前已驗證可用的瀏覽器入口為 `External HTTPS Load Balancer + IAP`，不是 app 內 login 頁。
+- direct IAP on Cloud Run 雖然文件上存在，但此 project 不屬於 organization，因此無法採用。
+- 目前驗證入口使用 self-signed certificate + static IP；正式環境應切到自訂網域 + Google-managed certificate。
+- Cloud Run 已收斂為 `internal-and-cloud-load-balancing` ingress，避免外部直接經由 `run.app` 旁路。
+- 2026-03-07 真人瀏覽器驗收新增發現：IAM generic OAuth client 可支撐 IAP backend 與程式化 token 驗證，但 live browser flow 仍回 `invalid_client`；最終外部登入仍需 customer-owned OAuth consent screen client。
+
 ---
 
 ## 2. Google Drive 整合
@@ -152,7 +168,23 @@ CLOUD_HTTP_TIMEOUT_S=120
 | Google Drive | `https://www.googleapis.com/auth/drive.file` | 僅存取本 App 建立的檔案 |
 | Secret Manager | `https://www.googleapis.com/auth/cloud-platform` | 讀取 Secret |
 
-### 4.3 上傳後追蹤與回滾
+### 4.3 IAP / Web 入口最小權限
+
+| Principal | Role | 用途 |
+|------|------|------|
+| `service-971489052398@gcp-sa-iap.iam.gserviceaccount.com` | `roles/run.invoker` | 允許 IAP 代表使用者呼叫後端 Cloud Run |
+| 已授權使用者 / Service Account | `roles/iap.httpsResourceAccessor` | 綁定於 IAP backend service 資源層級，允許通過 IAP 存取單一網站入口 |
+
+### 4.4 OAuth Client 注意事項
+
+- 舊 `gcloud iap oauth-brands` / `gcloud iap oauth-clients` 路線已被官方標示將淘汰，且在本專案會被 `Project must belong to an organization` 阻擋。
+- 本輪驗證改用 `gcloud alpha iam oauth-clients` 建立 generic OAuth client。
+- IAP 實際使用的 redirect URI 必須是：
+    - `https://iap.googleapis.com/v1/oauth/clientIds/<CLIENT_ID>:handleRedirect`
+- OAuth client secret 屬敏感資訊，必須放在 Secret Manager 或其他安全儲存，不得寫入 repo。
+- 2026-03-07 真人瀏覽器驗收顯示：generic OAuth client 雖可被 IAP backend 接受，但 Google Accounts browser flow 仍可能回 `The OAuth client was not found`；正式登入需改用具 OAuth consent screen 的 customer-owned OAuth client。
+
+### 4.5 上傳後追蹤與回滾
 
 - 每次上傳成功後，將 `{local_path, remote_id, sha256_8}` 寫入 `upload_manifest.json`
 - 回滾時可依 `remote_id` 刪除雲端檔案

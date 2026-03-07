@@ -2,7 +2,7 @@
 
 ## 🎯 當前狀態：Phase 4 Stage 2 完成，Meta V2 核心整合達成 (100%)
 
-**最後更新**：2026-02-25
+**最後更新**：2026-03-07
 
 ---
 
@@ -18,6 +18,7 @@
 | Idx-047 | 整併 recovery/stash1-20260227（commit 61b86cc）：整理後可合回 main | P1 | ⏳ 待處理 | TBD | TBD | 2026-02-27-v1 | pending | Plan：`doc/plans/Idx-047_plan.md`；來源分支：`recovery/stash1-20260227` |
 | Idx-049 | 修正 Google Drive 週備份：SA quota 403 時改用 OAuth token 重試上傳 | P0 | ✅ 已完成 | opencode | PASS | 2026-03-01-v1 | `doc/logs/Idx-049_log.md` | Plan：`doc/plans/Idx-049_plan.md` |
 | Idx-050 | 最小 E2E 驗收清單回填（Drive / LLM / Cloud Run） | P1 | ⏳ 待處理 | opencode | pending | 2026-03-01-v1 | pending | Plan：`doc/plans/Idx-050_plan.md`（回填至 `doc/logs/Idx-038_log.md`、`doc/logs/Idx-043_log.md`） |
+| Idx-051 | 方案 A：以 Google 前置身分保護私有 Cloud Run 網站入口 | P0 | ⚠️ 有風險 | opencode | FAIL | 2026-03-06-v1 | `doc/logs/Idx-051_log.md` | Plan：`doc/plans/Idx-051_plan.md`；LB+NEG+IAP 與自訂網域已落地，但 2026-03-07 真人瀏覽器驗收卡在 `invalid_client`，需改用具 OAuth consent screen 的 customer-owned OAuth client |
 | Idx-046 | 清理剩餘 stash：以 recovery 分支保存並清空 | P1 | ✅ 已完成 | OpenCode | PASS WITH RISK | 2026-02-27-v1 | `doc/logs/Idx-046_log.md` | Plan：`doc/plans/Idx-046_plan.md`；分支：`recovery/stash0-20260227`、`recovery/stash1-20260227` |
 | Idx-001 | 建立 `doc/logs/` 資料夾 + Log 範本 | P0 | ✅ 已完成 | Manual | PASS | — | — | 已建立範本 `Idx-000_log.template.md` |
 | Idx-002 | 更新 Index 表欄位與治理資訊 | P0 | ✅ 已完成 | Copilot Chat | PASS | 2026-01-10-v1 | `doc/logs/Idx-002_log.md` | Index 清理與統一完成 |
