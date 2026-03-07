@@ -174,6 +174,20 @@ printf '%s' '<iap-client-secret>' | gcloud secrets versions add iap-oauth-client
 若只設定 `IAP_USER_MEMBER` / `IAP_SERVICE_ACCOUNT_MEMBER`，腳本會補齊指定成員但保留其他既有 accessor；若要讓 allowlist 完整收斂，請明確提供 `IAP_ACCESS_MEMBERS`。
 此腳本負責收斂 LB / NEG / IAP / ingress 與 accessor 狀態，但不會替你建立 Google OAuth consent screen；若提供的 client 不是 browser-capable customer-owned Web OAuth client，真人登入仍可能失敗。
 
+### 公開 Privacy / Terms 頁面
+
+OAuth consent screen 若要進一步正式發布，homepage、privacy policy、terms of service 都必須是公開可見網址。
+
+本 repo 已新增 GitHub Pages 版公開頁面來源：`public_site/`，預設部署後網址為：
+
+- Home: `https://foreverjojo.github.io/Ivyhousetw-META/`
+- Privacy: `https://foreverjojo.github.io/Ivyhousetw-META/privacy/`
+- Terms: `https://foreverjojo.github.io/Ivyhousetw-META/terms/`
+
+部署 workflow：`.github/workflows/public-legal-pages.yml`
+
+若後續要送 Google brand verification，建議再把這組公開頁切到可由你驗證所有權的正式網域，例如 `legal.shincold.com`，並依 `doc/OAUTH_CONSENT_PUBLICATION.md` 完成 Search Console 驗證與 Branding 更新。
+
 此腳本會可重跑地處理：
 - global static IP
 - Google-managed certificate

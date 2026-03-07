@@ -10,6 +10,13 @@
 - Latest: `0.3.0` (2026-01-04) — Phase 3 多通路擴充（Shopee/MOMO）+ 觀測性基礎建設（structured logging / LLM monitor）
 - Unreleased: Phase 4 Streamlit Crew Console MVP、Trace ID 追蹤系統（詳見 `CHANGELOG.md`）
 
+## Public legal pages
+- GitHub Pages source: `public_site/`
+- Default public home: `https://foreverjojo.github.io/Ivyhousetw-META/`
+- Privacy policy: `https://foreverjojo.github.io/Ivyhousetw-META/privacy/`
+- Terms of service: `https://foreverjojo.github.io/Ivyhousetw-META/terms/`
+- OAuth consent screen publication checklist: `doc/OAUTH_CONSENT_PUBLICATION.md`
+
 
 ## Run app
 ```bash
