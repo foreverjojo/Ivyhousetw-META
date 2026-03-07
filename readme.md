@@ -12,9 +12,11 @@
 
 ## Public legal pages
 - GitHub Pages source: `public_site/`
-- Default public home: `https://foreverjojo.github.io/Ivyhousetw-META/`
-- Privacy policy: `https://foreverjojo.github.io/Ivyhousetw-META/privacy/`
-- Terms of service: `https://foreverjojo.github.io/Ivyhousetw-META/terms/`
+- Live public home: `https://adanalyzer.shincold.com/legal/`
+- Live privacy policy: `https://adanalyzer.shincold.com/legal/privacy/`
+- Live terms of service: `https://adanalyzer.shincold.com/legal/terms/`
+- Live delivery path: GCS backend bucket on the existing HTTPS Load Balancer
+- GitHub Pages backup workflow: `.github/workflows/public-legal-pages.yml`
 - OAuth consent screen publication checklist: `doc/OAUTH_CONSENT_PUBLICATION.md`
 
 

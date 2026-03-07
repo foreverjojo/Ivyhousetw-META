@@ -178,15 +178,22 @@ printf '%s' '<iap-client-secret>' | gcloud secrets versions add iap-oauth-client
 
 OAuth consent screen 若要進一步正式發布，homepage、privacy policy、terms of service 都必須是公開可見網址。
 
-本 repo 已新增 GitHub Pages 版公開頁面來源：`public_site/`，預設部署後網址為：
+本 repo 已新增公開頁面來源：`public_site/`，目前 live 路徑已掛在既有正式網域：
 
-- Home: `https://foreverjojo.github.io/Ivyhousetw-META/`
-- Privacy: `https://foreverjojo.github.io/Ivyhousetw-META/privacy/`
-- Terms: `https://foreverjojo.github.io/Ivyhousetw-META/terms/`
+- Home: `https://adanalyzer.shincold.com/legal/`
+- Privacy: `https://adanalyzer.shincold.com/legal/privacy/`
+- Terms: `https://adanalyzer.shincold.com/legal/terms/`
 
-部署 workflow：`.github/workflows/public-legal-pages.yml`
+live 部署方式：
 
-若後續要送 Google brand verification，建議再把這組公開頁切到可由你驗證所有權的正式網域，例如 `legal.shincold.com`，並依 `doc/OAUTH_CONSENT_PUBLICATION.md` 完成 Search Console 驗證與 Branding 更新。
+- static source：`public_site/`
+- GCS bucket：`gs://ivyhouse-ad-analyzer-public-pages-971489052398/legal/`
+- LB backend bucket：`ivyhouse-meta-public-pages`
+- URL map path：`/legal`、`/legal/privacy`、`/legal/terms`
+
+repo 內也保留 `.github/workflows/public-legal-pages.yml` 作為 GitHub Pages 備援發佈路徑；若後續需要獨立 public site，可再啟用。
+
+既然目前公開頁已位於 `adanalyzer.shincold.com` 同網域，後續送 Google brand verification 時，優先以這組 live URL 回填 Branding，並依 `doc/OAUTH_CONSENT_PUBLICATION.md` 完成 Search Console 驗證與正式發布。
 
 此腳本會可重跑地處理：
 - global static IP

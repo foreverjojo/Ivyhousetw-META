@@ -4,28 +4,36 @@
 
 ## 1. 公開頁面
 
-本 repo 已提供 GitHub Pages 用的公開頁面來源：`public_site/`。
+本 repo 已提供公開頁面來源：`public_site/`，並已掛到既有正式網域的公開 path。
 
-預設公開網址：
+目前 live 公開網址：
 
-- Home: `https://foreverjojo.github.io/Ivyhousetw-META/`
-- Privacy: `https://foreverjojo.github.io/Ivyhousetw-META/privacy/`
-- Terms: `https://foreverjojo.github.io/Ivyhousetw-META/terms/`
+- Home: `https://adanalyzer.shincold.com/legal/`
+- Privacy: `https://adanalyzer.shincold.com/legal/privacy/`
+- Terms: `https://adanalyzer.shincold.com/legal/terms/`
 
 部署方式：
 
+- static source：`public_site/`
+- GCS bucket：`gs://ivyhouse-ad-analyzer-public-pages-971489052398/legal/`
+- Load Balancer path：`/legal`、`/legal/privacy`、`/legal/terms`
+
+備援方式：
+
 - Workflow: `.github/workflows/public-legal-pages.yml`
-- 觸發條件：push 到 `main` 或 `chore/cloudbuild-cloudrun`，或手動 `workflow_dispatch`
+- 用途：若日後要切到 GitHub Pages 獨立公開站，可直接沿用
 
 ## 2. Google Auth Platform 建議回填值
 
 Branding 頁建議至少更新以下欄位：
 
 - App name: `Ivyhouse Meta Analyzer`
-- Homepage: `https://foreverjojo.github.io/Ivyhousetw-META/`
-- Privacy policy: `https://foreverjojo.github.io/Ivyhousetw-META/privacy/`
-- Terms of service: `https://foreverjojo.github.io/Ivyhousetw-META/terms/`
+- Homepage: `https://adanalyzer.shincold.com/legal/`
+- Privacy policy: `https://adanalyzer.shincold.com/legal/privacy/`
+- Terms of service: `https://adanalyzer.shincold.com/legal/terms/`
 - Support email: `foreverwow001@gmail.com`
+
+2026-03-07 狀態：Branding draft 已更新並儲存為上述 `/legal/...` live URL。
 
 ## 3. Authorized domains
 
@@ -38,17 +46,17 @@ Google 官方要求：
 
 實務上建議兩條路擇一：
 
-1. 臨時公開頁：先使用 GitHub Pages 預設網址，讓公開文件先上線。
-2. 正式送審：改用你可驗證所有權的正式網域，例如 `legal.shincold.com`，並在 Search Console 完成驗證。
+1. 目前 live 路徑已在 `adanalyzer.shincold.com`，可直接作為同網域公開頁方案。
+2. 若未來要再拆出獨立 legal site，可改成 `legal.shincold.com`，並在 Search Console 完成驗證。
 
 ## 4. 正式發布前的檢查清單
 
-- [ ] GitHub Pages workflow 已成功部署公開頁。
+- [x] `adanalyzer.shincold.com/legal/` 已公開可存取。
 - [ ] 公開首頁可清楚描述產品功能，不是只有登入入口。
 - [ ] 公開首頁已連到 Privacy 與 Terms。
 - [ ] Privacy policy 已揭露如何存取、使用、保存與分享 Google user data。
 - [ ] Terms 已說明授權、責任與 AI 生成內容限制。
-- [ ] Branding / Developer contact information 已更新為有效聯絡方式。
+- [x] Branding draft / Developer contact information 已更新為有效聯絡方式。
 - [ ] Authorized domains 已與實際公開頁、OAuth client 設定一致。
 - [ ] Search Console 已驗證正式送審要使用的網域。
 - [ ] 若要顯示正式 app name / logo，已準備送 brand verification。

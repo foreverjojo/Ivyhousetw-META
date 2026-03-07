@@ -93,6 +93,8 @@
 - 2026-03-07 customer-owned OAuth client 回綁後，入口已改回新的 Google OAuth authorize URL。
 - 2026-03-07 真人瀏覽器驗收：成功通過 Google 帳戶選擇頁、OAuth 同意頁，最後載入 `首頁 | Ivy House Meta`。
 - 2026-03-07 最小 smoke test：`bash -n scripts/setup_cloud_run_iap_entry.sh` 通過，且以 `IAP_OAUTH_CLIENT_SECRET_NAME=iap-oauth-client-secret` 重跑腳本後，backend service 仍指向 `971489052398-untjbrcfdlqc5bg61hbce6aigeia033e.apps.googleusercontent.com`，`curl -I https://adanalyzer.shincold.com/` 仍回新的 Google OAuth authorize URL。
+- 2026-03-07 公開 legal pages 已掛到 `https://adanalyzer.shincold.com/legal/`、`/legal/privacy/`、`/legal/terms/`，且 `curl -I` 驗證為 HTTP 200；同時網站根目錄 `/` 仍維持 IAP 302。
+- 2026-03-07 Google Auth Platform Branding draft 已更新並儲存為新的 `/legal/...` 公開網址。
 
 7. 第 2 步腳本化
 - 新增 `scripts/setup_cloud_run_iap_entry.sh`，將 LB + NEG + IAP + ingress 收斂流程做成可重跑腳本。
@@ -166,7 +168,7 @@
 ## Residual Risks
 
 1. OAuth consent screen 目前仍為 `External / 測試`；若要擴大給更多外部使用者，需再處理正式發布與驗證。
-2. 目前條款與隱私權政策連結雖已填入 OAuth consent screen，但建議改成真正公開、可直接存取的頁面，而非受 IAP 保護的 app 路由。
+2. 正式送審前仍需確認 Search Console 網域驗證、authorized domains 與 Verification Center 狀態一致。
 3. `shellcheck` 不在目前環境內，shell 腳本未做該工具的額外 lint。
 4. 若未提供 `IAP_ACCESS_MEMBERS` 完整 allowlist，腳本會採安全的「補齊但不刪除既有 accessor」模式；需要收斂授權名單時應明確提供完整 allowlist。
 
@@ -175,7 +177,7 @@
 ## Next Steps
 
 1. 視需要把 OAuth consent screen 從 `測試中` 推進到正式發布，並完成 Google 驗證流程。
-2. 將隱私權政策 / 服務條款改成公開頁面，避免未登入使用者點擊說明連結時落到受保護路徑。
+2. 在 Google Search Console 完成 `shincold.com` 網域驗證，並檢查 Verification Center 是否可直接送 brand verification。
 3. 若後續要精準縮減 IAP 可存取對象，執行腳本時改用 `IAP_ACCESS_MEMBERS` 提供完整 allowlist。
 
 ---
