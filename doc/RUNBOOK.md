@@ -189,6 +189,90 @@ git push origin main
 
 ---
 
+## Testing 小範圍使用：新增主管帳號 SOP
+
+> **適用情境**：OAuth consent screen 維持 `External / 測試` 狀態，需要新增一位主管帳號讓其可登入 `adanalyzer.shincold.com`。
+>
+> ⚠️ **重要**：Testing 模式下必須同步更新以下**兩個地方**，缺一不可。僅更新 IAP allowlist 而未補 Google Auth Platform test users，該帳號仍會被 OAuth 同意頁擋回。
+
+### 為什麼只補 IAP allowlist 不夠？
+
+```
+瀏覽器 → IAP（驗身分）→ Google Auth Platform OAuth consent screen（驗是否 test user）→ Cloud Run
+```
+
+- **IAP allowlist**（`roles/iap.httpsResourceAccessor`）：決定「誰被允許通過 IAP 閘道」。
+- **Google Auth Platform test users**（`目標對象 > 測試使用者`）：決定「OAuth consent screen 在 Testing 模式下允許哪些 Google 帳號完成登入授權」。
+- 若 OAuth consent screen 為 `Testing` 狀態，不在 test users 清單內的帳號會在 OAuth 階段收到 `Error 403: access_denied`，即使 IAP allowlist 已有該帳號。
+
+### 新增一位主管的最小步驟
+
+**Step 1：Google Auth Platform — 新增 test user（Console 操作）**
+
+1. 開啟 [Google Auth Platform](https://console.cloud.google.com/auth/audience?project=ivyhouse-ad-analyzer)。
+2. 左側選 **目標對象**。
+3. 確認目前在 `External / 測試` 狀態，找到 **測試使用者** 區塊。
+4. 點 **新增使用者** → 輸入主管 email → 儲存。
+5. 儲存後頁面應顯示該 email 已列入清單。
+
+**Step 2：IAP IAM — 新增 accessor（CLI 操作）**
+
+```bash
+gcloud iap web add-iam-policy-binding \
+  --resource-type=backend-services \
+  --service=ivyhouse-meta-iap-backend \
+  --project=ivyhouse-ad-analyzer \
+  --member='user:<新主管 email>' \
+  --role='roles/iap.httpsResourceAccessor'
+```
+
+> ✅ 此指令為**追加**操作，不會影響現有 principals。
+
+### 如何查詢目前名單
+
+**IAP allowlist（CLI）**
+
+```bash
+gcloud iap web get-iam-policy \
+  --resource-type=backend-services \
+  --service=ivyhouse-meta-iap-backend \
+  --project=ivyhouse-ad-analyzer \
+  --format='json'
+```
+
+**Google Auth Platform test users（Console）**
+
+開啟 [Google Auth Platform > 目標對象](https://console.cloud.google.com/auth/audience?project=ivyhouse-ad-analyzer) → 測試使用者區塊。
+
+### 目前正式維護名單（2026-03-08 更新）
+
+| 帳號 | IAP allowlist | Google test users | 說明 |
+|------|:---:|:---:|------|
+| `foreverwow001@gmail.com` | ✅ | ✅ | 原始開發者帳號（Idx-051 建立） |
+| `ivyhousetw@gmail.com` | ✅ | ✅ | 主管帳號（Idx-052 新增） |
+| `foreverjojo@gmail.com` | ✅ | ✅ | 主管帳號（Idx-052 新增） |
+| `maomaohappymeow@gmail.com` | ✅ | ✅ | 主管帳號（Idx-052 新增） |
+| `serviceAccount:971489052398-compute@developer.gserviceaccount.com` | ✅ | — | Compute SA（程式呼叫用） |
+
+> **注意**：Google Auth Platform test users 需由持有 GCP project owner/editor 的帳號在 Console 操作，無 CLI 批次指令可用。Idx-052 的 3 位主管帳號已由操作者手動加入，IAP allowlist 部分也已由 Idx-052 以 CLI 完成。各帳號的首次真人登入 smoke check 仍需由帳號持有人在實際登入時補驗。
+
+### 移除主管帳號
+
+**IAP allowlist（CLI）**
+
+```bash
+gcloud iap web remove-iam-policy-binding \
+  --resource-type=backend-services \
+  --service=ivyhouse-meta-iap-backend \
+  --project=ivyhouse-ad-analyzer \
+  --member='user:<主管 email>' \
+  --role='roles/iap.httpsResourceAccessor'
+```
+
+**Google Auth Platform test users**：在 Console 的測試使用者區塊手動移除。
+
+---
+
 如需，我可以：
 - 1) 將此檔加入 repo（commit & push）；
 - 2) 同時建立一個簡短 `scripts/ops/checks.sh` 來執行關鍵驗證指令。

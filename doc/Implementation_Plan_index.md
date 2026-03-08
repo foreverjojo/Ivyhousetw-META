@@ -2,7 +2,7 @@
 
 ## 🎯 當前狀態：Phase 4 Stage 2 完成，Meta V2 核心整合達成 (100%)
 
-**最後更新**：2026-03-07
+**最後更新**：2026-03-08
 
 ---
 
@@ -15,6 +15,7 @@
 
 | Index | 任務標題 | 優先級 | Status | Executor Tool | QA Result | Plan Version | Log 檔 | 備註 |
 |-------|----------|--------|--------|---------------|-----------|-------------|--------|------|
+| Idx-052 | Testing 小範圍使用：主管帳號開通與 access runbook 收斂 | P0 | ⚠️ 有風險 | opencode | PASS WITH RISK | 2026-03-08-v1 | `doc/logs/Idx-052_log.md` | 3 位主管 email 已完成 Google Auth Platform test users 與 IAP allowlist 補齊；已新增短 runbook `doc/testing_small_scope_runbook.md` |
 | Idx-047 | 整併 recovery/stash1-20260227（commit 61b86cc）：整理後可合回 main | P1 | ⏳ 待處理 | TBD | TBD | 2026-02-27-v1 | pending | Plan：`doc/plans/Idx-047_plan.md`；來源分支：`recovery/stash1-20260227` |
 | Idx-049 | 修正 Google Drive 週備份：SA quota 403 時改用 OAuth token 重試上傳 | P0 | ✅ 已完成 | opencode | PASS | 2026-03-01-v1 | `doc/logs/Idx-049_log.md` | Plan：`doc/plans/Idx-049_plan.md` |
 | Idx-050 | 最小 E2E 驗收清單回填（Drive / LLM / Cloud Run） | P1 | ⏳ 待處理 | opencode | pending | 2026-03-01-v1 | pending | Plan：`doc/plans/Idx-050_plan.md`（回填至 `doc/logs/Idx-038_log.md`、`doc/logs/Idx-043_log.md`） |
