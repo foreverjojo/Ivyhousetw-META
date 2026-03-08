@@ -11,12 +11,11 @@
 - Unreleased: Phase 4 Streamlit Crew Console MVP、Trace ID 追蹤系統（詳見 `CHANGELOG.md`）
 
 ## Public legal pages
-- GitHub Pages source: `public_site/`
+- Static source: `public_site/`
 - Live public home: `https://adanalyzer.shincold.com/legal/`
 - Live privacy policy: `https://adanalyzer.shincold.com/legal/privacy/`
 - Live terms of service: `https://adanalyzer.shincold.com/legal/terms/`
 - Live delivery path: GCS backend bucket on the existing HTTPS Load Balancer
-- GitHub Pages backup workflow: `.github/workflows/public-legal-pages.yml`
 - OAuth consent screen publication checklist: `doc/OAUTH_CONSENT_PUBLICATION.md`
 
 

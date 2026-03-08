@@ -191,8 +191,6 @@ live 部署方式：
 - LB backend bucket：`ivyhouse-meta-public-pages`
 - URL map path：`/legal`、`/legal/privacy`、`/legal/terms`
 
-repo 內也保留 `.github/workflows/public-legal-pages.yml` 作為 GitHub Pages 備援發佈路徑；若後續需要獨立 public site，可再啟用。
-
 既然目前公開頁已位於 `adanalyzer.shincold.com` 同網域，後續送 Google brand verification 時，優先以這組 live URL 回填 Branding，並依 `doc/OAUTH_CONSENT_PUBLICATION.md` 完成 Search Console 驗證與正式發布。
 
 此腳本會可重跑地處理：

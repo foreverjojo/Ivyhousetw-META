@@ -18,11 +18,6 @@
 - GCS bucket：`gs://ivyhouse-ad-analyzer-public-pages-971489052398/legal/`
 - Load Balancer path：`/legal`、`/legal/privacy`、`/legal/terms`
 
-備援方式：
-
-- Workflow: `.github/workflows/public-legal-pages.yml`
-- 用途：若日後要切到 GitHub Pages 獨立公開站，可直接沿用
-
 ## 2. Google Auth Platform 建議回填值
 
 Branding 頁建議至少更新以下欄位：
