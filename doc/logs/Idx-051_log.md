@@ -95,6 +95,8 @@
 - 2026-03-07 最小 smoke test：`bash -n scripts/setup_cloud_run_iap_entry.sh` 通過，且以 `IAP_OAUTH_CLIENT_SECRET_NAME=iap-oauth-client-secret` 重跑腳本後，backend service 仍指向 `971489052398-untjbrcfdlqc5bg61hbce6aigeia033e.apps.googleusercontent.com`，`curl -I https://adanalyzer.shincold.com/` 仍回新的 Google OAuth authorize URL。
 - 2026-03-07 公開 legal pages 已掛到 `https://adanalyzer.shincold.com/legal/`、`/legal/privacy/`、`/legal/terms/`，且 `curl -I` 驗證為 HTTP 200；同時網站根目錄 `/` 仍維持 IAP 302。
 - 2026-03-07 Google Auth Platform Branding draft 已更新並儲存為新的 `/legal/...` 公開網址。
+- 2026-03-08 Search Console 檢查：`foreverwow001@gmail.com` 對 `sc-domain:shincold.com` 顯示「你沒有存取這項資源的權限」，因此尚無法以此帳號確認網域驗證狀態。
+- 2026-03-08 Verification Center 檢查：畫面顯示「應用程式已設為測試發布狀態，因此不需要驗證」，目前尚不是直接送 brand verification 的狀態。
 
 7. 第 2 步腳本化
 - 新增 `scripts/setup_cloud_run_iap_entry.sh`，將 LB + NEG + IAP + ingress 收斂流程做成可重跑腳本。
@@ -168,7 +170,7 @@
 ## Residual Risks
 
 1. OAuth consent screen 目前仍為 `External / 測試`；若要擴大給更多外部使用者，需再處理正式發布與驗證。
-2. 正式送審前仍需確認 Search Console 網域驗證、authorized domains 與 Verification Center 狀態一致。
+2. `foreverwow001@gmail.com` 目前沒有 `shincold.com` 的 Search Console property 存取權；正式送審前仍需用 owner 帳號確認網域驗證、authorized domains 與 Verification Center 狀態一致。
 3. `shellcheck` 不在目前環境內，shell 腳本未做該工具的額外 lint。
 4. 若未提供 `IAP_ACCESS_MEMBERS` 完整 allowlist，腳本會採安全的「補齊但不刪除既有 accessor」模式；需要收斂授權名單時應明確提供完整 allowlist。
 
@@ -177,7 +179,7 @@
 ## Next Steps
 
 1. 視需要把 OAuth consent screen 從 `測試中` 推進到正式發布，並完成 Google 驗證流程。
-2. 在 Google Search Console 完成 `shincold.com` 網域驗證，並檢查 Verification Center 是否可直接送 brand verification。
+2. 用持有 `shincold.com` Search Console 權限的帳號確認或補做網域驗證，並在切到 production 後重新檢查 Verification Center 是否可直接送 brand verification。
 3. 若後續要精準縮減 IAP 可存取對象，執行腳本時改用 `IAP_ACCESS_MEMBERS` 提供完整 allowlist。
 
 ---

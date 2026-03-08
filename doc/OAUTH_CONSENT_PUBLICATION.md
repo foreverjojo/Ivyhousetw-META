@@ -61,8 +61,18 @@ Google 官方要求：
 - [ ] Search Console 已驗證正式送審要使用的網域。
 - [ ] 若要顯示正式 app name / logo，已準備送 brand verification。
 
+2026-03-08 實際檢查結果：
+
+- Search Console 以 `foreverwow001@gmail.com` 開啟 `sc-domain:shincold.com` 時，頁面顯示「你沒有存取這項資源的權限」，因此目前只能確認這個帳號不是既有 property owner / delegated user；無法在此帳號下確認網域已驗證。
+- Verification Center 顯示「應用程式已設為測試發布狀態，因此不需要驗證」，表示目前還不是可直接送 brand verification 的狀態；需先視需求將 audience / publishing status 往 production 推進，再檢查送審入口。
+
 ## 5. 送審注意事項
 
 - 如果仍是少量已知測試使用者，可以維持 `Testing` 狀態，不必急著送審。
 - 若要對更多外部 Google 帳號開放，建議改用正式可驗證網域後再送 brand verification。
 - Google 官方也建議 testing / staging 與 production 分開專案；若未來要對外正式提供服務，應評估拆出 production project。
+
+## 6. 下一步建議
+
+1. 先確認哪個 Google 帳號持有 `shincold.com` 的 Search Console property owner 權限，並用該帳號檢查或補做網域驗證。
+2. 若確定要擴大給外部使用者，再把 Google Auth Platform 的 publishing status 從 `Testing` 推進，回到 Verification Center 檢查 brand verification 送審入口。
