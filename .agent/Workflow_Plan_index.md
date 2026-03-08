@@ -48,6 +48,7 @@
 | Idx-041 | Role Selection Gate：納入 Copilot Chat（小修正）+ 強制工具一致性 | P0 | ⚠️ 有風險 | opencode | PASS WITH RISK | 2026-02-25-v1 | `.agent/logs/Idx-041_log.md` | Plan：`.agent/plans/Idx-041_plan.md` |
 | Idx-042 | Coordinator Preflight 清單化 + Command IDs 規範化（Injector+Monitor only） | P0 | ⏳ 待處理 | T.B.D. | T.B.D. | 2026-02-25-v1 | （尚未產出） | Plan：`.agent/plans/Idx-042_plan.md` |
 | Idx-048 | 整併 recovery/stash0-20260227（commit 00d4b23）：整理後可合回 main | P1 | ⏳ 待處理 | T.B.D. | T.B.D. | 2026-02-27-v1 | （尚未產出） | Plan：`.agent/plans/Idx-048_plan.md`；來源分支：`recovery/stash0-20260227` |
+| Idx-049 | 驗證 main push 是否自動觸發 Cloud Build 並部署 Cloud Run | P0 | ⚠️ 有風險 | Copilot Chat | PASS_WITH_RISK | 2026-03-06-v1 | `.agent/logs/Idx-049_log.md` | 已完成兩輪驗證：第一輪定位 `AUTH_FLAG` substitution 問題，第二輪修正後 build/deploy 成功 |
 
 ### 狀態說明
 - ✅ 已完成 (CLOSED)

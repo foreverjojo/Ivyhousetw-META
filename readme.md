@@ -10,6 +10,14 @@
 - Latest: `0.3.0` (2026-01-04) — Phase 3 多通路擴充（Shopee/MOMO）+ 觀測性基礎建設（structured logging / LLM monitor）
 - Unreleased: Phase 4 Streamlit Crew Console MVP、Trace ID 追蹤系統（詳見 `CHANGELOG.md`）
 
+## Public legal pages
+- Static source: `public_site/`
+- Live public home: `https://adanalyzer.shincold.com/legal/`
+- Live privacy policy: `https://adanalyzer.shincold.com/legal/privacy/`
+- Live terms of service: `https://adanalyzer.shincold.com/legal/terms/`
+- Live delivery path: GCS backend bucket on the existing HTTPS Load Balancer
+- OAuth consent screen publication checklist: `doc/OAUTH_CONSENT_PUBLICATION.md`
+
 
 ## Run app
 ```bash

@@ -1,0 +1,346 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&display=swap");
+
+:root {
+    --paper: #f8f3ea;
+    --ink: #20170f;
+    --muted: #6d5c4d;
+    --line: rgba(32, 23, 15, 0.12);
+    --card: rgba(255, 250, 244, 0.78);
+    --accent: #b45f2f;
+    --accent-deep: #7a3514;
+    --gold: #d3a85b;
+    --shadow: 0 24px 60px rgba(44, 25, 13, 0.14);
+    --max-width: 1120px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    font-family: "Manrope", "Segoe UI", sans-serif;
+    color: var(--ink);
+    background:
+        radial-gradient(circle at top left, rgba(211, 168, 91, 0.22), transparent 26%),
+        radial-gradient(circle at 85% 15%, rgba(180, 95, 47, 0.18), transparent 22%),
+        linear-gradient(180deg, #fbf8f1 0%, #f2eadb 48%, #f7f3eb 100%);
+    min-height: 100vh;
+}
+
+a {
+    color: inherit;
+}
+
+.shell {
+    width: min(var(--max-width), calc(100% - 32px));
+    margin: 0 auto;
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(14px);
+    background: rgba(248, 243, 234, 0.82);
+    border-bottom: 1px solid var(--line);
+}
+
+.topbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 72px;
+}
+
+.brand {
+    text-decoration: none;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.brand-mark {
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-deep);
+}
+
+.brand-name {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.nav a {
+    text-decoration: none;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.nav a:hover,
+.nav a:focus-visible {
+    color: var(--accent-deep);
+}
+
+.hero {
+    padding: 72px 0 36px;
+}
+
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(122, 53, 20, 0.18);
+    border-radius: 999px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.56);
+    color: var(--accent-deep);
+    font-size: 0.86rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.hero-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 28px;
+    align-items: stretch;
+    margin-top: 24px;
+}
+
+.hero-copy,
+.hero-card,
+.panel,
+.policy-card,
+.footer-card {
+    border: 1px solid var(--line);
+    background: var(--card);
+    box-shadow: var(--shadow);
+    border-radius: 28px;
+}
+
+.hero-copy {
+    padding: 34px;
+}
+
+.hero-copy h1,
+.policy-hero h1 {
+    margin: 0;
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(2.4rem, 5vw, 4.7rem);
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+}
+
+.hero-copy p,
+.policy-hero p,
+.panel p,
+.policy-section p,
+.policy-section li,
+.footer-card p {
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.75;
+}
+
+.hero-actions {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+}
+
+.button,
+.button-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 0 20px;
+    border-radius: 999px;
+    text-decoration: none;
+    font-weight: 700;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.button {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+    color: #fffaf4;
+    box-shadow: 0 16px 30px rgba(122, 53, 20, 0.2);
+}
+
+.button-secondary {
+    border: 1px solid rgba(122, 53, 20, 0.18);
+    background: rgba(255, 255, 255, 0.68);
+    color: var(--accent-deep);
+}
+
+.button:hover,
+.button-secondary:hover,
+.button:focus-visible,
+.button-secondary:focus-visible {
+    transform: translateY(-1px);
+}
+
+.hero-card {
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-card::after {
+    content: "";
+    position: absolute;
+    inset: auto -50px -60px auto;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(211, 168, 91, 0.34) 0%, rgba(211, 168, 91, 0) 70%);
+}
+
+.metric {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 18px;
+}
+
+.metric-label {
+    font-size: 0.82rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.metric-value {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 2.1rem;
+    font-weight: 700;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    padding: 12px 0 56px;
+}
+
+.panel,
+.policy-card,
+.footer-card {
+    padding: 26px;
+}
+
+.panel h2,
+.policy-section h2,
+.footer-card h2 {
+    margin-top: 0;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 1.55rem;
+}
+
+.panel ul,
+.policy-section ul,
+.policy-section ol {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--muted);
+    line-height: 1.75;
+}
+
+.policy-shell {
+    width: min(900px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 56px 0 72px;
+}
+
+.policy-hero,
+.policy-section,
+.footer-card {
+    margin-bottom: 20px;
+}
+
+.policy-hero,
+.policy-section {
+    border: 1px solid var(--line);
+    background: var(--card);
+    box-shadow: var(--shadow);
+    border-radius: 28px;
+    padding: 30px;
+}
+
+.policy-meta {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.footer {
+    padding: 18px 0 44px;
+}
+
+.footer-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.tiny {
+    font-size: 0.92rem;
+}
+
+@media (max-width: 900px) {
+    .hero-grid,
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .hero {
+        padding-top: 42px;
+    }
+
+    .hero-copy,
+    .hero-card,
+    .panel,
+    .policy-hero,
+    .policy-section,
+    .footer-card {
+        padding: 22px;
+        border-radius: 22px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    .button,
+    .button-secondary {
+        transition: none;
+    }
+}

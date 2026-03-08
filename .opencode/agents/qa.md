@@ -1,7 +1,7 @@
 ---
 description: 艾薇品管員 (QA) - 負責代碼審查與資安檢查
 mode: primary
-model: openai/gpt-5.2
+model: openai/gpt-5.4
 tools:
   read: true
   grep: true
